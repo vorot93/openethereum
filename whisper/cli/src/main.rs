@@ -88,7 +88,7 @@ Options:
 	-s, --secret KEYFILE           Specify which file contains the key to generate the enode.
 	-P, --rpc-port PORT            Specify which RPC port to use [default: 8545].
 	-A, --rpc-address ADDRESS      Specify which RPC address to use [default: 127.0.0.1].
-	-l, --logging LEVEL            Specify the logging level. Must conform to the same format as RUST_LOG [default: 0]. Log level verbosity configuration choice from highest to lowest priority (error 0, warn 1, info 2, debug 3, trace 4).
+	-l, --logging LEVEL            Specify the logging level. Must conform to the same format as RUST_LOG [default: 'error']. Log level verbosity configuration choice from highest to lowest priority ('error', 'warn', 'info', 'debug', 'trace').
 	-L, --logging-to-file          Record logs to output.log file.
 	-h, --help                     Display this message and exit.
 "#;

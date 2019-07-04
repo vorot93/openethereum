@@ -18,7 +18,31 @@ use fern::colors::{Color, ColoredLevelConfig};
 use rlog::{LevelFilter};
 use std::io;
 
-fn setup_logger(verbosity: u32, logging_to_file: bool) -> Result<(), fern::InitError> {
+/// Log levels.
+#[derive(Debug, PartialEq, Clone)]
+pub enum LogLevel {
+    Error,
+    Warn,
+    Info,
+    Debug,
+    Trace,
+}
+
+impl LogLevel {
+    /// Returns a string value of the current log level
+    pub fn value(&self) -> String {
+        match *self {
+            LogLevel::Error => "error".to_string(),
+            LogLevel::Warn => "warn".to_string(),
+            LogLevel::Info => "info".to_string(),
+            LogLevel::Debug => "debug".to_string(),
+            LogLevel::Trace => "trace".to_string(),
+            _ => "error".to_string(),
+        }
+    }
+}
+
+fn setup_logger(verbosity: &String, logging_to_file: bool) -> Result<(), fern::InitError> {
 	let colors_line = ColoredLevelConfig::new()
 		.error(Color::Red)
 		.warn(Color::Yellow)
@@ -31,30 +55,35 @@ fn setup_logger(verbosity: u32, logging_to_file: bool) -> Result<(), fern::InitE
 	let mut base_config = fern::Dispatch::new();
 
 	base_config = match verbosity {
-		0 => {
+		LogLevel::Error.value() => {
 			base_config
 			.level(LevelFilter::Error)
 			.level_for("pretty_colored", LevelFilter::Error)
 		}
-		1 => {
+		LogLevel::Warn.value() => {
 			base_config
 			.level(LevelFilter::Warn)
 			.level_for("pretty_colored", LevelFilter::Warn)
 		},
-		2 => {
+		LogLevel::Info.value() => {
 			base_config
 			.level(LevelFilter::Info)
 			.level_for("pretty_colored", LevelFilter::Info)
 		},
-		3 => {
+		LogLevel::Debug.value() => {
 			base_config
 			.level(LevelFilter::Debug)
 			.level_for("pretty_colored", LevelFilter::Debug)
 		},
-		_ => {
+		LogLevel::Trace.value() => {
 			base_config
 			.level(LevelFilter::Trace)
 			.level_for("pretty_colored", LevelFilter::Trace)
+		},
+		_ => {
+			base_config
+			.level(LevelFilter::Error)
+			.level_for("pretty_colored", LevelFilter::Error)
 		},
 	};
 
@@ -94,14 +123,13 @@ fn setup_logger(verbosity: u32, logging_to_file: bool) -> Result<(), fern::InitE
 
 /// Initialisation of the [Log Crate](https://crates.io/crates/log) and [Fern Crate](https://docs.rs/fern/0.5.5/fern/)
 ///
-/// - Choice of logging level verbosity from CLI: error (0), warn (1), info (2), debug (3), or trace (4).
+/// - Choice of logging level verbosity from CLI: error, warn, info, debug, or trace.
 /// - Fallback to default logging level that is defined.
 /// - Use of logging level macros from highest priority to lowest: `error!`, `warn!`, `info!`, `debug!` and `trace!`.
 /// - [Compile time filters](https://docs.rs/log/0.4.1/log/#compile-time-filters) that override the CLI logging levels
 /// are configured in Cargo.toml. In production the max logging level may differ from in development.
 /// - Output to output.log when logging_to_file is true.
-pub fn init_logger(logging: &str, logging_to_file: bool) -> () {
-	let verbosity: u32 = logging.parse::<u32>().expect("parsing cannot fail; qed");
+pub fn init_logger(verbosity: &String, logging_to_file: bool) -> () {
 
 	match setup_logger(verbosity, logging_to_file) {
 		Ok(_) => {
