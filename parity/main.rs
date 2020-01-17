@@ -112,35 +112,36 @@ fn take_spec_name_override() -> Option<String> {
 	r
 }
 
+#[cfg_attr(not(windows), derive(Default))]
+struct ResourceGuard;
+
 #[cfg(windows)]
-fn global_cleanup() {
-	// We need to clean up all sockets before spawning another Parity process. This makes sure everything is cleaned up.
-	// The loop is required because of internal reference counter for winsock dll. We don't know how many crates we use do
-	// initialize it. There's at least 2 now.
-	for _ in 0.. 10 {
-		unsafe { ::winapi::um::winsock2::WSACleanup(); }
+impl Default for ResourceGuard {
+	fn default() -> Self {
+		// When restarting in the same process this reinits windows sockets.
+		unsafe {
+			const WS_VERSION: u16 = 0x202;
+			let mut wsdata: ::winapi::um::winsock2::WSADATA = ::std::mem::zeroed();
+			::winapi::um::winsock2::WSAStartup(WS_VERSION, &mut wsdata);
+		}
 	}
 }
 
-#[cfg(not(windows))]
-fn global_init() {}
-
 #[cfg(windows)]
-fn global_init() {
-	// When restarting in the same process this reinits windows sockets.
-	unsafe {
-		const WS_VERSION: u16 = 0x202;
-		let mut wsdata: ::winapi::um::winsock2::WSADATA = ::std::mem::zeroed();
-		::winapi::um::winsock2::WSAStartup(WS_VERSION, &mut wsdata);
+impl Drop for ResourceGuard {
+	fn drop(&mut self) {
+		// We need to clean up all sockets before spawning another Parity process. This makes sure everything is cleaned up.
+		// The loop is required because of internal reference counter for winsock dll. We don't know how many crates we use do
+		// initialize it. There's at least 2 now.
+		for _ in 0..10 {
+			unsafe { ::winapi::um::winsock2::WSACleanup(); }
+		}
 	}
 }
-
-#[cfg(not(windows))]
-fn global_cleanup() {}
 
 // Starts parity binary installed via `parity-updater` and returns the code it exits with.
 fn run_parity() -> Result<(), Error> {
-	global_init();
+	let _g = ResourceGuard::default();
 
 	let prefix = vec![OsString::from("--can-restart"), OsString::from("--force-direct")];
 
@@ -163,7 +164,6 @@ fn run_parity() -> Result<(), Error> {
 		})
 	);
 
-	global_cleanup();
 	res
 }
 
@@ -183,7 +183,7 @@ struct ExitStatus {
 // Run `locally installed version` of parity (i.e, not installed via `parity-updater`)
 // Returns the exit error code.
 fn main_direct(force_can_restart: bool) -> i32 {
-	global_init();
+	let _g = ResourceGuard::default();
 
 	let mut conf = {
 		let args = std::env::args().collect::<Vec<_>>();
@@ -354,7 +354,6 @@ fn main_direct(force_can_restart: bool) -> i32 {
 		},
 	};
 
-	global_cleanup();
 	res
 }
 
