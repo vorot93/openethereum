@@ -110,7 +110,7 @@ struct SessionData {
 	pub failed_continue_with: Option<FailedContinueAction>,
 }
 
-/// SessionImpl creation parameters
+/// `SessionImpl` creation parameters
 pub struct SessionParams<T: SessionTransport> {
 	/// Session meta.
 	pub meta: ShareChangeSessionMeta,
@@ -169,7 +169,7 @@ impl<T> SessionImpl<T> where T: SessionTransport {
 	/// Create new session.
 	pub fn new(params: SessionParams<T>) -> (Self, Oneshot<Result<Option<(H256, NodeId)>, Error>>) {
 		let (completed, oneshot) = CompletionSignal::new();
-		(SessionImpl {
+		(Self {
 			core: SessionCore {
 				meta: params.meta,
 				sub_session: params.sub_session,
@@ -290,13 +290,13 @@ impl<T> SessionImpl<T> where T: SessionTransport {
 		}
 
 		match message {
-			&KeyVersionNegotiationMessage::RequestKeyVersions(ref message) =>
+			KeyVersionNegotiationMessage::RequestKeyVersions(message) =>
 				self.on_key_versions_request(sender, message),
-			&KeyVersionNegotiationMessage::KeyVersions(ref message) =>
+			KeyVersionNegotiationMessage::KeyVersions(message) =>
 				self.on_key_versions(sender, message),
-			&KeyVersionNegotiationMessage::KeyVersionsError(ref message) => {
+			KeyVersionNegotiationMessage::KeyVersionsError(message) => {
 				// remember failed continue action
-				if let Some(FailedKeyVersionContinueAction::Decrypt(Some(ref origin), ref requester)) = message.continue_with {
+				if let Some(FailedKeyVersionContinueAction::Decrypt(Some(origin), requester)) = &message.continue_with {
 					self.data.lock().failed_continue_with =
 						Some(FailedContinueAction::Decrypt(Some(origin.clone().into()), requester.clone().into()));
 				}
@@ -339,7 +339,7 @@ impl<T> SessionImpl<T> where T: SessionTransport {
 					.map(|v| v.hash.clone().into())
 					.take(VERSIONS_PER_MESSAGE)
 					.collect())
-				.unwrap_or_else(|| Default::default())
+				.unwrap_or_default()
 		}))?;
 
 		// update state
@@ -418,20 +418,20 @@ impl<T> SessionImpl<T> where T: SessionTransport {
 			// => let's broadcast fatal error so that every other node know about it, and, if it trusts to master node
 			// will report error to the contract
 			if let (Some(continue_with), Err(error)) = (data.continue_with.as_ref(), result.as_ref()) {
-				let origin = match *continue_with {
-					ContinueAction::Decrypt(_, origin, _, _) => origin.clone(),
+				let origin = match continue_with {
+					ContinueAction::Decrypt(_, origin, _, _) => *origin,
 					_ => None,
 				};
 
-				let requester = match *continue_with {
-					ContinueAction::Decrypt(ref session, _, _, _) => session.requester().and_then(|r| r.address(&core.meta.id).ok()),
+				let requester = match continue_with {
+					ContinueAction::Decrypt(session, _, _, _) => session.requester().and_then(|r| r.address(&core.meta.id).ok()),
 					_ => None,
 				};
 
 				if origin.is_some() && requester.is_some() && !error.is_non_fatal() {
 					let requester = requester.expect("checked in above condition; qed");
 					data.failed_continue_with =
-						Some(FailedContinueAction::Decrypt(origin.clone(), requester.clone()));
+						Some(FailedContinueAction::Decrypt(origin, requester));
 
 					let send_result = core.transport.broadcast(KeyVersionNegotiationMessage::KeyVersionsError(KeyVersionsError {
 						session: core.meta.id.clone().into(),
@@ -469,7 +469,7 @@ impl<T> ClusterSession for SessionImpl<T> where T: SessionTransport {
 	}
 
 	fn id(&self) -> SessionIdWithSubSession {
-		SessionIdWithSubSession::new(self.core.meta.id.clone(), self.core.sub_session.clone())
+		SessionIdWithSubSession::new(self.core.meta.id, self.core.sub_session.clone())
 	}
 
 	fn is_finished(&self) -> bool {
@@ -519,8 +519,8 @@ impl<T> ClusterSession for SessionImpl<T> where T: SessionTransport {
 	}
 
 	fn on_message(&self, sender: &NodeId, message: &Message) -> Result<(), Error> {
-		match *message {
-			Message::KeyVersionNegotiation(ref message) => self.process_message(sender, message),
+		match message {
+			Message::KeyVersionNegotiation(message) => self.process_message(sender, message),
 			_ => unreachable!("cluster checks message to be correct before passing; qed"),
 		}
 	}
@@ -539,7 +539,7 @@ impl SessionTransport for IsolatedSessionTransport {
 impl FastestResultComputer {
 	pub fn new(self_node_id: NodeId, key_share: Option<&DocumentKeyShare>, configured_nodes_count: usize, connected_nodes_count: usize) -> Self {
 		let threshold = key_share.map(|ks| ks.threshold);
-		FastestResultComputer {
+		Self {
 			self_node_id,
 			threshold,
 			configured_nodes_count,
@@ -556,17 +556,21 @@ impl SessionResultComputer for FastestResultComputer {
 			Some(threshold) => {
 				// select version this node have, with enough participants
 				let has_key_share = self.threshold.is_some();
-				let version = versions.iter().find(|&(_, ref n)| !has_key_share || n.contains(&self.self_node_id) && n.len() >= threshold + 1);
+				let version = versions.iter().find(|&(_, n)| !has_key_share || n.contains(&self.self_node_id) && n.len() > threshold);
 				// if there's no such version, wait for more confirmations
 				match version {
-					Some((version, nodes)) => Some(Ok((version.clone(), if has_key_share { self.self_node_id.clone() } else { nodes.iter().cloned().nth(0)
+					Some((version, nodes)) => Some(Ok((*version, if has_key_share { self.self_node_id } else { nodes.iter().cloned().next()
 						.expect("version is only inserted when there's at least one owner; qed") }))),
 					None if !confirmations.is_empty() => None,
 					// otherwise - try to find any version
 					None => Some(versions.iter()
-						.find(|&(_, ref n)| n.len() >= threshold + 1)
-						.map(|(version, nodes)| Ok((version.clone(), nodes.iter().cloned().nth(0)
-							.expect("version is only inserted when there's at least one owner; qed"))))
+						.find_map(|(version, nodes)| {
+							if nodes.len() > threshold {
+								Some(Ok((*version, nodes.iter().cloned().next().expect("version is only inserted when there's at least one owner; qed"))))
+							} else {
+								None
+							}
+						})
 						// if there's no version consensus among all connected nodes
 						//   AND we're connected to ALL configured nodes
 						//   OR there are less than required nodes for key restore
@@ -584,14 +588,15 @@ impl SessionResultComputer for FastestResultComputer {
 			None if !confirmations.is_empty() => None,
 			// ...and select version with largest support
 			None => Some(versions.iter()
-				.max_by_key(|&(_, ref n)| n.len())
-				.map(|(version, nodes)| Ok((version.clone(), nodes.iter().cloned().nth(0)
-					.expect("version is only inserted when there's at least one owner; qed"))))
-				.unwrap_or_else(|| Err(if self.configured_nodes_count == self.connected_nodes_count {
-					Error::ConsensusUnreachable
-				} else {
-					Error::ConsensusTemporaryUnreachable
-				}))),
+				.max_by_key(|&(_, n)| n.len())
+				.map_or_else(|| Err({
+					if self.configured_nodes_count == self.connected_nodes_count {
+						Error::ConsensusUnreachable
+					} else {
+						Error::ConsensusTemporaryUnreachable
+					}}),
+					|(version, nodes)| Ok((*version, nodes.iter().cloned().next()
+					.expect("version is only inserted when there's at least one owner; qed"))))),
 		}
 	}
 }
@@ -606,8 +611,8 @@ impl SessionResultComputer for LargestSupportResultComputer {
 		}
 
 		versions.iter()
-			.max_by_key(|&(_, ref n)| n.len())
-			.map(|(version, nodes)| Ok((version.clone(), nodes.iter().cloned().nth(0)
+			.max_by_key(|&(_, n)| n.len())
+			.map(|(version, nodes)| Ok((*version, nodes.iter().cloned().next()
 				.expect("version is only inserted when there's at least one owner; qed"))))
 	}
 }
@@ -672,34 +677,34 @@ mod tests {
 		}
 
 		pub fn new(nodes: BTreeMap<NodeId, Arc<DummyKeyStorage>>) -> Self {
-			let master_node_id = nodes.keys().cloned().nth(0).unwrap();
+			let master_node_id = nodes.keys().cloned().next().unwrap();
 			let sub_sesion = math::generate_random_scalar().unwrap();
 			let all_nodes_ids: BTreeSet<_> = nodes.keys().cloned().collect();
-			MessageLoop {
+			Self {
 				session_id: Default::default(),
 				nodes: nodes.iter().map(|(node_id, key_storage)| {
-					let cluster = Arc::new(DummyCluster::new(node_id.clone()));
+					let cluster = Arc::new(DummyCluster::new(*node_id));
 					cluster.add_nodes(all_nodes_ids.iter().cloned());
-					(node_id.clone(), Node {
+					(*node_id, Node {
 						cluster: cluster.clone(),
 						key_storage: key_storage.clone(),
 						session: SessionImpl::new(SessionParams {
 							meta: ShareChangeSessionMeta {
 								id: Default::default(),
-								self_node_id: node_id.clone(),
-								master_node_id: master_node_id.clone(),
+								self_node_id: *node_id,
+								master_node_id,
 								configured_nodes_count: nodes.len(),
 								connected_nodes_count: nodes.len(),
 							},
 							sub_session: sub_sesion.clone(),
 							key_share: key_storage.get(&Default::default()).unwrap(),
 							result_computer: Arc::new(FastestResultComputer::new(
-								node_id.clone(),
+								*node_id,
 								key_storage.get(&Default::default()).unwrap().as_ref(),
 								nodes.len(), nodes.len()
 							)),
 							transport: DummyTransport {
-								cluster: cluster,
+								cluster,
 							},
 							nonce: 0,
 						}).0,
@@ -719,8 +724,7 @@ mod tests {
 
 		pub fn take_message(&mut self) -> Option<(NodeId, NodeId, Message)> {
 			self.nodes.values()
-				.filter_map(|n| n.cluster.take_message().map(|m| (n.session.meta().self_node_id.clone(), m.0, m.1)))
-				.nth(0)
+				.find_map(|n| n.cluster.take_message().map(|m| (n.session.meta().self_node_id, m.0, m.1)))
 				.or_else(|| self.queue.pop_front())
 		}
 
@@ -803,7 +807,7 @@ mod tests {
 		ml.session(0).initialize(ml.nodes.keys().cloned().collect()).unwrap();
 		assert_eq!(ml.session(0).data.lock().state, SessionState::WaitingForResponses);
 
-		let version_id = (*math::generate_random_scalar().unwrap()).clone();
+		let version_id = *math::generate_random_scalar().unwrap();
 		assert_eq!(ml.session(0).process_message(ml.node_id(1), &KeyVersionNegotiationMessage::KeyVersions(KeyVersions {
 			session: Default::default(),
 			sub_session: math::generate_random_scalar().unwrap().into(),
@@ -839,7 +843,7 @@ mod tests {
 			let ml = MessageLoop::empty(3);
 			ml.session(0).initialize(ml.nodes.keys().cloned().collect()).unwrap();
 
-			let version_id = (*math::generate_random_scalar().unwrap()).clone();
+			let version_id = *math::generate_random_scalar().unwrap();
 			assert_eq!(ml.session(0).process_message(ml.node_id(1), &KeyVersionNegotiationMessage::KeyVersions(KeyVersions {
 				session: Default::default(),
 				sub_session: math::generate_random_scalar().unwrap().into(),
@@ -884,7 +888,7 @@ mod tests {
 		let ml = MessageLoop::empty(2);
 		ml.session(0).initialize(ml.nodes.keys().cloned().collect()).unwrap();
 
-		let version_id = (*math::generate_random_scalar().unwrap()).clone();
+		let version_id = *math::generate_random_scalar().unwrap();
 		assert_eq!(ml.session(0).process_message(ml.node_id(1), &KeyVersionNegotiationMessage::KeyVersions(KeyVersions {
 			session: Default::default(),
 			sub_session: math::generate_random_scalar().unwrap().into(),
@@ -897,8 +901,8 @@ mod tests {
 	#[test]
 	fn fast_negotiation_does_not_completes_instantly_when_enough_share_owners_are_connected() {
 		let nodes = MessageLoop::prepare_nodes(2);
-		let version_id = (*math::generate_random_scalar().unwrap()).clone();
-		nodes.values().nth(0).unwrap().insert(Default::default(), DocumentKeyShare {
+		let version_id = *math::generate_random_scalar().unwrap();
+		nodes.values().next().unwrap().insert(Default::default(), DocumentKeyShare {
 			author: H160::from_low_u64_be(2),
 			threshold: 1,
 			public: H512::from_low_u64_be(3),
@@ -906,7 +910,7 @@ mod tests {
 			encrypted_point: None,
 			versions: vec![DocumentKeyShareVersion {
 				hash: version_id,
-				id_numbers: vec![(nodes.keys().cloned().nth(0).unwrap(), math::generate_random_scalar().unwrap())].into_iter().collect(),
+				id_numbers: vec![(nodes.keys().cloned().next().unwrap(), math::generate_random_scalar().unwrap())].into_iter().collect(),
 				secret_share: math::generate_random_scalar().unwrap(),
 			}],
 		}).unwrap();

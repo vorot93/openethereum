@@ -18,7 +18,6 @@ use std::{fs, slice};
 use std::collections::{HashMap, HashSet};
 use std::fmt::{self, Display, Formatter};
 use std::hash::{Hash, Hasher};
-use std::iter::FromIterator;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6, ToSocketAddrs};
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -29,7 +28,7 @@ use log::{debug, warn};
 use rand::seq::SliceRandom;
 use rlp::{DecoderError, Rlp, RlpStream};
 use serde::{Deserialize, Serialize};
-use serde_json;
+
 
 use network::{AllowIP, Error, IpFilter};
 
@@ -82,14 +81,14 @@ impl NodeEndpoint {
 		let addr_bytes = rlp.at(0)?.data()?;
 		let address = match addr_bytes.len() {
 			4 => Ok(SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(addr_bytes[0], addr_bytes[1], addr_bytes[2], addr_bytes[3]), tcp_port))),
-			16 => unsafe {
-				let o: *const u16 = addr_bytes.as_ptr() as *const u16;
-				let o = slice::from_raw_parts(o, 8);
-				Ok(SocketAddr::V6(SocketAddrV6::new(Ipv6Addr::new(o[0], o[1], o[2], o[3], o[4], o[5], o[6], o[7]), tcp_port, 0, 0)))
-			},
+			16 => {
+				let mut addr = [0_u8; 16];
+				addr.copy_from_slice(&addr_bytes[0..16]);
+				Ok(SocketAddr::V6(SocketAddrV6::new(Ipv6Addr::from(addr), tcp_port, 0, 0)))
+			}
 			_ => Err(DecoderError::RlpInconsistentLengthAndData)
 		}?;
-		Ok(NodeEndpoint { address, udp_port })
+		Ok(Self { address, udp_port })
 	}
 
 	pub fn to_rlp(&self, rlp: &mut RlpStream) {
@@ -131,14 +130,14 @@ impl FromStr for NodeEndpoint {
 	type Err = Error;
 
 	/// Create endpoint from string. Performs name resolution if given a host name.
-	fn from_str(s: &str) -> Result<NodeEndpoint, Error> {
+	fn from_str(s: &str) -> Result<Self, Error> {
 		let address = s.to_socket_addrs().map(|mut i| i.next());
 		match address {
-			Ok(Some(a)) => Ok(NodeEndpoint {
+			Ok(Some(a)) => Ok(Self {
 				address: a,
 				udp_port: a.port()
 			}),
-			Ok(None) => return Err(Error::AddressResolve(None.into())),
+			Ok(None) => Err(Error::AddressResolve(None.into())),
 			Err(_) => Err(Error::AddressParse) // always an io::Error of InvalidInput kind
 		}
 	}
@@ -159,23 +158,23 @@ pub enum NodeContact {
 }
 
 impl NodeContact {
-	fn success() -> NodeContact {
-		NodeContact::Success(SystemTime::now())
+	fn success() -> Self {
+		Self::Success(SystemTime::now())
 	}
 
-	fn failure() -> NodeContact {
-		NodeContact::Failure(SystemTime::now())
+	fn failure() -> Self {
+		Self::Failure(SystemTime::now())
 	}
 
 	fn time(&self) -> SystemTime {
 		match *self {
-			NodeContact::Success(t) | NodeContact::Failure(t) => t
+			Self::Success(t) | Self::Failure(t) => t
 		}
 	}
 
 	/// Filters and old contact, returning `None` if it happened longer than a
 	/// week ago.
-	fn recent(&self) -> Option<&NodeContact> {
+	fn recent(&self) -> Option<&Self> {
 		let t = self.time();
 		if let Ok(d) = t.elapsed() {
 			if d < Duration::from_secs(60 * 60 * 24 * 7) {
@@ -196,8 +195,8 @@ pub struct Node {
 }
 
 impl Node {
-	pub fn new(id: NodeId, endpoint: NodeEndpoint) -> Node {
-		Node {
+	pub const fn new(id: NodeId, endpoint: NodeEndpoint) -> Self {
+		Self {
 			id,
 			endpoint,
 			peer_type: PeerType::Optional,
@@ -208,10 +207,10 @@ impl Node {
 
 impl Display for Node {
 	fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-		if self.endpoint.udp_port != self.endpoint.address.port() {
-			write!(f, "enode://{:x}@{}+{}", self.id, self.endpoint.address, self.endpoint.udp_port)?;
-		} else {
+		if self.endpoint.udp_port == self.endpoint.address.port() {
 			write!(f, "enode://{:x}@{}", self.id, self.endpoint.address)?;
+		} else {
+			write!(f, "enode://{:x}@{}+{}", self.id, self.endpoint.address, self.endpoint.udp_port)?;
 		}
 		Ok(())
 	}
@@ -227,7 +226,7 @@ impl FromStr for Node {
 			(NodeId::default(), NodeEndpoint::from_str(s)?)
 		};
 
-		Ok(Node {
+		Ok(Self {
 			id,
 			endpoint,
 			peer_type: PeerType::Optional,
@@ -262,10 +261,10 @@ pub struct NodeTable {
 }
 
 impl NodeTable {
-	pub fn new(path: Option<String>) -> NodeTable {
-		let nodes = NodeTable::load(path.clone());
-		let ordered_ids = NodeTable::make_ordered_entries(&nodes).iter().map(|m| m.id).collect();
-		NodeTable {
+	pub fn new(path: Option<String>) -> Self {
+		let nodes = Self::load(path.clone());
+		let ordered_ids = Self::make_ordered_entries(&nodes).iter().map(|m| m.id).collect();
+		Self {
 			path,
 			nodes,
 			useless_nodes: HashSet::new(),
@@ -322,12 +321,16 @@ impl NodeTable {
 
 	/// Returns a list of ordered entries from table
 	fn ordered(&self) -> Vec<&Node> {
-		Vec::from_iter(
-			self.ordered_ids
-				.iter()
-				.filter(|id| !self.useless_nodes.contains(&id))
-				.map(|id| self.nodes.get(&id).expect("nodes and ordered_ids do not get out of sync; qed"))
-		)
+		self.ordered_ids
+			.iter()
+			.filter_map(|id| {
+				if self.useless_nodes.contains(id) {
+					None
+				} else {
+					Some(self.nodes.get(id).expect("nodes and ordered_ids do not get out of sync; qed"))
+				}
+			})
+			.collect()
 	}
 
 	/// Makes a list of ordered nodes according to their most recent contact.
@@ -346,7 +349,7 @@ impl NodeTable {
 
 		for node in nodes {
 			// discard contact points older that aren't recent
-			match node.last_contact.as_ref().and_then(|c| c.recent()) {
+			match node.last_contact.as_ref().and_then(NodeContact::recent) {
 				Some(&NodeContact::Success(_)) => {
 					success.push(node);
 				},
@@ -385,8 +388,7 @@ impl NodeTable {
 	/// failures is considered.
 	pub fn nodes(&self, filter: &IpFilter) -> Vec<NodeId> {
 		self.ordered().iter()
-			.filter(|n| n.endpoint.is_allowed(&filter))
-			.map(|n| n.id)
+			.filter_map(|n| if n.endpoint.is_allowed(filter) { Some(n.id) } else { None })
 			.collect()
 	}
 
@@ -469,8 +471,8 @@ impl NodeTable {
 
 	/// Save the nodes.json file.
 	pub fn save(&self) {
-		let mut path = match self.path {
-			Some(ref path) => PathBuf::from(path),
+		let mut path = match &self.path {
+			Some(path) => PathBuf::from(path),
 			None => return,
 		};
 		if let Err(e) = fs::create_dir_all(&path) {
@@ -501,27 +503,26 @@ impl NodeTable {
 	fn load(path: Option<String>) -> HashMap<NodeId, Node> {
 		let path = match path {
 			Some(path) => PathBuf::from(path).join(NODES_FILE),
-			None => return Default::default(),
+			None => return HashMap::new(),
 		};
 
 		let file = match fs::File::open(&path) {
 			Ok(file) => file,
 			Err(e) => {
 				debug!(target: "network", "Error opening node table file: {:?}", e);
-				return Default::default();
+				return HashMap::new();
 			},
 		};
 		let res: Result<json::NodeTable, _> = serde_json::from_reader(file);
 		match res {
 			Ok(table) => {
 				table.nodes.into_iter()
-					.filter_map(|n| n.into_node())
-					.map(|n| (n.id, n))
+					.filter_map(|n| n.into_node().map(|n| (n.id, n)))
 					.collect()
 			},
 			Err(e) => {
 				warn!(target: "network", "Error reading node table file: {:?}", e);
-				Default::default()
+				HashMap::new()
 			},
 		}
 	}
@@ -560,10 +561,10 @@ mod json {
 	impl NodeContact {
 		pub fn into_node_contact(self) -> super::NodeContact {
 			match self {
-				NodeContact::Success(s) => super::NodeContact::Success(
+				Self::Success(s) => super::NodeContact::Success(
 					time::UNIX_EPOCH + Duration::from_secs(s)
 				),
-				NodeContact::Failure(s) => super::NodeContact::Failure(
+				Self::Failure(s) => super::NodeContact::Failure(
 					time::UNIX_EPOCH + Duration::from_secs(s)
 				),
 			}
@@ -580,7 +581,7 @@ mod json {
 		pub fn into_node(self) -> Option<super::Node> {
 			match super::Node::from_str(&self.url) {
 				Ok(mut node) => {
-					node.last_contact = self.last_contact.map(|c| c.into_node_contact());
+					node.last_contact = self.last_contact.map(NodeContact::into_node_contact);
 					Some(node)
 				},
 				_ => None,
@@ -599,7 +600,7 @@ mod json {
 				}
 			});
 
-			Node {
+			Self {
 				url: format!("{}", node),
 				last_contact
 			}
@@ -813,8 +814,8 @@ mod tests {
 	fn custom_allow() {
 		let filter = IpFilter {
 			predefined: AllowIP::None,
-			custom_allow: vec![IpNetwork::from_str(&"10.0.0.0/8").unwrap(), IpNetwork::from_str(&"1.0.0.0/8").unwrap()],
-			custom_block: vec![],
+			custom_allow: vec![IpNetwork::from_str("10.0.0.0/8").unwrap(), IpNetwork::from_str("1.0.0.0/8").unwrap()],
+			custom_block: Vec::new(),
 		};
 		assert!(!NodeEndpoint::from_str("123.99.55.44:7770").unwrap().is_allowed(&filter));
 		assert!(NodeEndpoint::from_str("10.0.0.1:7770").unwrap().is_allowed(&filter));
@@ -825,8 +826,8 @@ mod tests {
 	fn custom_block() {
 		let filter = IpFilter {
 			predefined: AllowIP::All,
-			custom_allow: vec![],
-			custom_block: vec![IpNetwork::from_str(&"10.0.0.0/8").unwrap(), IpNetwork::from_str(&"1.0.0.0/8").unwrap()],
+			custom_allow: Vec::new(),
+			custom_block: vec![IpNetwork::from_str("10.0.0.0/8").unwrap(), IpNetwork::from_str("1.0.0.0/8").unwrap()],
 		};
 		assert!(NodeEndpoint::from_str("123.99.55.44:7770").unwrap().is_allowed(&filter));
 		assert!(!NodeEndpoint::from_str("10.0.0.1:7770").unwrap().is_allowed(&filter));
@@ -837,8 +838,8 @@ mod tests {
 	fn custom_allow_ipv6() {
 		let filter = IpFilter {
 			predefined: AllowIP::None,
-			custom_allow: vec![IpNetwork::from_str(&"fc00::/8").unwrap()],
-			custom_block: vec![],
+			custom_allow: vec![IpNetwork::from_str("fc00::/8").unwrap()],
+			custom_block: Vec::new(),
 		};
 		assert!(NodeEndpoint::from_str("[fc00::]:5550").unwrap().is_allowed(&filter));
 		assert!(!NodeEndpoint::from_str("[fd00::]:5550").unwrap().is_allowed(&filter));
@@ -848,8 +849,8 @@ mod tests {
 	fn custom_block_ipv6() {
 		let filter = IpFilter {
 			predefined: AllowIP::All,
-			custom_allow: vec![],
-			custom_block: vec![IpNetwork::from_str(&"fc00::/8").unwrap()],
+			custom_allow: Vec::new(),
+			custom_block: vec![IpNetwork::from_str("fc00::/8").unwrap()],
 		};
 		assert!(!NodeEndpoint::from_str("[fc00::]:5550").unwrap().is_allowed(&filter));
 		assert!(NodeEndpoint::from_str("[fd00::]:5550").unwrap().is_allowed(&filter));

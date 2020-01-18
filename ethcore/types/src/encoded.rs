@@ -41,7 +41,7 @@ impl Header {
 	/// Create a new owning header view.
 	/// Expects the data to be an RLP-encoded header -- any other case will likely lead to
 	/// panics further down the line.
-	pub fn new(encoded: Vec<u8>) -> Self { Header(encoded) }
+	pub fn new(encoded: Vec<u8>) -> Self { Self(encoded) }
 
 	/// Upgrade this encoded view to a fully owned `Header` object.
 	pub fn decode(&self) -> Result<FullHeader, rlp::DecoderError> {
@@ -57,6 +57,7 @@ impl Header {
 	pub fn rlp(&self) -> Rlp { Rlp::new(&self.0) }
 
 	/// Consume the view and return the raw bytes.
+	#[allow(clippy::missing_const_for_fn)]
 	pub fn into_inner(self) -> Vec<u8> { self.0 }
 }
 
@@ -124,7 +125,7 @@ pub struct Body(Vec<u8>);
 impl Body {
 	/// Create a new owning block body view. The raw bytes passed in must be an rlp-encoded block
 	/// body.
-	pub fn new(raw: Vec<u8>) -> Self { Body(raw) }
+	pub fn new(raw: Vec<u8>) -> Self { Self(raw) }
 
 	/// Get a borrowed view of the data within.
 	#[inline]
@@ -142,6 +143,7 @@ impl Body {
 	}
 
 	/// Consume the view and return the raw bytes.
+	#[allow(clippy::missing_const_for_fn)]
 	pub fn into_inner(self) -> Vec<u8> { self.0 }
 }
 
@@ -184,7 +186,7 @@ pub struct Block(Vec<u8>);
 
 impl Block {
 	/// Create a new owning block view. The raw bytes passed in must be an rlp-encoded block.
-	pub fn new(raw: Vec<u8>) -> Self { Block(raw) }
+	pub fn new(raw: Vec<u8>) -> Self { Self(raw) }
 
 	/// Create a new owning block view by concatenating the encoded header and body
 	pub fn new_from_header_and_body(header: &views::HeaderView, body: &views::BodyView) -> Self {
@@ -192,7 +194,7 @@ impl Block {
 		stream.append_raw(header.rlp().as_raw(), 1);
 		stream.append_raw(body.transactions_rlp().as_raw(), 1);
 		stream.append_raw(body.uncles_rlp().as_raw(), 1);
-		Block::new(stream.out())
+		Self::new(stream.out())
 	}
 
 	/// Get a borrowed view of the whole block.
@@ -219,6 +221,7 @@ impl Block {
 	}
 
 	/// Consume the view and return the raw bytes.
+	#[allow(clippy::missing_const_for_fn)]
 	pub fn into_inner(self) -> Vec<u8> { self.0 }
 
 	/// Returns the reference to slice of bytes

@@ -16,7 +16,7 @@
 
 //! Log EVM instruction output data traces from a simple formatting informant.
 
-use trace;
+
 use parity_bytes::ToPretty;
 
 use crate::{
@@ -36,7 +36,7 @@ impl vm::Informant for Informant {
 		println!("Test: {} ({})", name, action);
 	}
 
-	fn clone_sink(&self) -> Self::Sink { () }
+	fn clone_sink(&self) -> Self::Sink {  }
 
 	fn finish(result: vm::RunResult<Self::Output>, _sink: &mut Self::Sink) {
 		match result {

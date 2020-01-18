@@ -59,10 +59,9 @@ pub struct Progress {
 	last_tick: Instant,
 }
 
-impl Progress {
-	/// Create a new progress tracker.
-	pub fn new() -> Progress {
-		Progress {
+impl Default for Progress {
+	fn default() -> Self {
+		Self {
 			accounts: 0,
 			prev_accounts: 0,
 			blocks: 0,
@@ -73,24 +72,31 @@ impl Progress {
 			last_tick: Instant::now(),
 		}
 	}
+}
+
+impl Progress {
+	/// Create a new progress tracker.
+	pub fn new() -> Self {
+		Self::default()
+	}
 
 	/// Get the number of accounts snapshotted thus far.
-	pub fn accounts(&self) -> u64 { self.accounts }
+	pub const fn accounts(&self) -> u64 { self.accounts }
 
 	/// Get the number of blocks snapshotted thus far.
-	pub fn blocks(&self) -> u64 { self.blocks }
+	pub const fn blocks(&self) -> u64 { self.blocks }
 
 	/// Get the written size of the snapshot in bytes.
-	pub fn bytes(&self) -> u64 { self.bytes }
+	pub const fn bytes(&self) -> u64 { self.bytes }
 
 	/// Whether the snapshot is complete.
-	pub fn done(&self) -> bool  { self.done }
+	pub const fn done(&self) -> bool  { self.done }
 
 	/// Return the progress rate over the last tick (i.e. since last update).
 	pub fn rate(&self) -> (f64, f64) {
 		let dt = self.last_tick.elapsed().as_secs_f64();
 		if dt < 1.0 {
-			return (0f64, 0f64);
+			return (0_f64, 0_f64);
 		}
 		let delta_acc = self.accounts.saturating_sub(self.prev_accounts);
 		let delta_bytes = self.bytes.saturating_sub(self.prev_bytes);
@@ -147,13 +153,13 @@ impl ManifestData {
 			(1, decoder.val_at(0)?)
 		};
 
-		let state_hashes: Vec<H256> = decoder.list_at(start + 0)?;
+		let state_hashes: Vec<H256> = decoder.list_at(start)?;
 		let block_hashes: Vec<H256> = decoder.list_at(start + 1)?;
 		let state_root: H256 = decoder.val_at(start + 2)?;
 		let block_number: u64 = decoder.val_at(start + 3)?;
 		let block_hash: H256 = decoder.val_at(start + 4)?;
 
-		Ok(ManifestData {
+		Ok(Self {
 			version,
 			state_hashes,
 			block_hashes,

@@ -27,18 +27,19 @@ pub struct Bytes(pub Vec<u8>);
 
 impl Bytes {
 	/// Simple constructor.
-	pub fn new(bytes: Vec<u8>) -> Bytes {
-		Bytes(bytes)
+	pub fn new(bytes: Vec<u8>) -> Self {
+		Self(bytes)
 	}
 	/// Convert back to vector
+	#[allow(clippy::missing_const_for_fn)]
 	pub fn into_vec(self) -> Vec<u8> {
 		self.0
 	}
 }
 
 impl From<Vec<u8>> for Bytes {
-	fn from(bytes: Vec<u8>) -> Bytes {
-		Bytes(bytes)
+	fn from(bytes: Vec<u8>) -> Self {
+		Self(bytes)
 	}
 }
 
@@ -58,7 +59,7 @@ impl Serialize for Bytes {
 }
 
 impl<'a> Deserialize<'a> for Bytes {
-	fn deserialize<D>(deserializer: D) -> Result<Bytes, D::Error>
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
 	where D: Deserializer<'a> {
 		deserializer.deserialize_any(BytesVisitor)
 	}
@@ -114,7 +115,7 @@ mod tests {
 		assert!(bytes1.is_err());
 		assert!(bytes2.is_err());
 		assert!(bytes3.is_err());
-		assert_eq!(bytes4, Bytes(vec![]));
+		assert_eq!(bytes4, Bytes(Vec::new()));
 		assert_eq!(bytes5, Bytes(vec![0x12]));
 		assert_eq!(bytes6, Bytes(vec![0x1, 0x23]));
 	}

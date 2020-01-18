@@ -14,9 +14,58 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
+
+use std::convert::TryFrom;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-/// Temporary trait for `checked operations` on SystemTime until these are available in the standard library
+/// Temporary trait for `checked operations` on `SystemTime` until these are available in the standard library
 pub trait CheckedSystemTime {
 	/// Returns `Some<SystemTime>` when the result less or equal to `i32::max_value` to prevent `SystemTime` to panic because
 	/// it is platform specific, possible representations are i32, i64, u64 or Duration. `None` otherwise
@@ -30,7 +79,7 @@ impl CheckedSystemTime for SystemTime {
 		let this_dur = self.duration_since(UNIX_EPOCH).ok()?;
 		let total_time = this_dur.checked_add(dur)?;
 
-		if total_time.as_secs() <= i32::max_value() as u64 {
+		if i32::try_from(total_time.as_secs()).is_ok() {
 			Some(self + dur)
 		} else {
 			None
@@ -41,7 +90,7 @@ impl CheckedSystemTime for SystemTime {
 		let this_dur = self.duration_since(UNIX_EPOCH).ok()?;
 		let total_time = this_dur.checked_sub(dur)?;
 
-		if total_time.as_secs() <= i32::max_value() as u64 {
+		if i32::try_from(total_time.as_secs()).is_ok() {
 			Some(self - dur)
 		} else {
 			None

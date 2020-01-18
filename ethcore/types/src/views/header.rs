@@ -29,7 +29,7 @@ pub struct HeaderView<'a> {
 }
 
 impl<'a> HeaderView<'a> {
-	/// Creates a new Header view from valid ViewRlp
+	/// Creates a new Header view from valid `ViewRlp`
 	/// Use the `view!` macro to create this view in order to capture debugging info.
 	///
 	/// # Example
@@ -40,12 +40,10 @@ impl<'a> HeaderView<'a> {
 	///
 	/// use types::views::{HeaderView};
 	///
-	/// fn main() {
 	/// let bytes : &[u8] = &[];
 	/// let tx_view = view!(HeaderView, bytes);
-	/// }
 	/// ```
-	pub fn new(rlp: ViewRlp<'a>) -> HeaderView<'a> {
+	pub const fn new(rlp: ViewRlp<'a>) -> HeaderView<'a> {
 		HeaderView {
 			rlp
 		}
@@ -57,7 +55,7 @@ impl<'a> HeaderView<'a> {
 	}
 
 	/// Returns raw rlp.
-	pub fn rlp(&self) -> &ViewRlp<'a> { &self.rlp }
+	pub const fn rlp(&self) -> &ViewRlp<'a> { &self.rlp }
 
 	/// Returns parent hash.
 	pub fn parent_hash(&self) -> H256 { self.rlp.val_at(0) }
@@ -100,7 +98,7 @@ impl<'a> HeaderView<'a> {
 
 	/// Returns a vector of post-RLP-encoded seal fields.
 	pub fn seal(&self) -> Vec<Bytes> {
-		let mut seal = vec![];
+		let mut seal = Vec::new();
 		for i in 13..self.rlp.item_count() {
 			seal.push(self.rlp.at(i).as_raw().to_vec());
 		}
@@ -140,12 +138,12 @@ mod tests {
 		assert_eq!(view.transactions_root(), H256::from_str("88d2ec6b9860aae1a2c3b299f72b6a5d70d7f7ba4722c78f2c49ba96273c2158").unwrap());
 		assert_eq!(view.receipts_root(), H256::from_str("07c6fdfa8eea7e86b81f5b0fc0f78f90cc19f4aa60d323151e0cac660199e9a1").unwrap());
 		assert_eq!(view.log_bloom(), Bloom::default());
-		assert_eq!(view.difficulty(), 0x020080.into());
+		assert_eq!(view.difficulty(), 0x0002_0080.into());
 		assert_eq!(view.number(), 3);
-		assert_eq!(view.gas_limit(), 0x2fefba.into());
+		assert_eq!(view.gas_limit(), 0x002f_efba.into());
 		assert_eq!(view.gas_used(), 0x524d.into());
 		assert_eq!(view.timestamp(), 0x56_8e_93_2a);
-		assert_eq!(view.extra_data(), vec![] as Vec<u8>);
+		assert_eq!(view.extra_data(), Vec::new() as Vec<u8>);
 		assert_eq!(view.seal(), vec![mix_hash, nonce]);
 	}
 }

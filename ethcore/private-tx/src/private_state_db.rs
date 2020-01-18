@@ -31,7 +31,7 @@ pub struct PrivateStateDB {
 impl PrivateStateDB {
 	/// Constructs the object
 	pub fn new(db: Arc<dyn KeyValueDB>) -> Self {
-		PrivateStateDB {
+		Self {
 			db,
 		}
 	}
@@ -46,7 +46,7 @@ impl PrivateStateDB {
 	}
 
 	/// Stores state for the hash
-	pub fn save_state(&self, storage: &Bytes) -> Result<H256, Error> {
+	pub fn save_state(&self, storage: &[u8]) -> Result<H256, Error> {
 		let state_hash = self.state_hash(storage)?;
 		let mut transaction = DBTransaction::new();
 		transaction.put(COL_PRIVATE_TRANSACTIONS_STATE, state_hash.as_bytes(), storage);
@@ -56,7 +56,7 @@ impl PrivateStateDB {
 	}
 
 	/// Returns state's hash without committing it to DB
-	pub fn state_hash(&self, state: &Bytes) -> Result<H256, Error> {
+	pub fn state_hash(&self, state: &[u8]) -> Result<H256, Error> {
 		Ok(KeccakHasher::hash(state))
 	}
 }

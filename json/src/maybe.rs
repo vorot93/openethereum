@@ -47,8 +47,8 @@ struct MaybeEmptyVisitor<T> {
 }
 
 impl<T> MaybeEmptyVisitor<T> {
-	fn new() -> Self {
-		MaybeEmptyVisitor {
+	const fn new() -> Self {
+		Self {
 			_phantom: PhantomData
 		}
 	}
@@ -74,9 +74,9 @@ impl<'a, T> Visitor<'a> for MaybeEmptyVisitor<T> where T: Deserialize<'a> {
 	}
 }
 
-impl<T> Into<Option<T>> for MaybeEmpty<T> {
-	fn into(self) -> Option<T> {
-		match self {
+impl<T> From<MaybeEmpty<T>> for Option<T> {
+	fn from(value: MaybeEmpty<T>) -> Self {
+		match value {
 			MaybeEmpty::Some(s) => Some(s),
 			MaybeEmpty::None => None
 		}
@@ -86,31 +86,31 @@ impl<T> Into<Option<T>> for MaybeEmpty<T> {
 #[cfg(test)]
 impl From<Uint> for MaybeEmpty<Uint> {
 	fn from(uint: Uint) -> Self {
-		MaybeEmpty::Some(uint)
+		Self::Some(uint)
 	}
 }
 
 impl From<MaybeEmpty<Uint>> for U256 {
-	fn from(maybe: MaybeEmpty<Uint>) -> U256 {
+	fn from(maybe: MaybeEmpty<Uint>) -> Self {
 		match maybe {
 			MaybeEmpty::Some(v) => v.0,
-			MaybeEmpty::None => U256::zero(),
+			MaybeEmpty::None => Self::zero(),
 		}
 	}
 }
 
 impl From<MaybeEmpty<Uint>> for u64 {
-	fn from(maybe: MaybeEmpty<Uint>) -> u64 {
+	fn from(maybe: MaybeEmpty<Uint>) -> Self {
 		match maybe {
 			MaybeEmpty::Some(v) => v.0.low_u64(),
-			MaybeEmpty::None => 0u64,
+			MaybeEmpty::None => 0_u64,
 		}
 	}
 }
 
 impl Default for MaybeEmpty<Uint> {
 	fn default() -> Self {
-		MaybeEmpty::Some(Uint::default())
+		Self::Some(Uint::default())
 	}
 }
 

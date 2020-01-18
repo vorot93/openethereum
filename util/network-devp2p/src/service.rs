@@ -37,7 +37,7 @@ struct HostHandler {
 
 impl IoHandler<NetworkIoMessage> for HostHandler {
 	fn message(&self, _io: &IoContext<NetworkIoMessage>, message: &NetworkIoMessage) {
-		if let NetworkIoMessage::NetworkStarted(ref public_url) = *message {
+		if let NetworkIoMessage::NetworkStarted(public_url) = message {
 			let mut url = self.public_url.write();
 			if url.as_ref().map_or(true, |uref| uref != public_url) {
 				info!(target: "network", "Public node URL: {}", Colour::White.bold().paint(AsRef::<str>::as_ref(public_url)));
@@ -60,11 +60,11 @@ pub struct NetworkService {
 
 impl NetworkService {
 	/// Starts IO event loop
-	pub fn new(config: NetworkConfiguration, filter: Option<Arc<dyn ConnectionFilter>>) -> Result<NetworkService, Error> {
+	pub fn new(config: NetworkConfiguration, filter: Option<Arc<dyn ConnectionFilter>>) -> Result<Self, Error> {
 		let host_handler = Arc::new(HostHandler { public_url: RwLock::new(None) });
 		let io_service = IoService::<NetworkIoMessage>::start()?;
 
-		Ok(NetworkService {
+		Ok(Self {
 			io_service,
 			host_info: config.client_version.clone(),
 			host: RwLock::new(None),
@@ -96,12 +96,12 @@ impl NetworkService {
 	}
 
 	/// Returns underlying io service.
-	pub fn io(&self) -> &IoService<NetworkIoMessage> {
+	pub const fn io(&self) -> &IoService<NetworkIoMessage> {
 		&self.io_service
 	}
 
 	/// Returns the number of peers allowed.
-	pub fn num_peers_range(&self) -> RangeInclusive<u32> {
+	pub const fn num_peers_range(&self) -> RangeInclusive<u32> {
 		self.config.min_peers..=self.config.max_peers
 	}
 
@@ -142,7 +142,7 @@ impl NetworkService {
 	/// Stop network IO.
 	pub fn stop(&self) {
 		let mut host = self.host.write();
-		if let Some(ref host) = *host {
+		if let Some(host) = host.as_ref() {
 			let io = IoContext::new(self.io_service.channel(), 0); //TODO: take token id from host
 			host.stop(&io);
 		}
@@ -151,13 +151,13 @@ impl NetworkService {
 
 	/// Get a list of all connected peers by id.
 	pub fn connected_peers(&self) -> Vec<PeerId> {
-		self.host.read().as_ref().map(|h| h.connected_peers()).unwrap_or_else(Vec::new)
+		self.host.read().as_ref().map_or_else(Vec::new, |h| h.connected_peers())
 	}
 
 	/// Try to add a reserved peer.
 	pub fn add_reserved_peer(&self, peer: &str) -> Result<(), Error> {
 		let host = self.host.read();
-		if let Some(ref host) = *host {
+		if let Some(host) = host.as_ref() {
 			host.add_reserved_node(peer)
 		} else {
 			Ok(())
@@ -167,7 +167,7 @@ impl NetworkService {
 	/// Try to remove a reserved peer.
 	pub fn remove_reserved_peer(&self, peer: &str) -> Result<(), Error> {
 		let host = self.host.read();
-		if let Some(ref host) = *host {
+		if let Some(host) = host.as_ref() {
 			host.remove_reserved_node(peer)
 		} else {
 			Ok(())
@@ -177,7 +177,7 @@ impl NetworkService {
 	/// Set the non-reserved peer mode.
 	pub fn set_non_reserved_mode(&self, mode: NonReservedPeerMode) {
 		let host = self.host.read();
-		if let Some(ref host) = *host {
+		if let Some(host) = host.as_ref() {
 			let io_ctxt = IoContext::new(self.io_service.channel(), 0);
 			host.set_non_reserved_mode(mode, &io_ctxt);
 		}
@@ -187,7 +187,7 @@ impl NetworkService {
 	pub fn with_context<F>(&self, protocol: ProtocolId, action: F) where F: FnOnce(&dyn NetworkContext) {
 		let io = IoContext::new(self.io_service.channel(), 0);
 		let host = self.host.read();
-		if let Some(ref host) = host.as_ref() {
+		if let Some(host) = host.as_ref() {
 			host.with_context(protocol, &io, action);
 		};
 	}
@@ -196,6 +196,6 @@ impl NetworkService {
 	pub fn with_context_eval<F, T>(&self, protocol: ProtocolId, action: F) -> Option<T> where F: FnOnce(&dyn NetworkContext) -> T {
 		let io = IoContext::new(self.io_service.channel(), 0);
 		let host = self.host.read();
-		host.as_ref().map(|ref host| host.with_context_eval(protocol, &io, action))
+		host.as_ref().map(|host| host.with_context_eval(protocol, &io, action))
 	}
 }

@@ -43,12 +43,12 @@ pub struct SigningUnsafeClient<D> {
 }
 
 impl<D: Dispatcher + 'static> SigningUnsafeClient<D> {
-	/// Creates new SigningUnsafeClient.
+	/// Creates new `SigningUnsafeClient`.
 	pub fn new(accounts: &Arc<dyn dispatch::Accounts>, dispatcher: D) -> Self {
-		SigningUnsafeClient {
+		Self {
 			accounts: accounts.clone(),
 			dispatcher,
-			deprecation_notice: Default::default(),
+			deprecation_notice: DeprecationNotice::default(),
 		}
 	}
 

@@ -107,13 +107,13 @@ impl Session {
 	/// Create a new session out of completed handshake. This clones the handshake connection object
 	/// and leaves the handshake in limbo to be de-registered from the event loop.
 	pub fn new<Message>(io: &IoContext<Message>, socket: TcpStream, token: StreamToken, id: Option<&NodeId>,
-		nonce: &H256, host: &HostInfo) -> Result<Session, Error>
+		nonce: &H256, host: &HostInfo) -> Result<Self, Error>
 		where Message: Send + Clone + Sync + 'static {
 		let originated = id.is_some();
 		let mut handshake = Handshake::new(token, id, socket, nonce).expect("Can't create handshake");
 		let local_addr = handshake.connection.local_addr_str();
 		handshake.start(io, host, originated)?;
-		Ok(Session {
+		Ok(Self {
 			state: State::Handshake(handshake),
 			had_hello: false,
 			info: SessionInfo {
@@ -136,7 +136,7 @@ impl Session {
 	}
 
 	fn complete_handshake<Message>(&mut self, io: &IoContext<Message>, host: &HostInfo) -> Result<(), Error> where Message: Send + Sync + Clone {
-		let connection = if let State::Handshake(ref mut h) = self.state {
+		let connection = if let State::Handshake(h) = &mut self.state {
 			self.info.id = Some(h.id);
 			self.info.remote_address = h.connection.remote_addr_str();
 			EncryptedConnection::new(h)?
@@ -149,9 +149,9 @@ impl Session {
 	}
 
 	fn connection(&self) -> &Connection {
-		match self.state {
-			State::Handshake(ref h) => &h.connection,
-			State::Session(ref s) => &s.connection,
+		match &self.state {
+			State::Handshake(h) => &h.connection,
+			State::Session(s) => &s.connection,
 		}
 	}
 
@@ -161,7 +161,7 @@ impl Session {
 	}
 
 	/// Check if session is ready to send/receive data
-	pub fn is_ready(&self) -> bool {
+	pub const fn is_ready(&self) -> bool {
 		self.had_hello
 	}
 
@@ -171,7 +171,7 @@ impl Session {
 	}
 
 	/// Check if this session is expired.
-	pub fn expired(&self) -> bool {
+	pub const fn expired(&self) -> bool {
 		self.expired
 	}
 
@@ -192,14 +192,14 @@ impl Session {
 		}
 		let mut create_session = false;
 		let mut packet_data = None;
-		match self.state {
-			State::Handshake(ref mut h) => {
+		match &mut self.state {
+			State::Handshake(h) => {
 				h.readable(io, host)?;
 				if h.done() {
 					create_session = true;
 				}
 			}
-			State::Session(ref mut c) => {
+			State::Session(c) => {
 				match c.readable(io)? {
 					data @ Some(_) => packet_data = data,
 					None => return Ok(SessionData::None)
@@ -218,9 +218,9 @@ impl Session {
 
 	/// Writable IO handler. Sends pending packets.
 	pub fn writable<Message>(&mut self, io: &IoContext<Message>, _host: &HostInfo) -> Result<(), Error> where Message: Send + Sync + Clone {
-		match self.state {
-			State::Handshake(ref mut h) => h.writable(io),
-			State::Session(ref mut s) => s.writable(io),
+		match &mut self.state {
+			State::Handshake(h) => h.writable(io),
+			State::Session(s) => s.writable(io),
 		}
 	}
 
@@ -265,7 +265,7 @@ impl Session {
 		if self.expired() {
 			return Err(Error::Expired);
 		}
-		let mut i = 0usize;
+		let mut i = 0_usize;
 		let pid = match protocol {
 			Some(protocol) => {
 				while protocol != self.info.capabilities[i].protocol {
@@ -287,7 +287,7 @@ impl Session {
 			if payload.len() > MAX_PAYLOAD_SIZE {
 				return Err(Error::OversizedPacket);
 			}
-			let len = snappy::compress_into(&payload, &mut compressed);
+			let len = snappy::compress_into(payload, &mut compressed);
 			trace!(target: "network", "compressed {} to {}", payload.len(), len);
 			payload = &compressed[0..len];
 		}
@@ -343,10 +343,10 @@ impl Session {
 		}
 		let data = if self.compression {
 			let compressed = &packet.data[1..];
-			if snappy::decompressed_len(&compressed)? > MAX_PAYLOAD_SIZE {
+			if snappy::decompressed_len(compressed)? > MAX_PAYLOAD_SIZE {
 				return Err(Error::OversizedPacket);
 			}
-			snappy::decompress(&compressed)?
+			snappy::decompress(compressed)?
 		} else {
 			packet.data[1..].to_owned()
 		};
@@ -377,7 +377,7 @@ impl Session {
 			PACKET_GET_PEERS => Ok(SessionData::None), //TODO;
 			PACKET_PEERS => Ok(SessionData::None),
 			PACKET_USER ..= PACKET_LAST => {
-				let mut i = 0usize;
+				let mut i = 0_usize;
 				while packet_id >= self.info.capabilities[i].id_offset + self.info.capabilities[i].packet_count {
 					i += 1;
 					if i == self.info.capabilities.len() {
@@ -390,12 +390,12 @@ impl Session {
 				let protocol = self.info.capabilities[i].protocol;
 				let protocol_packet_id = packet_id - self.info.capabilities[i].id_offset;
 
-				match *self.protocol_states.entry(protocol).or_insert_with(|| ProtocolState::Pending(Vec::new())) {
+				match self.protocol_states.entry(protocol).or_insert_with(|| ProtocolState::Pending(Vec::new())) {
 					ProtocolState::Connected => {
 						trace!(target: "network", "Packet {} mapped to {:?}:{}, i={}, capabilities={:?}", packet_id, protocol, protocol_packet_id, i, self.info.capabilities);
 						Ok(SessionData::Packet { data, protocol, packet_id: protocol_packet_id } )
 					}
-					ProtocolState::Pending(ref mut pending) => {
+					ProtocolState::Pending(pending) => {
 						trace!(target: "network", "Packet {} deferred until protocol connection event completion", packet_id);
 						pending.push((data, protocol_packet_id));
 
@@ -508,11 +508,11 @@ impl Session {
 	}
 
 	fn send<Message>(&mut self, io: &IoContext<Message>, data: &[u8]) -> Result<(), Error> where Message: Send + Sync + Clone {
-		match self.state {
+		match &mut self.state {
 			State::Handshake(_) => {
 				warn!(target:"network", "Unexpected send request");
 			},
-			State::Session(ref mut s) => {
+			State::Session(s) => {
 				s.send_packet(io, data)?
 			},
 		}

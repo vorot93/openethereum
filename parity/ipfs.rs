@@ -30,12 +30,12 @@ pub struct Configuration {
 
 impl Default for Configuration {
 	fn default() -> Self {
-		Configuration {
+		Self {
 			enabled: false,
 			port: 5001,
 			interface: "127.0.0.1".into(),
-			cors: Some(vec![]),
-			hosts: Some(vec![]),
+			cors: Some(Vec::new()),
+			hosts: Some(Vec::new()),
 		}
 	}
 }

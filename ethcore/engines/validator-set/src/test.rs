@@ -47,9 +47,9 @@ pub struct TestSet {
 
 impl Default for TestSet {
 	fn default() -> Self {
-		TestSet::new(
-			Default::default(),
-			Default::default(),
+		Self::new(
+			Arc::new(AtomicUsize::new(0)),
+			Arc::new(AtomicUsize::new(0)),
 			vec![Address::from_str("7d577a597b2742b498cb5cf0c26cdcd726d39e6e").unwrap()]
 		)
 	}
@@ -57,7 +57,7 @@ impl Default for TestSet {
 
 impl TestSet {
 	pub fn new(last_malicious: Arc<AtomicUsize>, last_benign: Arc<AtomicUsize>, validators: Vec<Address>) -> Self {
-		TestSet {
+		Self {
 			validator: SimpleList::new(validators),
 			last_malicious,
 			last_benign,
@@ -65,7 +65,7 @@ impl TestSet {
 	}
 
 	pub fn from_validators(validators: Vec<Address>) -> Self {
-		TestSet::new(Default::default(), Default::default(), validators)
+		Self::new(Arc::new(AtomicUsize::new(0)), Arc::new(AtomicUsize::new(0)), validators)
 	}
 
 	pub fn last_malicious(&self) -> usize {

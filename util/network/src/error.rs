@@ -38,21 +38,21 @@ pub enum DisconnectReason
 }
 
 impl DisconnectReason {
-	pub fn from_u8(n: u8) -> DisconnectReason {
+	pub fn from_u8(n: u8) -> Self {
 		match n {
-			0 => DisconnectReason::DisconnectRequested,
-			1 => DisconnectReason::TCPError,
-			2 => DisconnectReason::BadProtocol,
-			3 => DisconnectReason::UselessPeer,
-			4 => DisconnectReason::TooManyPeers,
-			5 => DisconnectReason::DuplicatePeer,
-			6 => DisconnectReason::IncompatibleProtocol,
-			7 => DisconnectReason::NullIdentity,
-			8 => DisconnectReason::ClientQuit,
-			9 => DisconnectReason::UnexpectedIdentity,
-			10 => DisconnectReason::LocalIdentity,
-			11 => DisconnectReason::PingTimeout,
-			_ => DisconnectReason::Unknown,
+			0 => Self::DisconnectRequested,
+			1 => Self::TCPError,
+			2 => Self::BadProtocol,
+			3 => Self::UselessPeer,
+			4 => Self::TooManyPeers,
+			5 => Self::DuplicatePeer,
+			6 => Self::IncompatibleProtocol,
+			7 => Self::NullIdentity,
+			8 => Self::ClientQuit,
+			9 => Self::UnexpectedIdentity,
+			10 => Self::LocalIdentity,
+			11 => Self::PingTimeout,
+			_ => Self::Unknown,
 		}
 	}
 }
@@ -61,7 +61,7 @@ impl fmt::Display for DisconnectReason {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		use self::DisconnectReason::*;
 
-		let msg = match *self {
+		let msg = match self {
 			DisconnectRequested => "disconnect requested",
 			TCPError => "TCP error",
 			BadProtocol => "bad protocol",
@@ -128,27 +128,27 @@ pub enum Error {
 	Io(io::Error),
 }
 
-/// Wraps io::Error for Display impl
+/// Wraps `io::Error` for `Display` impl
 #[derive(Debug)]
 pub struct AddressResolveError(Option<io::Error>);
 
 impl fmt::Display for AddressResolveError {
 	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-		write!(f, "{}", self.0.as_ref().map_or("".to_string(), |e| e.to_string()))
+		write!(f, "{}", self.0.as_ref().map_or("".to_string(), ToString::to_string))
 	}
 }
 
 impl From<Option<io::Error>> for AddressResolveError {
 	fn from(err: Option<io::Error>) -> Self {
-		AddressResolveError(err)
+		Self(err)
 	}
 }
 
 impl error::Error for Error {
 	fn source(&self) -> Option<&(dyn error::Error + 'static)> {
 		match self {
-			Error::Decompression(e) => Some(e),
-			Error::Rlp(e) => Some(e),
+			Self::Decompression(e) => Some(e),
+			Self::Rlp(e) => Some(e),
 			_ => None,
 		}
 	}
@@ -156,46 +156,46 @@ impl error::Error for Error {
 
 impl From<IoError> for Error {
 	fn from(err: IoError) -> Self {
-		Error::SocketIo(err)
+		Self::SocketIo(err)
 	}
 }
 
 impl From<snappy::InvalidInput> for Error {
 	fn from(err: snappy::InvalidInput) -> Self {
-		Error::Decompression(err)
+		Self::Decompression(err)
 	}
 }
 
 impl From<rlp::DecoderError> for Error {
 	fn from(err: rlp::DecoderError) -> Self {
-		Error::Rlp(err)
+		Self::Rlp(err)
 	}
 }
 
 impl From<io::Error> for Error {
 	fn from(err: io::Error) -> Self {
 		match err.raw_os_error() {
-			Some(ENFILE) => Error::ProcessTooManyFiles,
-			Some(EMFILE) => Error::SystemTooManyFiles,
-			_ => Error::Io(err)
+			Some(ENFILE) => Self::ProcessTooManyFiles,
+			Some(EMFILE) => Self::SystemTooManyFiles,
+			_ => Self::Io(err)
 		}
 	}
 }
 
 impl From<crypto::publickey::Error> for Error {
 	fn from(_err: crypto::publickey::Error) -> Self {
-		Error::Auth
+		Self::Auth
 	}
 }
 
 impl From<crypto::error::SymmError> for Error {
 	fn from(_err: crypto::error::SymmError) -> Self {
-		Error::Auth
+		Self::Auth
 	}
 }
 
 impl From<net::AddrParseError> for Error {
-	fn from(_err: net::AddrParseError) -> Self { Error::AddressParse }
+	fn from(_err: net::AddrParseError) -> Self { Self::AddressParse }
 }
 
 #[test]

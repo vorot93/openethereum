@@ -41,7 +41,7 @@ impl Encodable for Transition {
 
 impl Decodable for Transition {
 	fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-		Ok(Transition {
+		Ok(Self {
 			block_hash: rlp.val_at(0)?,
 			block_number: rlp.val_at(1)?,
 			proof: rlp.val_at(2)?,
@@ -64,7 +64,7 @@ impl Encodable for PendingTransition {
 
 impl Decodable for PendingTransition {
 	fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-		Ok(PendingTransition {
+		Ok(Self {
 			proof: rlp.as_val()?,
 		})
 	}

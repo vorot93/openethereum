@@ -52,7 +52,7 @@ pub type SystemCall<'a> = dyn FnMut(Address, Vec<u8>) -> Result<Vec<u8>, String>
 /// A system-calling closure. Enacts calls on a block's state with code either from an on-chain contract, or hard-coded EVM or WASM (if enabled on-chain) codes.
 pub type SystemOrCodeCall<'a> = dyn FnMut(SystemOrCodeCallKind, Vec<u8>) -> Result<Vec<u8>, String> + 'a;
 
-/// Kind of SystemOrCodeCall, this is either an on-chain address, or code.
+/// Kind of `SystemOrCodeCall`, this is either an on-chain address, or code.
 #[derive(PartialEq, Debug, Clone)]
 pub enum SystemOrCodeCallKind {
 	/// On-chain address.
@@ -61,7 +61,7 @@ pub enum SystemOrCodeCallKind {
 	Code(Arc<Vec<u8>>, H256),
 }
 
-/// Default SystemOrCodeCall implementation.
+/// Default `SystemOrCodeCall` implementation.
 pub fn default_system_or_code_call<'a>(machine: &'a Machine, block: &'a mut ExecutedBlock) -> impl FnMut(SystemOrCodeCallKind, Vec<u8>) -> Result<Vec<u8>, String> + 'a {
 	move |to, data| {
 		let result = match to {
@@ -94,7 +94,7 @@ pub fn default_system_or_code_call<'a>(machine: &'a Machine, block: &'a mut Exec
 /// Proof dependent on state.
 pub trait StateDependentProof: Send + Sync {
 	/// Generate a proof, given the state.
-	fn generate_proof<'a>(&self, state: &machine_types::Call) -> Result<Vec<u8>, String>;
+	fn generate_proof(&self, state: &machine_types::Call) -> Result<Vec<u8>, String>;
 	/// Check a proof generated elsewhere (potentially by a peer).
 	// `engine` needed to check state proofs, while really this should
 	// just be state machine params.
@@ -221,7 +221,7 @@ pub trait Engine: Sync + Send {
 	/// no checks have to be done here, since all internally generated seals
 	/// should be valid.
 	///
-	/// Externally-generated seals (e.g. PoW) will need to be checked for validity.
+	/// Externally-generated seals (e.g. `PoW`) will need to be checked for validity.
 	///
 	/// It is fine to require access to state or a full client for this function, since
 	/// light clients do not generate seals.
@@ -243,7 +243,7 @@ pub trait Engine: Sync + Send {
 	fn verify_block_external(&self, _header: &Header) -> Result<(), Error> { Ok(()) }
 
 	/// Genesis epoch data.
-	fn genesis_epoch_data<'a>(&self, _header: &Header, _state: &machine_types::Call) -> Result<Vec<u8>, String> { Ok(Vec::new()) }
+	fn genesis_epoch_data(&self, _header: &Header, _state: &machine_types::Call) -> Result<Vec<u8>, String> { Ok(Vec::new()) }
 
 	/// Whether an epoch change is signalled at the given header but will require finality.
 	/// If a change can be enacted immediately then return `No` from this function but
@@ -311,7 +311,7 @@ pub trait Engine: Sync + Send {
 	/// Register a component which signs consensus messages.
 	fn set_signer(&self, _signer: Option<Box<dyn EngineSigner>>) {}
 
-	/// Sign using the EngineSigner, to be used for consensus tx signing.
+	/// Sign using the `EngineSigner`, to be used for consensus tx signing.
 	fn sign(&self, _hash: H256) -> Result<Signature, Error> { unimplemented!() }
 
 	/// Add Client which can be used for sealing, potentially querying the state and sending messages.
@@ -320,7 +320,7 @@ pub trait Engine: Sync + Send {
 	/// Trigger next step of the consensus engine.
 	fn step(&self) {}
 
-	/// Snapshot mode for the engine: Unsupported, PoW or PoA
+	/// Snapshot mode for the engine: `Unsupported`, `PoW` or `PoA`
 	fn snapshot_mode(&self) -> Snapshotting { Snapshotting::Unsupported }
 
 	/// Return a new open block header timestamp based on the parent timestamp.

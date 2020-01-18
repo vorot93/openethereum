@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Test implementation of SyncProvider.
+//! Test implementation of `SyncProvider`.
 
 use std::collections::BTreeMap;
 use ethereum_types::{H256, H512};
@@ -23,7 +23,7 @@ use network::client_version::ClientVersion;
 use futures::sync::mpsc;
 use sync::{SyncProvider, EthProtocolInfo, SyncStatus, PeerInfo, TransactionStats, SyncState};
 
-/// TestSyncProvider config.
+/// `TestSyncProvider` config.
 pub struct Config {
 	/// Protocol version.
 	pub network_id: u64,
@@ -42,7 +42,7 @@ pub struct TestSyncProvider {
 impl TestSyncProvider {
 	/// Creates new sync provider.
 	pub fn new(config: Config) -> Self {
-		TestSyncProvider {
+		Self {
 			status: RwLock::new(SyncStatus {
 				state: SyncState::Idle,
 				network_id: config.network_id,
@@ -74,7 +74,7 @@ impl TestSyncProvider {
 
 impl SyncProvider for TestSyncProvider {
 	fn status(&self) -> SyncStatus {
-		self.status.read().clone()
+		*self.status.read()
 	}
 
 	fn peers(&self) -> Vec<PeerInfo> {

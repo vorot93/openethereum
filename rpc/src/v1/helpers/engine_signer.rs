@@ -20,7 +20,7 @@ use accounts::AccountProvider;
 use ethkey::Password;
 use crypto::publickey::{Address, Message, Public, Signature, Error};
 
-/// An implementation of EngineSigner using internal account management.
+/// An implementation of `EngineSigner` using internal account management.
 pub struct EngineSigner {
 	accounts: Arc<AccountProvider>,
 	address: Address,
@@ -30,7 +30,7 @@ pub struct EngineSigner {
 impl EngineSigner {
 	/// Creates new `EngineSigner` given account manager and account details.
 	pub fn new(accounts: Arc<AccountProvider>, address: Address, password: Password) -> Self {
-		EngineSigner { accounts, address, password }
+		Self { accounts, address, password }
 	}
 }
 

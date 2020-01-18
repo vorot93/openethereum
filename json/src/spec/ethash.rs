@@ -24,7 +24,7 @@ use crate::{
 };
 use serde::Deserialize;
 
-/// Deserializable doppelganger of block rewards for EthashParams
+/// Deserializable doppelganger of block rewards for `EthashParams`
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(untagged)]
@@ -35,7 +35,7 @@ pub enum BlockReward {
 	Multi(BTreeMap<Uint, Uint>),
 }
 
-/// Deserializable doppelganger of EthashParams.
+/// Deserializable doppelganger of `EthashParams`.
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
@@ -163,7 +163,7 @@ mod tests {
 
 		assert_eq!(deserialized, Ethash {
 			params: EthashParams {
-				minimum_difficulty: Uint(U256::from(0x020000)),
+				minimum_difficulty: Uint(U256::from(0x0002_0000)),
 				difficulty_bound_divisor: Uint(U256::from(0x0800)),
 				difficulty_increment_divisor: None,
 				metropolis_difficulty_increment_divisor: None,
@@ -224,7 +224,7 @@ mod tests {
 		let deserialized: Ethash = serde_json::from_str(s).unwrap();
 		assert_eq!(deserialized, Ethash {
 			params: EthashParams {
-				minimum_difficulty: Uint(U256::from(0x020000)),
+				minimum_difficulty: Uint(U256::from(0x0002_0000)),
 				difficulty_bound_divisor: Uint(U256::from(0x0800)),
 				difficulty_increment_divisor: None,
 				metropolis_difficulty_increment_divisor: None,

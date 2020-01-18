@@ -43,7 +43,7 @@ const RECEIVE_PAYLOAD: Duration = Duration::from_secs(30);
 pub const MAX_PAYLOAD_SIZE: usize = (1 << 24) - 1;
 
 /// Network responses should try not to go over this limit.
-/// This should be lower than MAX_PAYLOAD_SIZE
+/// This should be lower than `MAX_PAYLOAD_SIZE`
 pub const PAYLOAD_SOFT_LIMIT: usize = (1 << 22) - 1;
 
 pub trait GenericSocket : Read + Write {
@@ -150,7 +150,7 @@ impl<Socket: GenericSocket> GenericConnection<Socket> {
 				},
 				Ok(Some(_)) => { panic!("Wrote past buffer");},
 				Ok(None) => Ok(WriteStatus::Ongoing),
-				Err(e) => Err(e)?
+				Err(e) => return Err(e.into()),
 			}
 		}.and_then(|r| {
 			if r == WriteStatus::Complete {
@@ -170,8 +170,8 @@ pub type Connection = GenericConnection<TcpStream>;
 
 impl Connection {
 	/// Create a new connection with given id and socket.
-	pub fn new(token: StreamToken, socket: TcpStream) -> Connection {
-		Connection {
+	pub fn new(token: StreamToken, socket: TcpStream) -> Self {
+		Self {
 			token,
 			socket,
 			send_queue: VecDeque::new(),
@@ -183,7 +183,7 @@ impl Connection {
 	}
 
 	/// Get socket token
-	pub fn token(&self) -> StreamToken {
+	pub const fn token(&self) -> StreamToken {
 		self.token
 	}
 
@@ -194,20 +194,20 @@ impl Connection {
 
 	/// Get remote peer address string
 	pub fn remote_addr_str(&self) -> String {
-		self.socket.peer_addr().map(|a| a.to_string()).unwrap_or_else(|err| {
+		self.socket.peer_addr().map_or_else(|err| {
 			debug!("error occurred getting peer_addr: {}, connection token: {}", err, self.token);
 			"Unknown peer address".to_owned()
-		})
+		}, |a| a.to_string())
 	}
 
 	/// Get local peer address string
 	pub fn local_addr_str(&self) -> String {
-		self.socket.local_addr().map(|a| a.to_string()).unwrap_or_else(|_| "Unknown".to_owned())
+		self.socket.local_addr().map_or_else(|_| "Unknown".to_string(), |a| a.to_string())
 	}
 
 	/// Clone this connection. Clears the receiving buffer of the returned connection.
 	pub fn try_clone(&self) -> io::Result<Self> {
-		Ok(Connection {
+		Ok(Self {
 			token: self.token,
 			socket: self.socket.try_clone()?,
 			rec_buf: Vec::new(),
@@ -275,7 +275,7 @@ enum EncryptedConnectionState {
 }
 
 /// Connection implementing `RLPx` framing
-/// https://github.com/ethereum/devp2p/blob/master/rlpx.md#framing
+/// <https://github.com/ethereum/devp2p/blob/master/rlpx.md#framing>
 pub struct EncryptedConnection {
 	/// Underlying tcp connection
 	pub connection: Connection,
@@ -300,7 +300,7 @@ pub struct EncryptedConnection {
 const NULL_IV : [u8; 16] = [0;16];
 impl EncryptedConnection {
 	/// Create an encrypted connection out of the handshake.
-	pub fn new(handshake: &mut Handshake) -> Result<EncryptedConnection, Error> {
+	pub fn new(handshake: &mut Handshake) -> Result<Self, Error> {
 		let shared = parity_crypto::publickey::ecdh::agree(handshake.ecdhe.secret(), &handshake.remote_ephemeral)?;
 		let mut nonce_material = H512::default();
 		if handshake.originated {
@@ -341,7 +341,7 @@ impl EncryptedConnection {
 
 		let old_connection = handshake.connection.try_clone()?;
 		let connection = ::std::mem::replace(&mut handshake.connection, old_connection);
-		let mut enc = EncryptedConnection {
+		let mut enc = Self {
 			connection,
 			encoder,
 			decoder,
@@ -366,23 +366,23 @@ impl EncryptedConnection {
 		}
 
 		header.append_raw(&[(len >> 16) as u8, (len >> 8) as u8, len as u8], 1);
-		header.append_raw(&[0xc2u8, 0x80u8, 0x80u8], 1);
+		header.append_raw(&[0xc2_u8, 0x80_u8, 0x80_u8], 1);
 		let padding = (16 - (len % 16)) % 16;
 
-		let mut packet = vec![0u8; 16 + 16 + len + padding + 16];
+		let mut packet = vec![0_u8; 16 + 16 + len + padding + 16];
 		let mut header = header.out();
-		header.resize(HEADER_LEN, 0u8);
-		&mut packet[..HEADER_LEN].copy_from_slice(&mut header);
+		header.resize(HEADER_LEN, 0_u8);
+		packet[..HEADER_LEN].copy_from_slice(&header);
 		self.encoder.encrypt(&mut packet[..HEADER_LEN])?;
-		EncryptedConnection::update_mac(&mut self.egress_mac, &self.mac_encoder_key, &packet[..HEADER_LEN])?;
+		Self::update_mac(&mut self.egress_mac, &self.mac_encoder_key, &packet[..HEADER_LEN])?;
 		self.egress_mac.clone().finalize(&mut packet[HEADER_LEN..32]);
-		&mut packet[32..32 + len].copy_from_slice(payload);
+		packet[32..32 + len].copy_from_slice(payload);
 		self.encoder.encrypt(&mut packet[32..32 + len])?;
 		if padding != 0 {
 			self.encoder.encrypt(&mut packet[(32 + len)..(32 + len + padding)])?;
 		}
 		self.egress_mac.update(&packet[32..(32 + len + padding)]);
-		EncryptedConnection::update_mac(&mut self.egress_mac, &self.mac_encoder_key, &[0u8; 0])?;
+		Self::update_mac(&mut self.egress_mac, &self.mac_encoder_key, &[0_u8; 0])?;
 		self.egress_mac.clone().finalize(&mut packet[(32 + len + padding)..]);
 		self.connection.send(io, packet);
 
@@ -394,7 +394,7 @@ impl EncryptedConnection {
 		if header.len() != ENCRYPTED_HEADER_LEN {
 			return Err(Error::Auth);
 		}
-		EncryptedConnection::update_mac(&mut self.ingress_mac, &self.mac_encoder_key, &header[0..16])?;
+		Self::update_mac(&mut self.ingress_mac, &self.mac_encoder_key, &header[0..16])?;
 		let mac = &header[16..];
 		let mut expected = H256::zero();
 		self.ingress_mac.clone().finalize(expected.as_bytes_mut());
@@ -426,7 +426,7 @@ impl EncryptedConnection {
 			return Err(Error::Auth);
 		}
 		self.ingress_mac.update(&payload[0..payload.len() - 16]);
-		EncryptedConnection::update_mac(&mut self.ingress_mac, &self.mac_encoder_key, &[0u8; 0])?;
+		Self::update_mac(&mut self.ingress_mac, &self.mac_encoder_key, &[0_u8; 0])?;
 
 		let mac = &payload[(payload.len() - 16)..];
 		let mut expected = H128::default();
@@ -447,11 +447,11 @@ impl EncryptedConnection {
 		let mut prev = H128::default();
 		mac.clone().finalize(prev.as_bytes_mut());
 		let mut enc = H128::default();
-		&mut enc[..].copy_from_slice(prev.as_bytes());
+		enc[..].copy_from_slice(prev.as_bytes());
 		let mac_encoder = AesEcb256::new(mac_encoder_key.as_bytes())?;
 		mac_encoder.encrypt(enc.as_bytes_mut())?;
 
-		enc = enc ^ if seed.is_empty() { prev } else { H128::from_slice(seed) };
+		enc ^= if seed.is_empty() { prev } else { H128::from_slice(seed) };
 		mac.update(enc.as_bytes());
 		Ok(())
 	}
@@ -509,24 +509,24 @@ mod tests {
 
 	impl Default for TestSocket {
 		fn default() -> Self {
-			TestSocket::new()
+			Self::new()
 		}
 	}
 
 	impl TestSocket {
-		pub fn new() -> Self {
-			TestSocket {
-				read_buffer: vec![],
-				write_buffer: vec![],
+		pub const fn new() -> Self {
+			Self {
+				read_buffer: Vec::new(),
+				write_buffer: Vec::new(),
 				cursor: 0,
 				buf_size: 0,
 			}
 		}
 
-		pub fn new_buf(buf_size: usize) -> TestSocket {
-			TestSocket {
-				read_buffer: vec![],
-				write_buffer: vec![],
+		pub const fn new_buf(buf_size: usize) -> Self {
+			Self {
+				read_buffer: Vec::new(),
+				write_buffer: Vec::new(),
 				cursor: 0,
 				buf_size,
 			}
@@ -538,15 +538,14 @@ mod tests {
 			let end_position = cmp::min(self.read_buffer.len(), self.cursor+buf.len());
 			if self.cursor > end_position { return Ok(0) }
 			let len = cmp::max(end_position - self.cursor, 0);
-			match len {
-				0 => Ok(0),
-				_ => {
-					for i in self.cursor..end_position {
-						buf[i-self.cursor] = self.read_buffer[i];
-					}
-					self.cursor = end_position;
-					Ok(len)
+			if len == 0 {
+				Ok(0)
+			} else {
+				for i in self.cursor..end_position {
+					buf[i-self.cursor] = self.read_buffer[i];
 				}
+				self.cursor = end_position;
+				Ok(len)
 			}
 		}
 	}
@@ -596,14 +595,14 @@ mod tests {
 
 	impl Default for TestConnection {
 		fn default() -> Self {
-			TestConnection::new()
+			Self::new()
 		}
 	}
 
 	impl TestConnection {
 		pub fn new() -> Self {
-			TestConnection {
-				token: 999998888usize,
+			Self {
+				token: 999_998_888_usize,
 				socket: TestSocket::new(),
 				send_queue: VecDeque::new(),
 				rec_buf: Bytes::new(),
@@ -618,14 +617,14 @@ mod tests {
 
 	impl Default for TestBrokenConnection {
 		fn default() -> Self {
-			TestBrokenConnection::new()
+			Self::new()
 		}
 	}
 
 	impl TestBrokenConnection {
 		pub fn new() -> Self {
-			TestBrokenConnection {
-				token: 999998888usize,
+			Self {
+				token: 999_998_888_usize,
 				socket: TestBrokenSocket { error: "test broken socket".to_owned() },
 				send_queue: VecDeque::new(),
 				rec_buf: Bytes::new(),
@@ -659,7 +658,7 @@ mod tests {
 
 		let encoder = AesEcb256::new(key.as_bytes()).unwrap();
 		got = H128::default();
-		got.as_bytes_mut().copy_from_slice(&before2.as_bytes());
+		got.as_bytes_mut().copy_from_slice(before2.as_bytes());
 		encoder.encrypt(got.as_bytes_mut()).unwrap();
 		assert_eq!(got, after2);
 	}

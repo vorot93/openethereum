@@ -90,20 +90,20 @@ pub enum Error {
 
 impl From<EthPublicKeyCryptoError> for Error {
 	fn from(err: EthPublicKeyCryptoError) -> Self {
-		Error::InvalidSignature(format!("{}", err))
+		Self::InvalidSignature(format!("{}", err))
 	}
 }
 
 impl From<rlp::DecoderError> for Error {
 	fn from(err: rlp::DecoderError) -> Self {
-		Error::InvalidRlp(format!("{}", err))
+		Self::InvalidRlp(format!("{}", err))
 	}
 }
 
 impl fmt::Display for Error {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		use self::Error::*;
-		let msg = match *self {
+		let msg = match self {
 			AlreadyImported => "Already imported".into(),
 			Old => "No longer valid".into(),
 			TooCheapToReplace { prev, new } =>
@@ -120,15 +120,15 @@ impl fmt::Display for Error {
 					balance, cost),
 			GasLimitExceeded { limit, got } =>
 				format!("Gas limit exceeded. Limit={}, Given={}", limit, got),
-			InvalidGasLimit(ref err) => format!("Invalid gas limit. {}", err),
+			InvalidGasLimit(err) => format!("Invalid gas limit. {}", err),
 			SenderBanned => "Sender is temporarily banned.".into(),
 			RecipientBanned => "Recipient is temporarily banned.".into(),
 			CodeBanned => "Contract code is temporarily banned.".into(),
 			InvalidChainId => "Transaction of this chain ID is not allowed on this chain.".into(),
-			InvalidSignature(ref err) => format!("Transaction has invalid signature: {}.", err),
+			InvalidSignature(err) => format!("Transaction has invalid signature: {}.", err),
 			NotAllowed => "Sender does not have permissions to execute this type of transaction".into(),
 			TooBig => "Transaction too big".into(),
-			InvalidRlp(ref err) => format!("Transaction has invalid RLP structure: {}.", err),
+			InvalidRlp(err) => format!("Transaction has invalid RLP structure: {}.", err),
 		};
 
 		f.write_fmt(format_args!("Transaction error ({})", msg))
@@ -158,19 +158,19 @@ pub enum CallError {
 
 impl From<ExecutionError> for CallError {
 	fn from(error: ExecutionError) -> Self {
-		CallError::Execution(error)
+		Self::Execution(error)
 	}
 }
 
 impl fmt::Display for CallError {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		use self::CallError::*;
-		let msg = match *self {
+		let msg = match self {
 			TransactionNotFound => "Transaction couldn't be found in the chain".into(),
 			StatePruned => "Couldn't find the transaction block's state in the chain".into(),
-			Exceptional(ref e) => format!("An exception ({}) happened in the execution", e),
+			Exceptional(e) => format!("An exception ({}) happened in the execution", e),
 			StateCorrupt => "Stored state found to be corrupted.".into(),
-			Execution(ref e) => format!("{}", e),
+			Execution(e) => format!("{}", e),
 		};
 
 		f.write_fmt(format_args!("Transaction execution error ({}).", msg))

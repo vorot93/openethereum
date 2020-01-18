@@ -187,7 +187,7 @@ pub fn block_to_cht_number(block_num: u64) -> Option<u64> {
 /// More generally: CHT N includes block (1 + N*SIZE)...((N+1)*SIZE).
 /// This is because the genesis hash is assumed to be known
 /// and including it would be redundant.
-pub fn start_number(cht_num: u64) -> u64 {
+pub const fn start_number(cht_num: u64) -> u64 {
 	(cht_num * SIZE) + 1
 }
 

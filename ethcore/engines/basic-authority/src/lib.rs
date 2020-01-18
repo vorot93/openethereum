@@ -16,6 +16,43 @@
 
 //! A blockchain engine that supports a basic, non-BFT proof-of-authority.
 
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+)]
+
 use std::sync::Weak;
 
 use common_types::{
@@ -49,7 +86,7 @@ pub struct BasicAuthorityParams {
 
 impl From<ethjson::spec::BasicAuthorityParams> for BasicAuthorityParams {
 	fn from(p: ethjson::spec::BasicAuthorityParams) -> Self {
-		BasicAuthorityParams {
+		Self {
 			validators: p.validators,
 		}
 	}
@@ -74,10 +111,11 @@ fn verify_external(header: &Header, validators: &dyn ValidatorSet) -> Result<(),
 		return Err(EngineError::NotAuthorized(*header.author()).into())
 	}
 
-	match validators.contains(header.parent_hash(), &signer) {
-		false => Err(BlockError::InvalidSeal.into()),
-		true => Ok(())
+	if !validators.contains(header.parent_hash(), &signer) {
+		return Err(BlockError::InvalidSeal.into());
 	}
+	
+	Ok(())
 }
 
 /// Engine using `BasicAuthority`, trivial proof-of-authority consensus.
@@ -88,10 +126,10 @@ pub struct BasicAuthority {
 }
 
 impl BasicAuthority {
-	/// Create a new instance of BasicAuthority engine
+	/// Create a new instance of `BasicAuthority` engine
 	pub fn new(our_params: BasicAuthorityParams, machine: Machine) -> Self {
-		BasicAuthority {
-			machine: machine,
+		Self {
+			machine,
 			signer: RwLock::new(None),
 			validators: new_validator_set(our_params.validators),
 		}
@@ -247,7 +285,7 @@ mod tests {
 	#[test]
 	fn can_return_schedule() {
 		let engine = new_test_authority().engine;
-		let schedule = engine.schedule(10000000);
+		let schedule = engine.schedule(10_000_000);
 		assert!(schedule.stack_limit > 0);
 	}
 
@@ -272,7 +310,7 @@ mod tests {
 		let genesis_header = spec.genesis_header();
 		let db = spec.ensure_db_good(get_temp_state_db(), &Default::default()).unwrap();
 		let last_hashes = Arc::new(vec![genesis_header.hash()]);
-		let b = OpenBlock::new(engine, Default::default(), false, db, &genesis_header, last_hashes, addr, (3141562.into(), 31415620.into()), vec![], false).unwrap();
+		let b = OpenBlock::new(engine, Default::default(), false, db, &genesis_header, last_hashes, addr, (3_141_562.into(), 31_415_620.into()), Vec::new(), false).unwrap();
 		let b = b.close_and_lock().unwrap();
 		if let Seal::Regular(seal) = engine.generate_seal(&b, &genesis_header) {
 			assert!(b.try_seal(engine, seal).is_ok());

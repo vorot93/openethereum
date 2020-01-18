@@ -42,7 +42,7 @@ use clique::Clique;
 use engine::Engine;
 use ethash_engine::Ethash;
 use ethereum_types::{H256, Bloom, U256, Address};
-use ethjson;
+
 use instant_seal::{InstantSeal, InstantSealParams};
 use keccak_hash::{KECCAK_NULL_RLP, keccak};
 use log::{trace, warn};
@@ -73,17 +73,17 @@ pub struct SpecParams<'a> {
 
 impl<'a> SpecParams<'a> {
 	/// Create from a cache path, with null values for the other fields
-	pub fn from_path(path: &'a Path) -> Self {
-		SpecParams {
-			cache_dir: path,
+	pub const fn from_path(cache_dir: &'a Path) -> Self {
+		Self {
+			cache_dir,
 			optimization_setting: None,
 		}
 	}
 
 	/// Create from a cache path and an optimization setting
-	pub fn new(path: &'a Path, optimization: OptimizeFor) -> Self {
-		SpecParams {
-			cache_dir: path,
+	pub const fn new(cache_dir: &'a Path, optimization: OptimizeFor) -> Self {
+		Self {
+			cache_dir,
 			optimization_setting: Some(optimization),
 		}
 	}
@@ -134,7 +134,7 @@ fn run_constructors<T: Backend>(
 	let mut state = State::from_existing(db, root, start_nonce, factories.clone())?;
 	if constructors.is_empty() {
 		state.populate_from(genesis_state.clone());
-		let _ = state.commit()?;
+		state.commit()?;
 	} else {
 		// Execute contract constructors.
 		let env_info = EnvInfo {
@@ -142,25 +142,25 @@ fn run_constructors<T: Backend>(
 			author,
 			timestamp,
 			difficulty,
-			last_hashes: Default::default(),
+			last_hashes: Arc::default(),
 			gas_used: U256::zero(),
 			gas_limit: U256::max_value(),
 		};
 
 		let from = Address::zero();
-		for &(ref address, ref constructor) in constructors.iter() {
+		for (address, constructor) in constructors {
 			trace!(target: "spec", "run_constructors: Creating a contract at {}.", address);
 			trace!(target: "spec", "  .. root before = {}", state.root());
 			let params = ActionParams {
-				code_address: address.clone(),
+				code_address: *address,
 				code_hash: Some(keccak(constructor)),
 				code_version: U256::zero(),
-				address: address.clone(),
-				sender: from.clone(),
-				origin: from.clone(),
+				address: *address,
+				sender: from,
+				origin: from,
 				gas: U256::max_value(),
-				gas_price: Default::default(),
-				value: ActionValue::Transfer(Default::default()),
+				gas_price: U256::zero(),
+				value: ActionValue::Transfer(U256::zero()),
 				code: Some(Arc::new(constructor.clone())),
 				data: None,
 				call_type: CallType::None,
@@ -172,14 +172,14 @@ fn run_constructors<T: Backend>(
 			{
 				let machine = engine.machine();
 				let schedule = machine.schedule(env_info.number);
-				let mut exec = Executive::new(&mut state, &env_info, &machine, &schedule);
+				let mut exec = Executive::new(&mut state, &env_info, machine, &schedule);
 				// failing create is not a bug
 				if let Err(e) = exec.create(params, &mut substate, &mut NoopTracer, &mut NoopVMTracer) {
 					warn!(target: "spec", "Genesis constructor execution at {} failed: {}.", address, e);
 				}
 			}
 
-			let _ = state.commit()?;
+			state.commit()?;
 		}
 	}
 	Ok(state.drop())
@@ -239,7 +239,7 @@ pub struct SpecHardcodedSync {
 
 impl From<ethjson::spec::HardcodedSync> for SpecHardcodedSync {
 	fn from(sync: ethjson::spec::HardcodedSync) -> Self {
-		SpecHardcodedSync {
+		Self {
 			header: encoded::Header::new(sync.header.into()),
 			total_difficulty: sync.total_difficulty.into(),
 			chts: sync.chts.into_iter().map(Into::into).collect(),
@@ -298,14 +298,14 @@ fn load_from(spec_params: SpecParams, s: ethjson::spec::Spec) -> Result<Spec, Er
 		author,
 		timestamp,
 		difficulty,
-		&Default::default(),
+		&Factories::default(),
 		BasicBackend(journaldb::new_memory_db()),
 	)?;
 
 	let s = Spec {
 		engine,
-		name: s.name.clone().into(),
-		data_dir: s.data_dir.unwrap_or(s.name).into(),
+		name: s.name.clone(),
+		data_dir: s.data_dir.unwrap_or(s.name),
 		nodes: s.nodes.unwrap_or_else(Vec::new),
 		parent_hash: g.parent_hash,
 		transactions_root: g.transactions_root,
@@ -333,7 +333,7 @@ impl Spec {
 		params: CommonParams,
 		builtins: BTreeMap<Address, Builtin>,
 	) -> Machine {
-		if let ethjson::spec::Engine::Ethash(ref ethash) = *engine_spec {
+		if let ethjson::spec::Engine::Ethash(ethash) = engine_spec {
 			Machine::with_ethash_extensions(params, builtins, ethash.params.clone().into())
 		} else {
 			Machine::regular(params, builtins)
@@ -365,7 +365,7 @@ impl Spec {
 
 	/// Get common blockchain parameters.
 	pub fn params(&self) -> &CommonParams {
-		&self.engine.params()
+		self.engine.params()
 	}
 
 	/// Get the configured Network ID.
@@ -390,7 +390,7 @@ impl Spec {
 
 	/// Get the header of the genesis block.
 	pub fn genesis_header(&self) -> Header {
-		let mut header: Header = Default::default();
+		let mut header = Header::default();
 		header.set_parent_hash(self.parent_hash.clone());
 		header.set_timestamp(self.timestamp);
 		header.set_number(0);
@@ -448,7 +448,7 @@ impl Spec {
 			self.author,
 			self.timestamp,
 			self.difficulty,
-			&Default::default(),
+			&Factories::default(),
 			BasicBackend(journaldb::new_memory_db()),
 		)?;
 
@@ -492,7 +492,7 @@ impl Spec {
 					.collect();
 				let builtins = builtins?;
 				let params = CommonParams::from(s.params);
-				Ok(Spec::machine(&s.engine, params, builtins))
+				Ok(Self::machine(&s.engine, params, builtins))
 			})
 	}
 
@@ -509,7 +509,7 @@ impl Spec {
 	pub fn genesis_epoch_data(&self) -> Result<Vec<u8>, String> {
 		let genesis = self.genesis_header();
 
-		let factories = Default::default();
+		let factories = Factories::default();
 		let mut db = journaldb::new(
 			Arc::new(kvdb_memorydb::create(1)),
 			journaldb::Algorithm::Archive,
@@ -536,8 +536,8 @@ impl Spec {
 				nonce: self.engine.account_start_nonce(0),
 				action: Action::Call(a),
 				gas: U256::max_value(),
-				gas_price: U256::default(),
-				value: U256::default(),
+				gas_price: U256::zero(),
+				value: U256::zero(),
 				data: d,
 			}.fake_sign(from);
 

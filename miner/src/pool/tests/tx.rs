@@ -30,7 +30,7 @@ pub struct Tx {
 
 impl Default for Tx {
 	fn default() -> Self {
-		Tx {
+		Self {
 			nonce: 123,
 			gas: 21_000,
 			gas_price: 1,
@@ -40,7 +40,7 @@ impl Default for Tx {
 
 impl Tx {
 	pub fn gas_price(gas_price: u64) -> Self {
-		Tx {
+		Self {
 			gas_price,
 			..Default::default()
 		}
@@ -157,6 +157,7 @@ impl TxExt for SignedTransaction {
 	}
 }
 
+#[allow(clippy::use_self)]
 impl TxExt for Vec<SignedTransaction> {
 	type Out = Vec<verifier::Transaction>;
 	type Verified = Vec<VerifiedTransaction>;

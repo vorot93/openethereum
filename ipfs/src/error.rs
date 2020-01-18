@@ -31,19 +31,19 @@ pub enum ServerError {
 
 /// Handle IO errors (ports taken when starting the server).
 impl From<std::io::Error> for ServerError {
-	fn from(err: std::io::Error) -> ServerError {
-		ServerError::IoError(err)
+	fn from(err: std::io::Error) -> Self {
+		Self::IoError(err)
 	}
 }
 
 impl From<http::hyper::error::Error> for ServerError {
-	fn from(err: http::hyper::error::Error) -> ServerError {
-		ServerError::Other(err)
+	fn from(err: http::hyper::error::Error) -> Self {
+		Self::Other(err)
 	}
 }
 
 impl From<ServerError> for String {
-	fn from(err: ServerError) -> String {
+	fn from(err: ServerError) -> Self {
 		match err {
 			ServerError::IoError(err) => err.to_string(),
 			ServerError::Other(err) => err.to_string(),
@@ -55,9 +55,9 @@ impl From<ServerError> for String {
 impl std::fmt::Display for ServerError {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		match self {
-			ServerError::IoError(err) => write!(f, "Io Error: {}", err),
-			ServerError::Other(err) => write!(f, "Other error: {}", err),
-			ServerError::InvalidInterface => write!(f, "Invalid interface"),
+			Self::IoError(err) => write!(f, "Io Error: {}", err),
+			Self::Other(err) => write!(f, "Other error: {}", err),
+			Self::InvalidInterface => write!(f, "Invalid interface"),
 		}
 	}
 }
@@ -78,31 +78,31 @@ pub enum Error {
 /// Convert Error into Out, handy when switching from Rust's Result-based
 /// error handling to Hyper's request handling.
 impl From<Error> for Out {
-	fn from(err: Error) -> Out {
+	fn from(err: Error) -> Self {
 		use self::Error::*;
 
 		match err {
-			UnsupportedHash => Out::Bad("Hash must be Keccak-256"),
-			UnsupportedCid => Out::Bad("CID codec not supported"),
-			CidParsingFailed => Out::Bad("CID parsing failed"),
-			BlockNotFound => Out::NotFound("Block not found"),
-			TransactionNotFound => Out::NotFound("Transaction not found"),
-			StateRootNotFound => Out::NotFound("State root not found"),
-			ContractNotFound => Out::NotFound("Contract not found"),
+			UnsupportedHash => Self::Bad("Hash must be Keccak-256"),
+			UnsupportedCid => Self::Bad("CID codec not supported"),
+			CidParsingFailed => Self::Bad("CID parsing failed"),
+			BlockNotFound => Self::NotFound("Block not found"),
+			TransactionNotFound => Self::NotFound("Transaction not found"),
+			StateRootNotFound => Self::NotFound("State root not found"),
+			ContractNotFound => Self::NotFound("Contract not found"),
 		}
 	}
 }
 
 /// Convert Content ID errors.
 impl From<cid::Error> for Error {
-	fn from(_: cid::Error) -> Error {
-		Error::CidParsingFailed
+	fn from(_: cid::Error) -> Self {
+		Self::CidParsingFailed
 	}
 }
 
 /// Convert multihash errors (multihash being part of CID).
 impl From<multihash::Error> for Error {
-	fn from(_: multihash::Error) -> Error {
-		Error::CidParsingFailed
+	fn from(_: multihash::Error) -> Self {
+		Self::CidParsingFailed
 	}
 }

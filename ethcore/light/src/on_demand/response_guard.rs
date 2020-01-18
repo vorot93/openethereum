@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-//! ResponseGuard implementation.
+//! `ResponseGuard` implementation.
 //! It is responsible for the receiving end of `Pending Request` (see `OnDemand` module docs for more information)
 //! The major functionality is the following:
 //!    1) Register non-successful responses which will reported back if it fails
@@ -38,11 +38,11 @@ pub enum Error {
 impl fmt::Display for Error {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
-			Error::Majority(err, majority, total) => {
+			Self::Majority(err, majority, total) => {
 				write!(f, "Error cause was {:?}, (majority count: {} / total: {})",
 					err, majority, total)
 			}
-			Error::NoMajority(total) => {
+			Self::NoMajority(total) => {
 				write!(f, "Error cause couldn't be determined, the total number of responses was {}", total)
 			}
 		}
@@ -102,7 +102,7 @@ impl ResponseGuard {
 		}
 	}
 
-	fn into_reason(&self, err: &ResponseError<super::request::Error>) -> Inner {
+	fn to_reason(&self, err: &ResponseError<super::request::Error>) -> Inner {
 		match err {
 			ResponseError::Unexpected => Inner::Unexpected,
 			ResponseError::Validity(ValidityError::BadProof) => Inner::BadProof,
@@ -123,7 +123,7 @@ impl ResponseGuard {
 
 	/// Update the state after a `faulty` call
 	pub fn register_error(&mut self, err: &ResponseError<super::request::Error>) -> Result<(), Error> {
-		let err = self.into_reason(err);
+		let err = self.to_reason(err);
 		*self.responses.entry(err).or_insert(0) += 1;
 		self.number_responses = self.number_responses.saturating_add(1);
 		trace!(target: "circuit_breaker", "ResponseGuard: {:?}", self.responses);

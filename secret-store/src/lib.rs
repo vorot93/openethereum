@@ -14,6 +14,54 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
+
 extern crate byteorder;
 extern crate ethabi;
 extern crate ethereum_types;
@@ -89,7 +137,7 @@ pub fn open_secretstore_db(data_path: &str) -> Result<Arc<dyn KeyValueDB>, Strin
 	let db_path = db_path.to_str().ok_or_else(|| "Invalid secretstore path".to_string())?;
 
 	let config = DatabaseConfig::with_columns(1);
-	Ok(Arc::new(Database::open(&config, &db_path).map_err(|e| format!("Error opening database: {:?}", e))?))
+	Ok(Arc::new(Database::open(&config, db_path).map_err(|e| format!("Error opening database: {:?}", e))?))
 }
 
 /// Start new key server instance
@@ -125,31 +173,26 @@ pub fn start(trusted_client: Arc<dyn SecretStoreChain>, self_key_pair: Arc<dyn S
 			self_key_pair.clone()));
 
 	let mut contracts: Vec<Arc<dyn listener::service_contract::ServiceContract>> = Vec::new();
-	config.service_contract_address.map(|address|
+	if let Some(l) = config.service_contract_address.map(|address|
 		create_service_contract(address,
 			listener::service_contract::SERVICE_CONTRACT_REGISTRY_NAME.to_owned(),
-			listener::ApiMask::all()))
-		.map(|l| contracts.push(l));
-	config.service_contract_srv_gen_address.map(|address|
+			listener::ApiMask::all())) { contracts.push(l) }
+	if let Some(l) = config.service_contract_srv_gen_address.map(|address|
 		create_service_contract(address,
 			listener::service_contract::SRV_KEY_GEN_SERVICE_CONTRACT_REGISTRY_NAME.to_owned(),
-			listener::ApiMask { server_key_generation_requests: true, ..Default::default() }))
-		.map(|l| contracts.push(l));
-	config.service_contract_srv_retr_address.map(|address|
+			listener::ApiMask { server_key_generation_requests: true, ..listener::ApiMask::default() })) { contracts.push(l) }
+	if let Some(l) = config.service_contract_srv_retr_address.map(|address|
 		create_service_contract(address,
 			listener::service_contract::SRV_KEY_RETR_SERVICE_CONTRACT_REGISTRY_NAME.to_owned(),
-			listener::ApiMask { server_key_retrieval_requests: true, ..Default::default() }))
-		.map(|l| contracts.push(l));
-	config.service_contract_doc_store_address.map(|address|
+			listener::ApiMask { server_key_retrieval_requests: true, ..listener::ApiMask::default() })) { contracts.push(l) }
+	if let Some(l) = config.service_contract_doc_store_address.map(|address|
 		create_service_contract(address,
 			listener::service_contract::DOC_KEY_STORE_SERVICE_CONTRACT_REGISTRY_NAME.to_owned(),
-			listener::ApiMask { document_key_store_requests: true, ..Default::default() }))
-		.map(|l| contracts.push(l));
-	config.service_contract_doc_sretr_address.map(|address|
+			listener::ApiMask { document_key_store_requests: true, ..listener::ApiMask::default() })) { contracts.push(l) }
+	if let Some(l) = config.service_contract_doc_sretr_address.map(|address|
 		create_service_contract(address,
 			listener::service_contract::DOC_KEY_SRETR_SERVICE_CONTRACT_REGISTRY_NAME.to_owned(),
-			listener::ApiMask { document_key_shadow_retrieval_requests: true, ..Default::default() }))
-		.map(|l| contracts.push(l));
+			listener::ApiMask { document_key_shadow_retrieval_requests: true, ..listener::ApiMask::default() })) { contracts.push(l) }
 
 	let contract: Option<Arc<dyn listener::service_contract::ServiceContract>> = match contracts.len() {
 		0 => None,
@@ -161,12 +204,12 @@ pub fn start(trusted_client: Arc<dyn SecretStoreChain>, self_key_pair: Arc<dyn S
 		Some(contract) => Some({
 			let listener = listener::service_contract_listener::ServiceContractListener::new(
 				listener::service_contract_listener::ServiceContractListenerParams {
-					contract: contract,
+					contract,
 					self_key_pair: self_key_pair.clone(),
-					key_server_set: key_server_set,
-					acl_storage: acl_storage,
-					cluster: cluster,
-					key_storage: key_storage,
+					key_server_set,
+					acl_storage,
+					cluster,
+					key_storage,
 				}
 			)?;
 			trusted_client.add_listener(listener.clone());

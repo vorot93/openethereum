@@ -344,15 +344,15 @@ enum_with_from_u8! {
 
 impl Instruction {
 	/// Returns true if given instruction is `PUSHN` instruction.
-	pub fn is_push(&self) -> bool {
-		*self >= PUSH1 && *self <= PUSH32
+	pub fn is_push(self) -> bool {
+		self >= PUSH1 && self <= PUSH32
 	}
 
 	/// Returns number of bytes to read for `PUSHN` instruction
 	/// PUSH1 -> 1
-	pub fn push_bytes(&self) -> Option<usize> {
+	pub fn push_bytes(self) -> Option<usize> {
 		if self.is_push() {
-			Some(((*self as u8) - (PUSH1 as u8) + 1) as usize)
+			Some(((self as u8) - (PUSH1 as u8) + 1) as usize)
 		} else {
 			None
 		}
@@ -360,9 +360,9 @@ impl Instruction {
 
 	/// Returns stack position of item to duplicate
 	/// DUP1 -> 0
-	pub fn dup_position(&self) -> Option<usize> {
-		if *self >= DUP1 && *self <= DUP16 {
-			Some(((*self as u8) - (DUP1 as u8)) as usize)
+	pub fn dup_position(self) -> Option<usize> {
+		if self >= DUP1 && self <= DUP16 {
+			Some(((self as u8) - (DUP1 as u8)) as usize)
 		} else {
 			None
 		}
@@ -370,9 +370,9 @@ impl Instruction {
 
 	/// Returns stack position of item to SWAP top with
 	/// SWAP1 -> 1
-	pub fn swap_position(&self) -> Option<usize> {
-		if *self >= SWAP1 && *self <= SWAP16 {
-			Some(((*self as u8) - (SWAP1 as u8) + 1) as usize)
+	pub fn swap_position(self) -> Option<usize> {
+		if self >= SWAP1 && self <= SWAP16 {
+			Some(((self as u8) - (SWAP1 as u8) + 1) as usize)
 		} else {
 			None
 		}
@@ -380,17 +380,17 @@ impl Instruction {
 
 	/// Returns number of topics to take from stack
 	/// LOG0 -> 0
-	pub fn log_topics(&self) -> Option<usize> {
-		if *self >= LOG0 && *self <= LOG4 {
-			Some(((*self as u8) - (LOG0 as u8)) as usize)
+	pub fn log_topics(self) -> Option<usize> {
+		if self >= LOG0 && self <= LOG4 {
+			Some(((self as u8) - (LOG0 as u8)) as usize)
 		} else {
 			None
 		}
 	}
 
 	/// Returns the instruction info.
-	pub fn info(&self) -> &'static InstructionInfo {
-		INSTRUCTIONS[*self as usize].as_ref().expect("A instruction is defined in Instruction enum, but it is not found in InstructionInfo struct; this indicates a logic failure in the code.")
+	pub fn info(self) -> &'static InstructionInfo {
+		INSTRUCTIONS[self as usize].as_ref().expect("A instruction is defined in Instruction enum, but it is not found in InstructionInfo struct; this indicates a logic failure in the code.")
 	}
 }
 
@@ -416,16 +416,16 @@ pub enum GasPriceTier {
 
 impl GasPriceTier {
 	/// Returns the index in schedule for specific `GasPriceTier`
-	pub fn idx(&self) -> usize {
+	pub fn idx(self) -> usize {
 		match self {
-			&GasPriceTier::Zero => 0,
-			&GasPriceTier::Base => 1,
-			&GasPriceTier::VeryLow => 2,
-			&GasPriceTier::Low => 3,
-			&GasPriceTier::Mid => 4,
-			&GasPriceTier::High => 5,
-			&GasPriceTier::Ext => 6,
-			&GasPriceTier::Special => 7,
+			Self::Zero => 0,
+			Self::Base => 1,
+			Self::VeryLow => 2,
+			Self::Low => 3,
+			Self::Mid => 4,
+			Self::High => 5,
+			Self::Ext => 6,
+			Self::Special => 7,
 		}
 	}
 }
@@ -445,8 +445,8 @@ pub struct InstructionInfo {
 
 impl InstructionInfo {
 	/// Create new instruction info.
-	pub fn new(name: &'static str, args: usize, ret: usize, tier: GasPriceTier) -> Self {
-		InstructionInfo { name, args, ret, tier }
+	pub const fn new(name: &'static str, args: usize, ret: usize, tier: GasPriceTier) -> Self {
+		Self { name, args, ret, tier }
 	}
 }
 

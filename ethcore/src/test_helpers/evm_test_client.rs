@@ -57,7 +57,7 @@ pub enum EvmTestError {
 
 impl<E: Into<EthcoreError>> From<E> for EvmTestError {
 	fn from(err: E) -> Self {
-		EvmTestError::ClientError(err.into())
+		Self::ClientError(err.into())
 	}
 }
 
@@ -65,11 +65,11 @@ impl fmt::Display for EvmTestError {
 	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
 		use self::EvmTestError::*;
 
-		match *self {
-			Trie(ref err) => write!(fmt, "Trie: {}", err),
-			Evm(ref err) => write!(fmt, "EVM: {}", err),
-			ClientError(ref err) => write!(fmt, "{}", err),
-			PostCondition(ref err) => write!(fmt, "{}", err),
+		match self {
+			Trie(err) => write!(fmt, "Trie: {}", err),
+			Evm(err) => write!(fmt, "EVM: {}", err),
+			ClientError(err) => write!(fmt, "{}", err),
+			PostCondition(err) => write!(fmt, "{}", err),
 		}
 	}
 }
@@ -81,7 +81,7 @@ pub struct EvmTestClient<'a> {
 	dump_state: fn(&State<state_db::StateDB>) -> Option<PodState>,
 }
 
-fn no_dump_state(_: &State<state_db::StateDB>) -> Option<PodState> {
+const fn no_dump_state(_: &State<state_db::StateDB>) -> Option<PodState> {
 	None
 }
 
@@ -101,7 +101,7 @@ impl<'a> fmt::Debug for EvmTestClient<'a> {
 impl<'a> EvmTestClient<'a> {
 	/// Converts a json spec definition into spec.
 	pub fn fork_spec_from_json(spec: &ForkSpec) -> Option<spec::Spec> {
-		match *spec {
+		match spec {
 			ForkSpec::Frontier => Some(spec::new_frontier_test()),
 			ForkSpec::Homestead => Some(spec::new_homestead_test()),
 			ForkSpec::EIP150 => Some(spec::new_eip150_test()),
@@ -138,7 +138,7 @@ impl<'a> EvmTestClient<'a> {
 		Self::new_with_trie(spec, trie::TrieSpec::Secure)
 	}
 
-	/// Creates new EVM test client with an in-memory DB initialized with given PodState.
+	/// Creates new EVM test client with an in-memory DB initialized with given `PodState`.
 	/// Takes a `TrieSpec` to set the type of trie.
 	pub fn from_pod_state_with_trie(spec: &'a spec::Spec, pod_state: PodState, trie_spec: trie::TrieSpec) -> Result<Self, EvmTestError> {
 		let factories = Self::factories(trie_spec);
@@ -151,7 +151,7 @@ impl<'a> EvmTestClient<'a> {
 		})
 	}
 
-	/// Creates new EVM test client with an in-memory DB initialized with given PodState.
+	/// Creates new EVM test client with an in-memory DB initialized with given `PodState`.
 	pub fn from_pod_state(spec: &'a spec::Spec, pod_state: PodState) -> Result<Self, EvmTestError> {
 		Self::from_pod_state_with_trie(spec, pod_state, trie::TrieSpec::Secure)
 	}
@@ -188,7 +188,7 @@ impl<'a> EvmTestClient<'a> {
 
 	fn state_from_pod(spec: &'a spec::Spec, factories: &Factories, pod_state: PodState) -> Result<State<state_db::StateDB>, EvmTestError> {
 		let db = Arc::new(kvdb_memorydb::create(db::NUM_COLUMNS));
-		let journal_db = journaldb::new(db.clone(), journaldb::Algorithm::EarlyMerge, db::COL_STATE);
+		let journal_db = journaldb::new(db, journaldb::Algorithm::EarlyMerge, db::COL_STATE);
 		let state_db = state_db::StateDB::new(journal_db, 5 * 1024 * 1024);
 		let mut state = State::new(
 			state_db,
@@ -201,11 +201,11 @@ impl<'a> EvmTestClient<'a> {
 	}
 
 	/// Return current state.
-	pub fn state(&self) -> &State<state_db::StateDB> {
+	pub const fn state(&self) -> &State<state_db::StateDB> {
 		&self.state
 	}
 
-	/// Execute the VM given ActionParams and tracer.
+	/// Execute the VM given `ActionParams` and tracer.
 	/// Returns amount of gas left and the output.
 	pub fn call<T: trace::Tracer, V: trace::VMTracer>(
 		&mut self,
@@ -227,7 +227,7 @@ impl<'a> EvmTestClient<'a> {
 		self.call_envinfo(params, tracer, vm_tracer, info)
 	}
 
-	/// Execute the VM given envinfo, ActionParams and tracer.
+	/// Execute the VM given envinfo, `ActionParams` and tracer.
 	/// Returns amount of gas left and the output.
 	pub fn call_envinfo<T: trace::Tracer, V: trace::VMTracer>(
 		&mut self,
@@ -240,7 +240,7 @@ impl<'a> EvmTestClient<'a> {
 		let mut substate = Substate::new();
 		let machine = self.spec.engine.machine();
 		let schedule = machine.schedule(info.number);
-		let mut executive = executive::Executive::new(&mut self.state, &info, &machine, &schedule);
+		let mut executive = executive::Executive::new(&mut self.state, &info, machine, &schedule);
 		executive.call(
 			params,
 			&mut substate,
@@ -249,7 +249,7 @@ impl<'a> EvmTestClient<'a> {
 		).map_err(EvmTestError::Evm)
 	}
 
-	/// Executes a SignedTransaction within context of the provided state and `EnvInfo`.
+	/// Executes a `SignedTransaction` within context of the provided state and `EnvInfo`.
 	/// Returns the state root, gas left and the output.
 	pub fn transact<T: trace::Tracer, V: trace::VMTracer>(
 		&mut self,
@@ -271,7 +271,7 @@ impl<'a> EvmTestClient<'a> {
 		}
 
 		// Apply transaction
-		let result = self.state.apply_with_tracing(&env_info, self.spec.engine.machine(), &transaction, tracer, vm_tracer);
+		let result = self.state.apply_with_tracing(env_info, self.spec.engine.machine(), &transaction, tracer, vm_tracer);
 		let scheme = CreateContractAddress::FromSenderAndNonce;
 
 		// Touch the coinbase at the end of the test to simulate
@@ -316,12 +316,12 @@ impl<'a> EvmTestClient<'a> {
 					end_state,
 				}
 			)},
-			Err(e) => Err(TransactErr {state_root, error: e.into(), end_state}),
+			Err(e) => Err(TransactErr {state_root, error: e, end_state}),
 		}
 	}
 }
 
-/// To be returned inside a std::result::Result::Ok after a successful
+/// To be returned inside a `Result::Ok` after a successful
 /// transaction completed.
 #[allow(dead_code)]
 pub struct TransactSuccess<T, V> {
@@ -345,7 +345,7 @@ pub struct TransactSuccess<T, V> {
 	pub end_state: Option<PodState>,
 }
 
-/// To be returned inside a std::result::Result::Err after a failed
+/// To be returned inside a `Result::Err` after a failed
 /// transaction.
 #[allow(dead_code)]
 pub struct TransactErr {

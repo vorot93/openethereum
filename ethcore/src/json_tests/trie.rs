@@ -25,22 +25,22 @@ use super::HookType;
 #[allow(dead_code)]
 fn test_trie<H: FnMut(&str, HookType)>(path: &Path, json: &[u8], trie: TrieSpec, start_stop_hook: &mut H) -> Vec<String> {
 	let tests = ethjson::test_helpers::trie::Test::load(json)
-		.expect(&format!("Could not parse JSON trie test data from {}", path.display()));
+		.unwrap_or_else(|_| panic!("Could not parse JSON trie test data from {}", path.display()));
 	let factory = TrieFactory::new(trie, ethtrie::Layout);
-	let mut result = vec![];
+	let mut result = Vec::new();
 
-	for (name, test) in tests.into_iter() {
+	for (name, test) in tests {
 		start_stop_hook(&name, HookType::OnStart);
 
 		let mut memdb = journaldb::new_memory_db();
 		let mut root = H256::zero();
 		let mut t = factory.create(&mut memdb, &mut root);
 
-		for (key, value) in test.input.data.into_iter() {
+		for (key, value) in test.input.data {
 			let key: Vec<u8> = key.into();
 			let value: Vec<u8> = value.map_or_else(Vec::new, Into::into);
 			t.insert(&key, &value)
-				.expect(&format!("Trie test '{:?}' failed due to internal error", name));
+				.unwrap_or_else(|_| panic!("Trie test '{:?}' failed due to internal error", name));
 		}
 
 		if *t.root() != test.root.into() {

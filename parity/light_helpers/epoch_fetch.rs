@@ -83,13 +83,17 @@ impl ChainDataFetcher for EpochFetch {
 	}
 
 	/// Fetch epoch transition proof at given header.
-	fn epoch_transition(&self, hash: H256, engine: Arc<dyn Engine>, checker: Arc<dyn StateDependentProof>)
-		-> Self::Transition
+	fn epoch_transition(
+		&self,
+		hash: H256,
+		engine: Arc<dyn Engine>,
+		proof_check: Arc<dyn StateDependentProof>
+	) -> Self::Transition
 	{
 		self.request(request::Signal {
-			hash: hash,
-			engine: engine,
-			proof_check: checker,
+			hash,
+			engine,
+			proof_check,
 		})
 	}
 }

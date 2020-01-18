@@ -56,7 +56,7 @@ struct EthTester {
 
 impl Default for EthTester {
 	fn default() -> Self {
-		Self::new_with_options(Default::default())
+		Self::new_with_options(EthClientOptions::default())
 	}
 }
 
@@ -75,7 +75,7 @@ impl EthTester {
 		let mut io: IoHandler<Metadata> = IoHandler::default();
 		io.extend_with(sign);
 
-		EthTester {
+		Self {
 			runtime,
 			client,
 			miner,
@@ -105,11 +105,11 @@ fn rpc_eth_send_transaction() {
 
 	let t = Transaction {
 		nonce: U256::zero(),
-		gas_price: U256::from(0x9184e72a000u64),
+		gas_price: U256::from(0x0918_4e72_a000_u64),
 		gas: U256::from(0x76c0),
 		action: Action::Call(Address::from_str("d46e8dd67c5d32be8058bb8eb970870f07244567").unwrap()),
-		value: U256::from(0x9184e72au64),
-		data: vec![]
+		value: U256::from(0x9184_e72a_u64),
+		data: Vec::new()
 	};
 	let signature = tester.accounts_provider.sign(address, None, t.hash(None)).unwrap();
 	let t = t.with_signature(signature, None);
@@ -122,11 +122,11 @@ fn rpc_eth_send_transaction() {
 
 	let t = Transaction {
 		nonce: U256::one(),
-		gas_price: U256::from(0x9184e72a000u64),
+		gas_price: U256::from(0x0918_4e72_a000_u64),
 		gas: U256::from(0x76c0),
 		action: Action::Call(Address::from_str("d46e8dd67c5d32be8058bb8eb970870f07244567").unwrap()),
-		value: U256::from(0x9184e72au64),
-		data: vec![]
+		value: U256::from(0x9184_e72a_u64),
+		data: Vec::new()
 	};
 	let signature = tester.accounts_provider.sign(address, None, t.hash(None)).unwrap();
 	let t = t.with_signature(signature, None);
@@ -156,11 +156,11 @@ fn rpc_eth_sign_transaction() {
 
 	let t = Transaction {
 		nonce: U256::one(),
-		gas_price: U256::from(0x9184e72a000u64),
+		gas_price: U256::from(0x0918_4e72_a000_u64),
 		gas: U256::from(0x76c0),
 		action: Action::Call(Address::from_str("d46e8dd67c5d32be8058bb8eb970870f07244567").unwrap()),
-		value: U256::from(0x9184e72au64),
-		data: vec![]
+		value: U256::from(0x9184_e72a_u64),
+		data: Vec::new()
 	};
 	let signature = tester.accounts_provider.sign(address, None, t.hash(None)).unwrap();
 	let t = t.with_signature(signature, None);

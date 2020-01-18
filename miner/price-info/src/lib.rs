@@ -14,7 +14,53 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-#![warn(missing_docs)]
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
 
 //! A simple client to get the current ETH price using an external API.
 
@@ -50,21 +96,21 @@ impl<F> fmt::Debug for Client<F> {
 }
 
 impl<F> cmp::PartialEq for Client<F> {
-	fn eq(&self, other: &Client<F>) -> bool {
+	fn eq(&self, other: &Self) -> bool {
 		self.api_endpoint == other.api_endpoint
 	}
 }
 
 impl<F: Fetch> Client<F> {
 	/// Creates a new instance of the `Client` given a `fetch::Client`.
-	pub fn new(fetch: F, pool: Executor, api_endpoint: String) -> Client<F> {
-		Client { pool, api_endpoint, fetch }
+	pub fn new(fetch: F, pool: Executor, api_endpoint: String) -> Self {
+		Self { pool, api_endpoint, fetch }
 	}
 
 	/// Gets the current ETH price and calls `set_price` with the result.
 	pub fn get<G: FnOnce(PriceInfo) + Sync + Send + 'static>(&self, set_price: G) {
 		let future = self.fetch.get(&self.api_endpoint, fetch::Abort::default())
-			.and_then(|response| response.concat2())
+			.and_then(Stream::concat2)
 			.and_then(move |body| {
 				let body_str = str::from_utf8(&body).ok();
 				let value: Option<Value> = body_str.and_then(|s| serde_json::from_str(s).ok());
@@ -72,19 +118,16 @@ impl<F: Fetch> Client<F> {
 				let ethusd = value
 					.as_ref()
 					.and_then(|value| value.pointer("/result/ethusd"))
-					.and_then(|obj| obj.as_str())
+					.and_then(Value::as_str)
 					.and_then(|s| s.parse().ok());
 
-				match ethusd {
-					Some(ethusd) => {
-						set_price(PriceInfo { ethusd });
-						Ok(())
-					},
-					None => {
-						let msg = format!("Unexpected response: {}", body_str.unwrap_or_default());
-						let err = io::Error::new(io::ErrorKind::Other, msg);
-						Err(fetch::Error::Io(err))
-					}
+				if let Some(ethusd) = ethusd {
+					set_price(PriceInfo { ethusd });
+					Ok(())
+				} else {
+					let msg = format!("Unexpected response: {}", body_str.unwrap_or_default());
+					let err = io::Error::new(io::ErrorKind::Other, msg);
+					Err(fetch::Error::Io(err))
 				}
 			})
 			.map_err(|err| {

@@ -160,6 +160,8 @@ fn execute_import_light(cmd: ImportBlockchain) -> Result<(), String> {
 	use light::cache::Cache as LightDataCache;
 	use parking_lot::Mutex;
 
+	const READAHEAD_BYTES: usize = 8;
+
 	let timer = Instant::now();
 
 	// load spec file
@@ -190,11 +192,11 @@ fn execute_import_light(cmd: ImportBlockchain) -> Result<(), String> {
 	cmd.dirs.create_dirs(false, false)?;
 
 	let cache = Arc::new(Mutex::new(
-		LightDataCache::new(Default::default(), Duration::new(0, 0))
+		LightDataCache::new(light::cache::CacheSizes::default(), Duration::new(0, 0))
 	));
 
 	let mut config = LightClientConfig {
-		queue: Default::default(),
+		queue: verification::QueueConfig::default(),
 		chain_column: ethcore_db::COL_LIGHT_CHAIN,
 		verify_full: true,
 		check_seal: cmd.check_seal,
@@ -206,7 +208,7 @@ fn execute_import_light(cmd: ImportBlockchain) -> Result<(), String> {
 
 	// initialize database.
 	let db = db::open_db_light(
-		&client_path.to_str().expect("DB path could not be converted to string."),
+		client_path.to_str().expect("DB path could not be converted to string."),
 		&cmd.cache_config,
 		&cmd.compaction,
 	).map_err(|e| format!("Failed to open database: {:?}", e))?;
@@ -226,19 +228,16 @@ fn execute_import_light(cmd: ImportBlockchain) -> Result<(), String> {
 		None => Box::new(io::stdin()),
 	};
 
-	const READAHEAD_BYTES: usize = 8;
-
 	let mut first_bytes: Vec<u8> = vec![0; READAHEAD_BYTES];
 	let mut first_read = 0;
 
-	let format = match cmd.format {
-		Some(format) => format,
-		None => {
-			first_read = instream.read(&mut first_bytes).map_err(|_| "Error reading from the file/stream.")?;
-			match first_bytes[0] {
-				0xf9 => DataFormat::Binary,
-				_ => DataFormat::Hex,
-			}
+	let format = if let Some(format) = cmd.format {
+		format
+	} else {
+		first_read = instream.read(&mut first_bytes).map_err(|_| "Error reading from the file/stream.")?;
+		match first_bytes[0] {
+			0xf9 => DataFormat::Binary,
+			_ => DataFormat::Hex,
 		}
 	};
 
@@ -379,8 +378,8 @@ fn execute_import(cmd: ImportBlockchain) -> Result<(), String> {
 		Arc::new(Miner::new_for_tests(&spec, None)),
 		Arc::new(ethcore_private_tx::DummySigner),
 		Box::new(ethcore_private_tx::NoopEncryptor),
-		Default::default(),
-		Default::default(),
+		ethcore_private_tx::ProviderConfig::default(),
+		ethcore_private_tx::EncryptorConfig::default(),
 	).map_err(|e| format!("Client service error: {:?}", e))?;
 
 	// free up the spec in memory.
@@ -429,6 +428,7 @@ fn execute_import(cmd: ImportBlockchain) -> Result<(), String> {
 	Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn start_client(
 	dirs: Directories,
 	spec: SpecType,
@@ -512,8 +512,8 @@ fn start_client(
 		Arc::new(Miner::new_for_tests(&spec, None)),
 		Arc::new(ethcore_private_tx::DummySigner),
 		Box::new(ethcore_private_tx::NoopEncryptor),
-		Default::default(),
-		Default::default(),
+		ethcore_private_tx::ProviderConfig::default(),
+		ethcore_private_tx::EncryptorConfig::default(),
 	).map_err(|e| format!("Client service error: {:?}", e))?;
 
 	drop(spec);
@@ -571,16 +571,16 @@ fn execute_export_state(cmd: ExportState) -> Result<(), String> {
 
 	let mut last: Option<Address> = None;
 	let at = cmd.at;
-	let mut i = 0usize;
+	let mut i = 0_usize;
 
-	out.write_fmt(format_args!("{{ \"state\": {{", )).expect("Couldn't write to stream.");
+	write!(out, "{{ \"state\": {{").expect("Couldn't write to stream.");
 	loop {
 		let accounts = client.list_accounts(at, last.as_ref(), 1000).ok_or("Specified block not found")?;
 		if accounts.is_empty() {
 			break;
 		}
 
-		for account in accounts.into_iter() {
+		for account in accounts {
 			let balance = client.balance(&account, at.into()).unwrap_or_else(U256::zero);
 			if cmd.min_balance.map_or(false, |m| balance < m) || cmd.max_balance.map_or(false, |m| balance > m) {
 				last = Some(account);
@@ -588,24 +588,24 @@ fn execute_export_state(cmd: ExportState) -> Result<(), String> {
 			}
 
 			if i != 0 {
-				out.write(b",").expect("Write error");
+				write!(out, ",").expect("Write error");
 			}
-			out.write_fmt(format_args!("\n\"0x{:x}\": {{\"balance\": \"{:x}\", \"nonce\": \"{:x}\"", account, balance, client.nonce(&account, at).unwrap_or_else(U256::zero))).expect("Write error");
+			write!(out, "\n\"0x{:x}\": {{\"balance\": \"{:x}\", \"nonce\": \"{:x}\"", account, balance, client.nonce(&account, at).unwrap_or_else(U256::zero)).expect("Write error");
 			let code = match client.code(&account, at.into()) {
 				StateResult::Missing => Vec::new(),
 				StateResult::Some(t) => t.unwrap_or_else(Vec::new),
 			};
 			if !code.is_empty() {
-				out.write_fmt(format_args!(", \"code_hash\": \"0x{:x}\"", keccak(&code))).expect("Write error");
+				write!(out, ", \"code_hash\": \"0x{:x}\"", keccak(&code)).expect("Write error");
 				if cmd.code {
-					out.write_fmt(format_args!(", \"code\": \"{}\"", code.to_hex())).expect("Write error");
+					write!(out, ", \"code\": \"{}\"", code.to_hex()).expect("Write error");
 				}
 			}
 			let storage_root = client.storage_root(&account, at).unwrap_or(KECCAK_NULL_RLP);
 			if storage_root != KECCAK_NULL_RLP {
-				out.write_fmt(format_args!(", \"storage_root\": \"0x{:x}\"", storage_root)).expect("Write error");
+				write!(out, ", \"storage_root\": \"0x{:x}\"", storage_root).expect("Write error");
 				if cmd.storage {
-					out.write_fmt(format_args!(", \"storage\": {{")).expect("Write error");
+					write!(out, ", \"storage\": {{").expect("Write error");
 					let mut last_storage: Option<H256> = None;
 					loop {
 						let keys = client.list_storage(at, &account, last_storage.as_ref(), Some(1000)).ok_or("Specified block not found")?;
@@ -613,18 +613,18 @@ fn execute_export_state(cmd: ExportState) -> Result<(), String> {
 							break;
 						}
 
-						for key in keys.into_iter() {
+						for key in keys {
 							if last_storage.is_some() {
-								out.write(b",").expect("Write error");
+								out.write_all(b",").expect("Write error");
 							}
-							out.write_fmt(format_args!("\n\t\"0x{:x}\": \"0x{:x}\"", key, client.storage_at(&account, &key, at.into()).unwrap_or_else(Default::default))).expect("Write error");
+							write!(out, "\n\t\"0x{:x}\": \"0x{:x}\"", key, client.storage_at(&account, &key, at.into()).unwrap_or_else(Default::default)).expect("Write error");
 							last_storage = Some(key);
 						}
 					}
-					out.write(b"\n}").expect("Write error");
+					out.write_all(b"\n}").expect("Write error");
 				}
 			}
-			out.write(b"}").expect("Write error");
+			out.write_all(b"}").expect("Write error");
 			i += 1;
 			if i % 10000 == 0 {
 				info!("Account #{}", i);
@@ -632,7 +632,7 @@ fn execute_export_state(cmd: ExportState) -> Result<(), String> {
 			last = Some(account);
 		}
 	}
-	out.write_fmt(format_args!("\n}}}}")).expect("Write error");
+	write!(out, "\n}}}}").expect("Write error");
 	info!("Export completed.");
 	Ok(())
 }

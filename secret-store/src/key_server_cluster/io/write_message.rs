@@ -30,8 +30,8 @@ pub fn write_message<A>(a: A, message: Message) -> WriteMessage<A> where A: Asyn
 		Err(error) => (Some(error), write_all(a, Vec::new())),
 	};
 	WriteMessage {
-		error: error,
-		future: future,
+		error,
+		future,
 	}
 }
 
@@ -45,8 +45,8 @@ pub fn write_encrypted_message<A>(a: A, key: &KeyPair, message: Message) -> Writ
 	};
 
 	WriteMessage {
-		error: error,
-		future: future,
+		error,
+		future,
 	}
 }
 

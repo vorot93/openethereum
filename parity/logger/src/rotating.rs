@@ -58,8 +58,8 @@ impl RotatingLogger {
 	/// Creates new `RotatingLogger` with given levels.
 	/// It does not enforce levels - it's just read only.
 	pub fn new(levels: String) -> Self {
-		RotatingLogger {
-			levels: levels,
+		Self {
+			levels,
 			logs: RwLock::new(ArrayVec::<[_; LOG_SIZE]>::new()),
 		}
 	}

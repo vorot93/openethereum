@@ -85,7 +85,7 @@ impl Watcher {
 			F: 'static + Send + Sync + Fn() -> bool,
 			C: 'static + Send + Sync,
 	{
-		Watcher {
+		Self {
 			oracle: Box::new(StandardOracle { client, sync_status }),
 			broadcast: Box::new(Mutex::new(channel)),
 			period,
@@ -96,11 +96,12 @@ impl Watcher {
 	#[cfg(any(test, feature = "test-helpers"))]
 	/// Instantiate a `Watcher` using anything that impls `Oracle` and `Broadcast`. Test only.
 	pub fn new_test(oracle: Box<dyn Oracle>, broadcast: Box<dyn Broadcast>, period: u64, history: u64) -> Self {
-		Watcher { oracle, broadcast, period, history }
+		Self { oracle, broadcast, period, history }
 	}
 }
 
 impl ChainNotify for Watcher {
+	#[allow(clippy::filter_map)]
 	fn new_blocks(&self, new_blocks: NewBlocks) {
 		if self.oracle.is_major_importing() || new_blocks.has_more_blocks_to_import { return }
 

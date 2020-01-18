@@ -25,7 +25,7 @@ use common_types::receipt::Receipt;
 use ethereum_types::{H256, H264, U256};
 use parity_util_mem::MallocSizeOf;
 use kvdb::PREFIX_LEN as DB_PREFIX_LEN;
-use rlp;
+
 use rlp_derive::{RlpEncodableWrapper, RlpDecodableWrapper, RlpEncodable, RlpDecodable};
 
 use crate::db::Key;
@@ -50,7 +50,7 @@ pub enum ExtrasIndex {
 fn with_index(hash: &H256, i: ExtrasIndex) -> H264 {
 	let mut result = H264::default();
 	result.as_bytes_mut()[0] = i as u8;
-	result.as_bytes_mut()[1..].clone_from_slice(hash.as_bytes());
+	result.as_bytes_mut()[1..].copy_from_slice(hash.as_bytes());
 	result
 }
 
@@ -67,7 +67,7 @@ impl Key<H256> for BlockNumber {
 	type Target = BlockNumberKey;
 
 	fn key(&self) -> Self::Target {
-		let mut result = [0u8; 5];
+		let mut result = [0_u8; 5];
 		result[0] = ExtrasIndex::BlockHash as u8;
 		result[1] = (self >> 24) as u8;
 		result[2] = (self >> 16) as u8;
@@ -114,7 +114,7 @@ pub const EPOCH_KEY_LEN: usize = DB_PREFIX_LEN + 16;
 
 /// epoch key prefix.
 /// used to iterate over all epoch transitions in order from genesis.
-pub const EPOCH_KEY_PREFIX: &'static [u8; DB_PREFIX_LEN] = &[
+pub const EPOCH_KEY_PREFIX: &[u8; DB_PREFIX_LEN] = &[
 	ExtrasIndex::EpochTransitions as u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 ];
 
@@ -129,7 +129,7 @@ impl Key<EpochTransitions> for u64 {
 	type Target = EpochTransitionsKey;
 
 	fn key(&self) -> Self::Target {
-		let mut arr = [0u8; EPOCH_KEY_LEN];
+		let mut arr = [0_u8; EPOCH_KEY_LEN];
 		arr[..DB_PREFIX_LEN].copy_from_slice(&EPOCH_KEY_PREFIX[..]);
 
 		write!(&mut arr[DB_PREFIX_LEN..], "{:016x}", self)
@@ -158,9 +158,10 @@ impl rlp::Encodable for BlockDetails {
 	fn rlp_append(&self, stream: &mut rlp::RlpStream) {
 		let use_short_version = !self.is_finalized;
 
-		match use_short_version {
-			true => { stream.begin_list(4); },
-			false => { stream.begin_list(5); },
+		if use_short_version {
+			stream.begin_list(4);
+		} else {
+			stream.begin_list(5);
 		}
 
 		stream.append(&self.number);
@@ -181,7 +182,7 @@ impl rlp::Decodable for BlockDetails {
 			_ => return Err(rlp::DecoderError::RlpIncorrectListLen),
 		};
 
-		Ok(BlockDetails {
+		Ok(Self {
 			number: rlp.val_at(0)?,
 			total_difficulty: rlp.val_at(1)?,
 			parent: rlp.val_at(2)?,
@@ -214,7 +215,7 @@ pub struct BlockReceipts {
 impl BlockReceipts {
 	/// Create new block receipts wrapper.
 	pub fn new(receipts: Vec<Receipt>) -> Self {
-		BlockReceipts { receipts }
+		Self { receipts }
 	}
 }
 

@@ -26,8 +26,8 @@ use snapshot::io::{
 	SNAPSHOT_VERSION,
 };
 
-const STATE_CHUNKS: &'static [&'static [u8]] = &[b"dog", b"cat", b"hello world", b"hi", b"notarealchunk"];
-const BLOCK_CHUNKS: &'static [&'static [u8]] = &[b"hello!", b"goodbye!", b"abcdefg", b"hijklmnop", b"qrstuvwxy", b"and", b"z"];
+const STATE_CHUNKS: &[&[u8]] = &[b"dog", b"cat", b"hello world", b"hi", b"notarealchunk"];
+const BLOCK_CHUNKS: &[&[u8]] = &[b"hello!", b"goodbye!", b"abcdefg", b"hijklmnop", b"qrstuvwxy", b"and", b"z"];
 
 #[test]
 fn packed_write_and_read() {
@@ -55,7 +55,7 @@ fn packed_write_and_read() {
 		state_hashes,
 		block_hashes,
 		state_root: keccak(b"notarealroot"),
-		block_number: 12345678987654321,
+		block_number: 12_345_678_987_654_321,
 		block_hash: keccak(b"notarealblock"),
 	};
 
@@ -94,7 +94,7 @@ fn loose_write_and_read() {
 		state_hashes,
 		block_hashes,
 		state_root: keccak(b"notarealroot"),
-		block_number: 12345678987654321,
+		block_number: 12_345_678_987_654_321,
 		block_hash: keccak(b"notarealblock)"),
 	};
 

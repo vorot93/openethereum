@@ -21,7 +21,7 @@ use key_server_cluster::{Error, NodeId, SessionId};
 use key_server_cluster::message::{InitializeConsensusSessionWithServersSet, InitializeConsensusSessionOfShareAdd};
 use key_server_cluster::jobs::job_session::{JobPartialResponseAction, JobPartialRequestAction, JobExecutor};
 
-/// Purpose of this job is to check if requestor is administrator of SecretStore (i.e. it have access to change key servers set).
+/// Purpose of this job is to check if requestor is administrator of `SecretStore` (i.e. it have access to change key servers set).
 pub struct ServersSetChangeAccessJob {
 	/// Servers set administrator public key (this could be changed to ACL-based check later).
 	administrator: Public,
@@ -49,7 +49,7 @@ pub struct ServersSetChangeAccessRequest {
 
 impl<'a> From<&'a InitializeConsensusSessionWithServersSet> for ServersSetChangeAccessRequest {
 	fn from(message: &InitializeConsensusSessionWithServersSet) -> Self {
-		ServersSetChangeAccessRequest {
+		Self {
 			old_servers_set: message.old_nodes_set.iter().cloned().map(Into::into).collect(),
 			new_servers_set: message.new_nodes_set.iter().cloned().map(Into::into).collect(),
 			old_set_signature: message.old_set_signature.clone().into(),
@@ -60,7 +60,7 @@ impl<'a> From<&'a InitializeConsensusSessionWithServersSet> for ServersSetChange
 
 impl<'a> From<&'a InitializeConsensusSessionOfShareAdd> for ServersSetChangeAccessRequest {
 	fn from(message: &InitializeConsensusSessionOfShareAdd) -> Self {
-		ServersSetChangeAccessRequest {
+		Self {
 			old_servers_set: message.old_nodes_set.iter().cloned().map(Into::into).collect(),
 			new_servers_set: message.new_nodes_map.keys().cloned().map(Into::into).collect(),
 			old_set_signature: message.old_set_signature.clone().into(),
@@ -70,9 +70,9 @@ impl<'a> From<&'a InitializeConsensusSessionOfShareAdd> for ServersSetChangeAcce
 }
 
 impl ServersSetChangeAccessJob {
-	pub fn new_on_slave(administrator: Public) -> Self {
-		ServersSetChangeAccessJob {
-			administrator: administrator,
+	pub const fn new_on_slave(administrator: Public) -> Self {
+		Self {
+			administrator,
 			old_servers_set: None,
 			new_servers_set: None,
 			old_set_signature: None,
@@ -81,8 +81,8 @@ impl ServersSetChangeAccessJob {
 	}
 
 	pub fn new_on_master(administrator: Public, old_servers_set: BTreeSet<NodeId>, new_servers_set: BTreeSet<NodeId>, old_set_signature: Signature, new_set_signature: Signature) -> Self {
-		ServersSetChangeAccessJob {
-			administrator: administrator,
+		Self {
+			administrator,
 			old_servers_set: Some(old_servers_set),
 			new_servers_set: Some(new_servers_set),
 			old_set_signature: Some(old_set_signature),
@@ -119,8 +119,8 @@ impl JobExecutor for ServersSetChangeAccessJob {
 		} = partial_request;
 
 		// check old servers set signature
-		let old_actual_public = recover(&old_set_signature, &ordered_nodes_hash(&old_servers_set).into())?;
-		let new_actual_public = recover(&new_set_signature, &ordered_nodes_hash(&new_servers_set).into())?;
+		let old_actual_public = recover(&old_set_signature, &ordered_nodes_hash(&old_servers_set))?;
+		let new_actual_public = recover(&new_set_signature, &ordered_nodes_hash(&new_servers_set))?;
 		let is_administrator = old_actual_public == self.administrator && new_actual_public == self.administrator;
 		self.new_servers_set = Some(new_servers_set);
 
@@ -142,7 +142,7 @@ pub fn ordered_nodes_hash(nodes: &BTreeSet<NodeId>) -> SessionId {
 		nodes_keccak.update(node.as_bytes());
 	}
 
-	let mut nodes_keccak_value = [0u8; 32];
+	let mut nodes_keccak_value = [0_u8; 32];
 	nodes_keccak.finalize(&mut nodes_keccak_value);
 
 	nodes_keccak_value.into()

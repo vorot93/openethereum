@@ -40,7 +40,7 @@ use params::{SpecType, Pruning, Switch, tracing_switch_to_bool, fatdb_switch_to_
 use helpers::{to_client_config, execute_upgrades};
 use dir::Directories;
 use user_defaults::UserDefaults;
-use ethcore_private_tx;
+use ethcore_private_tx::{self, EncryptorConfig, ProviderConfig};
 use db;
 
 /// Kinds of snapshot commands.
@@ -206,8 +206,8 @@ impl SnapshotCommand {
 			Arc::new(Miner::new_for_tests(&spec, None)),
 			Arc::new(ethcore_private_tx::DummySigner),
 			Box::new(ethcore_private_tx::NoopEncryptor),
-			Default::default(),
-			Default::default(),
+			ProviderConfig::default(),
+			EncryptorConfig::default(),
 		).map_err(|e| format!("Client service error: {:?}", e))?;
 
 		Ok(service)
@@ -227,7 +227,7 @@ impl SnapshotCommand {
 
 			let reader = PackedReader::new(Path::new(&file))
 				.map_err(|e| format!("Couldn't open snapshot file: {}", e))
-				.and_then(|x| x.ok_or("Snapshot file has invalid format.".into()));
+				.and_then(|x| x.ok_or_else(|| "Snapshot file has invalid format.".into()));
 
 			let reader = reader?;
 			restore_using(snapshot, &reader, true)?;
@@ -236,9 +236,10 @@ impl SnapshotCommand {
 
 			// attempting restoration with recovery will lead to deadlock
 			// as we currently hold a read lock on the service's reader.
-			match *snapshot.reader() {
-				Some(ref reader) => restore_using(snapshot.clone(), reader, false)?,
-				None => return Err("No local snapshot found.".into()),
+			if let Some(reader) = snapshot.reader().as_ref() {
+				restore_using(snapshot.clone(), reader, false)?;
+			} else {
+				return Err("No local snapshot found.".into());
 			}
 		}
 
@@ -247,7 +248,7 @@ impl SnapshotCommand {
 
 	/// Take a snapshot from the head of the chain.
 	pub fn take_snapshot(self) -> Result<(), String> {
-		let file_path = self.file_path.clone().ok_or("No file path provided.".to_owned())?;
+		let file_path = self.file_path.clone().ok_or_else(|| "No file path provided.".to_string())?;
 		let file_path: PathBuf = file_path.into();
 		let block_at = self.block_at;
 		let service = self.start_service()?;
@@ -265,15 +266,15 @@ impl SnapshotCommand {
 			loop {
 				{
 					let progress = p.read();
-					if !progress.done() {
+					if progress.done() {
+						break;
+					} else {
 						let cur_size = progress.bytes();
 						if cur_size != last_size {
 							last_size = cur_size;
 							let bytes = ::informant::format_bytes(cur_size);
 							info!("Snapshot: {} accounts (state), {} blocks, {} bytes", progress.accounts(), progress.blocks(), bytes);
 						}
-					} else {
-						break;
 					}
 				}
 				::std::thread::sleep(Duration::from_secs(5));

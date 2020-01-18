@@ -33,7 +33,7 @@ pub struct PrivateTransactionReceipt {
 
 impl From<EthPrivateReceipt> for PrivateTransactionReceipt {
 	fn from(r: EthPrivateReceipt) -> Self {
-		PrivateTransactionReceipt {
+		Self {
 			transaction_hash: r.hash,
 			contract_address: r.contract_address,
 			status_code: r.status_code,

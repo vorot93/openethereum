@@ -16,13 +16,13 @@
 
 //! Utility functions.
 //!
-//! Contains small functions used by the AuRa engine that are not strictly limited to that scope.
+//! Contains small functions used by the `AuRa` engine that are not strictly limited to that scope.
 
 use std::fmt;
 
 use client_traits::EngineClient;
 use common_types::ids::BlockId;
-use ethabi;
+
 use ethereum_types::Address;
 
 /// A contract bound to a client and block number.
@@ -59,8 +59,8 @@ impl<'a> fmt::Debug for BoundContract<'a> {
 
 impl<'a> BoundContract<'a> {
 	/// Create a new `BoundContract`.
-	pub fn new(client: &dyn EngineClient, block_id: BlockId, contract_addr: Address) -> BoundContract {
-		BoundContract {
+	pub fn new(client: &'a dyn EngineClient, block_id: BlockId, contract_addr: Address) -> Self {
+		Self {
 			client,
 			block_id,
 			contract_addr,

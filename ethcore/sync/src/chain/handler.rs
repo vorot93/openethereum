@@ -42,7 +42,6 @@ use enum_primitive::FromPrimitive;
 use ethereum_types::{H256, U256};
 use keccak_hash::keccak;
 use network::PeerId;
-use network::client_version::ClientVersion;
 use log::{debug, trace, error, warn};
 use rlp::Rlp;
 use common_types::{
@@ -64,17 +63,17 @@ impl SyncHandler {
 		let rlp = Rlp::new(data);
 		if let Some(packet_id) = SyncPacket::from_u8(packet_id) {
 			let result = match packet_id {
-				StatusPacket => SyncHandler::on_peer_status(sync, io, peer, &rlp),
-				BlockHeadersPacket => SyncHandler::on_peer_block_headers(sync, io, peer, &rlp),
-				BlockBodiesPacket => SyncHandler::on_peer_block_bodies(sync, io, peer, &rlp),
-				ReceiptsPacket => SyncHandler::on_peer_block_receipts(sync, io, peer, &rlp),
-				NewBlockPacket => SyncHandler::on_peer_new_block(sync, io, peer, &rlp),
-				NewBlockHashesPacket => SyncHandler::on_peer_new_hashes(sync, io, peer, &rlp),
-				SnapshotManifestPacket => SyncHandler::on_snapshot_manifest(sync, io, peer, &rlp),
-				SnapshotDataPacket => SyncHandler::on_snapshot_data(sync, io, peer, &rlp),
-				PrivateTransactionPacket => SyncHandler::on_private_transaction(sync, io, peer, &rlp),
-				SignedPrivateTransactionPacket => SyncHandler::on_signed_private_transaction(sync, io, peer, &rlp),
-				PrivateStatePacket => SyncHandler::on_private_state_data(sync, io, peer, &rlp),
+				StatusPacket => Self::on_peer_status(sync, io, peer, &rlp),
+				BlockHeadersPacket => Self::on_peer_block_headers(sync, io, peer, &rlp),
+				BlockBodiesPacket => Self::on_peer_block_bodies(sync, io, peer, &rlp),
+				ReceiptsPacket => Self::on_peer_block_receipts(sync, io, peer, &rlp),
+				NewBlockPacket => Self::on_peer_new_block(sync, io, peer, &rlp),
+				NewBlockHashesPacket => Self::on_peer_new_hashes(sync, io, peer, &rlp),
+				SnapshotManifestPacket => Self::on_snapshot_manifest(sync, io, peer, &rlp),
+				SnapshotDataPacket => Self::on_snapshot_data(sync, io, peer, &rlp),
+				PrivateTransactionPacket => Self::on_private_transaction(sync, io, peer, &rlp),
+				SignedPrivateTransactionPacket => Self::on_signed_private_transaction(sync, io, peer, &rlp),
+				PrivateStatePacket => Self::on_private_state_data(sync, io, peer, &rlp),
 				_ => {
 					trace!(target: "sync", "{}: Unknown packet {}", peer, packet_id.id());
 					Ok(())
@@ -119,9 +118,9 @@ impl SyncHandler {
 			if sync.state == SyncState::SnapshotManifest {
 				// Check if we are asking other peers for a snapshot manifest as well. If not,
 				// set our state to initial state (`Idle` or `WaitingPeers`).
-				let still_seeking_manifest = sync.peers.iter()
-					.filter(|&(id, p)| sync.active_peers.contains(id) && p.asking == PeerAsking::SnapshotManifest)
-					.next().is_some();
+				let still_seeking_manifest = sync.peers.iter().any(|(id, p)| {
+					sync.active_peers.contains(id) && p.asking == PeerAsking::SnapshotManifest
+				});
 
 				if !still_seeking_manifest {
 					warn!(target: "snapshot_sync", "The peer we were downloading a snapshot from ({}) went away. Retrying.", peer_id);
@@ -145,12 +144,12 @@ impl SyncHandler {
 
 	/// Called by peer once it has new block bodies
 	pub fn on_peer_new_block(sync: &mut ChainSync, io: &mut dyn SyncIo, peer_id: PeerId, r: &Rlp) -> Result<(), DownloaderImportError> {
-		if !sync.peers.get(&peer_id).map_or(false, |p| p.can_sync()) {
+		if !sync.peers.get(&peer_id).map_or(false, PeerInfo::can_sync) {
 			trace!(target: "sync", "Ignoring new block from unconfirmed peer {}", peer_id);
 			return Ok(());
 		}
 		let difficulty: U256 = r.val_at(1)?;
-		if let Some(ref mut peer) = sync.peers.get_mut(&peer_id) {
+		if let Some(mut peer) = sync.peers.get_mut(&peer_id) {
 			if peer.difficulty.map_or(true, |pd| difficulty > pd) {
 				peer.difficulty = Some(difficulty);
 			}
@@ -164,7 +163,7 @@ impl SyncHandler {
 		}
 		let mut unknown = false;
 
-		if let Some(ref mut peer) = sync.peers.get_mut(&peer_id) {
+		if let Some(mut peer) = sync.peers.get_mut(&peer_id) {
 			peer.latest_hash = hash;
 		}
 
@@ -209,21 +208,21 @@ impl SyncHandler {
 
 	/// Handles `NewHashes` packet. Initiates headers download for any unknown hashes.
 	pub fn on_peer_new_hashes(sync: &mut ChainSync, io: &mut dyn SyncIo, peer_id: PeerId, r: &Rlp) -> Result<(), DownloaderImportError> {
-		if !sync.peers.get(&peer_id).map_or(false, |p| p.can_sync()) {
+		if !sync.peers.get(&peer_id).map_or(false, PeerInfo::can_sync) {
 			trace!(target: "sync", "Ignoring new hashes from unconfirmed peer {}", peer_id);
 			return Ok(());
 		}
 		let hashes: Vec<_> = r.iter().take(MAX_NEW_HASHES).map(|item| (item.val_at::<H256>(0), item.val_at::<BlockNumber>(1))).collect();
-		if let Some(ref mut peer) = sync.peers.get_mut(&peer_id) {
+		if let Some(mut peer) = sync.peers.get_mut(&peer_id) {
 			// Peer has new blocks with unknown difficulty
 			peer.difficulty = None;
-			if let Some(&(Ok(ref h), _)) = hashes.last() {
-				peer.latest_hash = h.clone();
+			if let Some((Ok(h), _)) = hashes.last() {
+				peer.latest_hash = *h;
 			}
 		}
 		if sync.state != SyncState::Idle {
 			trace!(target: "sync", "Ignoring new hashes since we're already downloading.");
-			let max = r.iter().take(MAX_NEW_HASHES).map(|item| item.val_at::<BlockNumber>(1).unwrap_or(0)).fold(0u64, cmp::max);
+			let max = r.iter().take(MAX_NEW_HASHES).map(|item| item.val_at::<BlockNumber>(1).unwrap_or(0)).fold(0_u64, cmp::max);
 			if max > sync.highest_block.unwrap_or(0) {
 				sync.highest_block = Some(max);
 			}
@@ -246,7 +245,7 @@ impl SyncHandler {
 				trace!(target: "sync", "Ignored ancient new block hash {:?}", hash);
 				return Err(DownloaderImportError::Invalid);
 			}
-			match io.chain().block_status(BlockId::Hash(hash.clone())) {
+			match io.chain().block_status(BlockId::Hash(hash)) {
 				BlockStatus::InChain => {
 					trace!(target: "sync", "New block hash already in chain {:?}", hash);
 				},
@@ -257,8 +256,8 @@ impl SyncHandler {
 					new_hashes.push(hash.clone());
 					if number > max_height {
 						trace!(target: "sync", "New unknown block hash {:?}", hash);
-						if let Some(ref mut peer) = sync.peers.get_mut(&peer_id) {
-							peer.latest_hash = hash.clone();
+						if let Some(mut peer) = sync.peers.get_mut(&peer_id) {
+							peer.latest_hash = hash;
 						}
 						max_height = number;
 					}
@@ -284,15 +283,16 @@ impl SyncHandler {
 		let block_set = sync.peers.get(&peer_id)
 			.and_then(|p| p.block_set)
 			.unwrap_or(BlockSet::NewBlocks);
-		let allowed = sync.peers.get(&peer_id).map(|p| p.is_allowed()).unwrap_or(false);
+		let allowed = sync.peers.get(&peer_id).map_or(false, PeerInfo::is_allowed);
 
 		if !sync.reset_peer_asking(peer_id, PeerAsking::BlockBodies) || !allowed {
 			trace!(target: "sync", "{}: Ignored unexpected bodies", peer_id);
 			return Ok(());
 		}
-		let expected_blocks = match sync.peers.get_mut(&peer_id) {
-			Some(peer) => mem::replace(&mut peer.asking_blocks, Vec::new()),
-			None => {
+		let expected_blocks = {
+			if let Some(peer) = sync.peers.get_mut(&peer_id) {
+				mem::replace(&mut peer.asking_blocks, Vec::new())
+			} else { 
 				trace!(target: "sync", "{}: Ignored unexpected bodies (peer not found)", peer_id);
 				return Ok(());
 			}
@@ -308,12 +308,13 @@ impl SyncHandler {
 			{
 				let downloader = match block_set {
 					BlockSet::NewBlocks => &mut sync.new_blocks,
-					BlockSet::OldBlocks => match sync.old_blocks {
-						None => {
+					BlockSet::OldBlocks => {
+						if let Some(blocks) = &mut sync.old_blocks {
+							blocks
+						} else {
 							trace!(target: "sync", "Ignored block headers while block download is inactive");
 							return Ok(());
-						},
-						Some(ref mut blocks) => blocks,
+						}
 					}
 				};
 				downloader.import_bodies(r, expected_blocks.as_slice())?;
@@ -328,7 +329,7 @@ impl SyncHandler {
 			let peer = sync.peers.get_mut(&peer_id).expect("Is only called when peer is present in peers");
 			peer.asking = PeerAsking::Nothing;
 			let item_count = r.item_count()?;
-			let (fork_number, fork_hash) = sync.fork_block.expect("ForkHeader request is sent only fork block is Some; qed").clone();
+			let (fork_number, fork_hash) = sync.fork_block.expect("ForkHeader request is sent only fork block is Some; qed");
 
 			if item_count == 0 || item_count != 1 {
 				trace!(target: "sync", "{}: Chain is too short to confirm the block", peer_id);
@@ -351,7 +352,7 @@ impl SyncHandler {
 			}
 		}
 
-		return Ok(());
+		Ok(())
 	}
 
 	/// Called by peer once it has new block headers during sync
@@ -362,21 +363,22 @@ impl SyncHandler {
 		};
 
 		if is_fork_header_request {
-			return SyncHandler::on_peer_fork_header(sync, io, peer_id, r);
+			return Self::on_peer_fork_header(sync, io, peer_id, r);
 		}
 
 		sync.clear_peer_download(peer_id);
 		let expected_hash = sync.peers.get(&peer_id).and_then(|p| p.asking_hash);
-		let allowed = sync.peers.get(&peer_id).map(|p| p.is_allowed()).unwrap_or(false);
+		let allowed = sync.peers.get(&peer_id).map_or(false, PeerInfo::is_allowed);
 		let block_set = sync.peers.get(&peer_id).and_then(|p| p.block_set).unwrap_or(BlockSet::NewBlocks);
 
 		if !sync.reset_peer_asking(peer_id, PeerAsking::BlockHeaders) {
 			trace!(target: "sync", "{}: Ignored unexpected headers", peer_id);
 			return Ok(());
 		}
-		let expected_hash = match expected_hash {
-			Some(hash) => hash,
-			None => {
+		let expected_hash = {
+			if let Some(hash) = expected_hash {
+				hash
+			} else {
 				trace!(target: "sync", "{}: Ignored unexpected headers (expected_hash is None)", peer_id);
 				return Ok(());
 			}
@@ -401,12 +403,11 @@ impl SyncHandler {
 			let downloader = match block_set {
 				BlockSet::NewBlocks => &mut sync.new_blocks,
 				BlockSet::OldBlocks => {
-					match sync.old_blocks {
-						None => {
-							trace!(target: "sync", "Ignored block headers while block download is inactive");
-							return Ok(());
-						},
-						Some(ref mut blocks) => blocks,
+					if let Some(blocks) = &mut sync.old_blocks {
+						blocks
+					} else {
+						trace!(target: "sync", "Ignored block headers while block download is inactive");
+						return Ok(());
 					}
 				}
 			};
@@ -425,14 +426,15 @@ impl SyncHandler {
 	fn on_peer_block_receipts(sync: &mut ChainSync, io: &mut dyn SyncIo, peer_id: PeerId, r: &Rlp) -> Result<(), DownloaderImportError> {
 		sync.clear_peer_download(peer_id);
 		let block_set = sync.peers.get(&peer_id).and_then(|p| p.block_set).unwrap_or(BlockSet::NewBlocks);
-		let allowed = sync.peers.get(&peer_id).map(|p| p.is_allowed()).unwrap_or(false);
+		let allowed = sync.peers.get(&peer_id).map_or(false, PeerInfo::is_allowed);
 		if !sync.reset_peer_asking(peer_id, PeerAsking::BlockReceipts) || !allowed {
 			trace!(target: "sync", "{}: Ignored unexpected receipts", peer_id);
 			return Ok(());
 		}
-		let expected_blocks = match sync.peers.get_mut(&peer_id) {
-			Some(peer) => mem::replace(&mut peer.asking_blocks, Vec::new()),
-			None => {
+		let expected_blocks = {
+			if let Some(peer) = sync.peers.get_mut(&peer_id) {
+				mem::replace(&mut peer.asking_blocks, Vec::new())
+			} else {
 				trace!(target: "sync", "{}: Ignored unexpected bodies (peer not found)", peer_id);
 				return Ok(());
 			}
@@ -448,12 +450,13 @@ impl SyncHandler {
 			{
 				let downloader = match block_set {
 					BlockSet::NewBlocks => &mut sync.new_blocks,
-					BlockSet::OldBlocks => match sync.old_blocks {
-						None => {
+					BlockSet::OldBlocks => {
+						if let Some(blocks) = &mut sync.old_blocks {
+							blocks
+						} else {
 							trace!(target: "sync", "Ignored block headers while block download is inactive");
 							return Ok(());
-						},
-						Some(ref mut blocks) => blocks,
+						}
 					}
 				};
 				downloader.import_receipts(r, expected_blocks.as_slice())?;
@@ -465,7 +468,7 @@ impl SyncHandler {
 
 	/// Called when snapshot manifest is downloaded from a peer.
 	fn on_snapshot_manifest(sync: &mut ChainSync, io: &mut dyn SyncIo, peer_id: PeerId, r: &Rlp) -> Result<(), DownloaderImportError> {
-		if !sync.peers.get(&peer_id).map_or(false, |p| p.can_sync()) {
+		if !sync.peers.get(&peer_id).map_or(false, PeerInfo::can_sync) {
 			trace!(target: "snapshot_sync", "Ignoring snapshot manifest from unconfirmed peer {}", peer_id);
 			return Ok(());
 		}
@@ -496,7 +499,7 @@ impl SyncHandler {
 
 	/// Called when snapshot data is downloaded from a peer.
 	fn on_snapshot_data(sync: &mut ChainSync, io: &mut dyn SyncIo, peer_id: PeerId, r: &Rlp) -> Result<(), DownloaderImportError> {
-		if !sync.peers.get(&peer_id).map_or(false, |p| p.can_sync()) {
+		if !sync.peers.get(&peer_id).map_or(false, PeerInfo::can_sync) {
 			trace!(target: "snapshot_sync", "Ignoring snapshot data from unconfirmed peer {}", peer_id);
 			return Ok(());
 		}
@@ -564,7 +567,7 @@ impl SyncHandler {
 	fn on_peer_status(sync: &mut ChainSync, io: &mut dyn SyncIo, peer_id: PeerId, r: &Rlp) -> Result<(), DownloaderImportError> {
 		sync.handshaking_peers.remove(&peer_id);
 		let protocol_version: u8 = r.val_at(0)?;
-		let warp_protocol_version = io.protocol_version(&WARP_SYNC_PROTOCOL_ID, peer_id);
+		let warp_protocol_version = io.protocol_version(WARP_SYNC_PROTOCOL_ID, peer_id);
 		let warp_protocol = warp_protocol_version != 0;
 		let private_tx_protocol = warp_protocol_version >= PAR_PROTOCOL_VERSION_3.0;
 		let peer = PeerInfo {
@@ -587,7 +590,7 @@ impl SyncHandler {
 			snapshot_number: if warp_protocol { Some(r.val_at(6)?) } else { None },
 			block_set: None,
 			private_tx_enabled: if private_tx_protocol { r.val_at(7).unwrap_or(false) } else { false },
-			client_version: ClientVersion::from(io.peer_version(peer_id)),
+			client_version: io.peer_version(peer_id),
 		};
 
 		trace!(target: "sync", "New peer {} (\
@@ -628,9 +631,13 @@ impl SyncHandler {
 			return Err(DownloaderImportError::Invalid);
 		}
 
-		if false
-			|| (warp_protocol && (peer.protocol_version < PAR_PROTOCOL_VERSION_1.0 || peer.protocol_version > PAR_PROTOCOL_VERSION_4.0))
-			|| (!warp_protocol && (peer.protocol_version < ETH_PROTOCOL_VERSION_62.0 || peer.protocol_version > ETH_PROTOCOL_VERSION_63.0))
+		if (
+			warp_protocol &&
+			(peer.protocol_version < PAR_PROTOCOL_VERSION_1.0 || peer.protocol_version > PAR_PROTOCOL_VERSION_4.0)
+		) || (
+			!warp_protocol &&
+			(peer.protocol_version < ETH_PROTOCOL_VERSION_62.0 || peer.protocol_version > ETH_PROTOCOL_VERSION_63.0)
+		)
 		{
 			trace!(target: "sync", "Peer {} unsupported eth protocol ({})", peer_id, peer.protocol_version);
 			return Err(DownloaderImportError::Invalid);
@@ -660,7 +667,7 @@ impl SyncHandler {
 			trace!(target: "sync", "{} Ignoring transactions while syncing", peer_id);
 			return Ok(());
 		}
-		if !sync.peers.get(&peer_id).map_or(false, |p| p.can_sync()) {
+		if !sync.peers.get(&peer_id).map_or(false, PeerInfo::can_sync) {
 			trace!(target: "sync", "{} Ignoring transactions from unconfirmed/unknown peer", peer_id);
 			return Ok(());
 		}
@@ -679,13 +686,14 @@ impl SyncHandler {
 
 	/// Called when peer sends us signed private transaction packet
 	fn on_signed_private_transaction(sync: &mut ChainSync, _io: &mut dyn SyncIo, peer_id: PeerId, r: &Rlp) -> Result<(), DownloaderImportError> {
-		if !sync.peers.get(&peer_id).map_or(false, |p| p.can_sync()) {
+		if !sync.peers.get(&peer_id).map_or(false, PeerInfo::can_sync) {
 			trace!(target: "sync", "{} Ignoring packet from unconfirmed/unknown peer", peer_id);
 			return Ok(());
 		}
-		let private_handler = match sync.private_tx_handler {
-			Some(ref handler) => handler,
-			None => {
+		let private_handler = {
+			if let Some(handler) = &sync.private_tx_handler {
+				handler
+			} else {
 				trace!(target: "sync", "{} Ignoring private tx packet from peer", peer_id);
 				return Ok(());
 			}
@@ -694,7 +702,7 @@ impl SyncHandler {
 		match private_handler.import_signed_private_transaction(r.as_raw()) {
 			Ok(transaction_hash) => {
 				//don't send the packet back
-				if let Some(ref mut peer) = sync.peers.get_mut(&peer_id) {
+				if let Some(peer) = sync.peers.get_mut(&peer_id) {
 					peer.last_sent_private_transactions.insert(transaction_hash);
 				}
 			},
@@ -707,13 +715,14 @@ impl SyncHandler {
 
 	/// Called when peer sends us new private transaction packet
 	fn on_private_transaction(sync: &mut ChainSync, _io: &mut dyn SyncIo, peer_id: PeerId, r: &Rlp) -> Result<(), DownloaderImportError> {
-		if !sync.peers.get(&peer_id).map_or(false, |p| p.can_sync()) {
+		if !sync.peers.get(&peer_id).map_or(false, PeerInfo::can_sync) {
 			trace!(target: "sync", "{} Ignoring packet from unconfirmed/unknown peer", peer_id);
 			return Ok(());
 		}
-		let private_handler = match sync.private_tx_handler {
-			Some(ref handler) => handler,
-			None => {
+		let private_handler = {
+			if let Some(handler) = &sync.private_tx_handler {
+				handler
+			} else {
 				trace!(target: "sync", "{} Ignoring private tx packet from peer", peer_id);
 				return Ok(());
 			}
@@ -722,7 +731,7 @@ impl SyncHandler {
 		match private_handler.import_private_transaction(r.as_raw()) {
 			Ok(transaction_hash) => {
 				//don't send the packet back
-				if let Some(ref mut peer) = sync.peers.get_mut(&peer_id) {
+				if let Some(peer) = sync.peers.get_mut(&peer_id) {
 					peer.last_sent_private_transactions.insert(transaction_hash);
 				}
 			},
@@ -734,7 +743,7 @@ impl SyncHandler {
 	}
 
 	fn on_private_state_data(sync: &mut ChainSync, io: &mut dyn SyncIo, peer_id: PeerId, r: &Rlp) -> Result<(), DownloaderImportError> {
-		if !sync.peers.get(&peer_id).map_or(false, |p| p.can_sync()) {
+		if !sync.peers.get(&peer_id).map_or(false, PeerInfo::can_sync) {
 			trace!(target: "sync", "{} Ignoring packet from unconfirmed/unknown peer", peer_id);
 			return Ok(());
 		}
@@ -743,44 +752,43 @@ impl SyncHandler {
 			return Ok(());
 		}
 		let requested_hash = sync.peers.get(&peer_id).and_then(|p| p.asking_private_state);
-		let requested_hash = match requested_hash {
-			Some(hash) => hash,
-			None => {
+		let requested_hash = {
+			if let Some(hash) = requested_hash {
+				hash
+			} else {
 				debug!(target: "sync", "{}: Ignored unexpected private state (requested_hash is None)", peer_id);
 				return Ok(());
 			}
 		};
-		let private_handler = match sync.private_tx_handler {
-			Some(ref handler) => handler,
-			None => {
+		let private_handler = {
+			if let Some(handler) = &sync.private_tx_handler {
+				handler
+			} else {
 				trace!(target: "sync", "{} Ignoring private tx packet from peer", peer_id);
 				return Ok(());
 			}
 		};
 		trace!(target: "privatetx", "Received private state data packet from {:?}", peer_id);
 		let private_state_data: Bytes = r.val_at(0)?;
-		match io.private_state() {
-			Some(db) => {
-				// Check hash of the rececived data before submitting it to DB
-				let received_hash = db.state_hash(&private_state_data).unwrap_or_default();
-				if received_hash != requested_hash {
-					trace!(target: "sync", "{} Ignoring private state data with unexpected hash from peer", peer_id);
-					return Ok(());
-				}
-				match db.save_state(&private_state_data) {
-					Ok(hash) => {
-						if let Err(err) = private_handler.private_state_synced(&hash) {
-							trace!(target: "privatetx", "Ignoring received private state message, error queueing: {}", err);
-						}
-					}
-					Err(e) => {
-						error!(target: "privatetx", "Cannot save received private state {:?}", e);
+		if let Some(db) = io.private_state() {
+			// Check hash of the rececived data before submitting it to DB
+			let received_hash = db.state_hash(&private_state_data).unwrap_or_default();
+			if received_hash != requested_hash {
+				trace!(target: "sync", "{} Ignoring private state data with unexpected hash from peer", peer_id);
+				return Ok(());
+			}
+			match db.save_state(&private_state_data) {
+				Ok(hash) => {
+					if let Err(err) = private_handler.private_state_synced(&hash) {
+						trace!(target: "privatetx", "Ignoring received private state message, error queueing: {}", err);
 					}
 				}
+				Err(e) => {
+					error!(target: "privatetx", "Cannot save received private state {:?}", e);
+				}
 			}
-			None => {
-				trace!(target: "sync", "{} Ignoring private tx packet from peer", peer_id);
-			}
+		} else {
+			trace!(target: "sync", "{} Ignoring private tx packet from peer", peer_id);
 		};
 		Ok(())
 	}
@@ -809,7 +817,7 @@ mod tests {
 		let queue = RwLock::new(VecDeque::new());
 		let mut sync = dummy_sync_with_peer(client.block_hash_delta_minus(5), &client);
 		let ss = TestSnapshotService::new();
-		let mut io = TestIo::new(&mut client, &ss, &queue, None, None);
+		let mut io = TestIo::new(&client, &ss, &queue, None, None);
 
 		let hashes_data = get_dummy_hashes();
 		let hashes_rlp = Rlp::new(&hashes_data);
@@ -830,7 +838,7 @@ mod tests {
 		let mut sync = dummy_sync_with_peer(client.block_hash_delta_minus(5), &client);
 		//sync.have_common_block = true;
 		let ss = TestSnapshotService::new();
-		let mut io = TestIo::new(&mut client, &ss, &queue, None, None);
+		let mut io = TestIo::new(&client, &ss, &queue, None, None);
 
 		let block = Rlp::new(&block_data);
 
@@ -849,7 +857,7 @@ mod tests {
 		let queue = RwLock::new(VecDeque::new());
 		let mut sync = dummy_sync_with_peer(client.block_hash_delta_minus(5), &client);
 		let ss = TestSnapshotService::new();
-		let mut io = TestIo::new(&mut client, &ss, &queue, None, None);
+		let mut io = TestIo::new(&client, &ss, &queue, None, None);
 
 		let block = Rlp::new(&block_data);
 
@@ -863,9 +871,9 @@ mod tests {
 		let queue = RwLock::new(VecDeque::new());
 		let mut sync = dummy_sync_with_peer(client.block_hash_delta_minus(5), &client);
 		let ss = TestSnapshotService::new();
-		let mut io = TestIo::new(&mut client, &ss, &queue, None, None);
+		let mut io = TestIo::new(&client, &ss, &queue, None, None);
 
-		let empty_data = vec![];
+		let empty_data = Vec::new();
 		let block = Rlp::new(&empty_data);
 
 		let result = SyncHandler::on_peer_new_block(&mut sync, &mut io, 0, &block);
@@ -880,9 +888,9 @@ mod tests {
 		let queue = RwLock::new(VecDeque::new());
 		let mut sync = dummy_sync_with_peer(client.block_hash_delta_minus(5), &client);
 		let ss = TestSnapshotService::new();
-		let mut io = TestIo::new(&mut client, &ss, &queue, None, None);
+		let mut io = TestIo::new(&client, &ss, &queue, None, None);
 
-		let empty_hashes_data = vec![];
+		let empty_hashes_data = Vec::new();
 		let hashes_rlp = Rlp::new(&empty_hashes_data);
 
 		let result = SyncHandler::on_peer_new_hashes(&mut sync, &mut io, 0, &hashes_rlp);

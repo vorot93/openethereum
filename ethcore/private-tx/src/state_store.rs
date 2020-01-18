@@ -33,7 +33,7 @@ pub enum RequestType {
 	/// Verification of private transaction
 	Verification(Arc<VerifiedPrivateTransaction>),
 	/// Creation of the private transaction
-	Creation(SignedTransaction),
+	Creation(Box<SignedTransaction>),
 }
 
 #[derive(Clone, PartialEq)]
@@ -58,7 +58,7 @@ pub struct PrivateStateStorage {
 impl PrivateStateStorage {
 	/// Constructs the object
 	pub fn new(db: Arc<dyn KeyValueDB>) -> Self {
-		PrivateStateStorage {
+		Self {
 			private_state_db: Arc::new(PrivateStateDB::new(db)),
 			requests: RwLock::new(Vec::new()),
 			syncing_hashes: RwLock::default(),
@@ -68,7 +68,7 @@ impl PrivateStateStorage {
 	/// Checks if ready for processing requests exist in queue
 	pub fn requests_ready(&self) -> bool {
 		let requests = self.requests.read();
-		requests.iter().find(|r| r.state == RequestState::Ready).is_some()
+		requests.iter().any(|r| r.state == RequestState::Ready)
 	}
 
 	/// Signals that corresponding private state retrieved and added into the local db
@@ -86,7 +86,7 @@ impl PrivateStateStorage {
 	/// Store a request for state's sync and later processing, returns new hashes, which sync is required
 	pub fn add_request(&self, request_type: RequestType, request_hashes: HashSet<H256>) -> Vec<H256> {
 		let request = StateRequest {
-			request_type: request_type,
+			request_type,
 			request_hashes: request_hashes.clone(),
 			state: RequestState::Syncing,
 		};
@@ -125,7 +125,7 @@ impl PrivateStateStorage {
 		syncing_hashes
 			.iter()
 			.filter(|&(_, expiration_time)| *expiration_time >= current_time)
-			.for_each(|(hash, _)| self.mark_hash_stale(&hash, logging));
+			.for_each(|(hash, _)| self.mark_hash_stale(hash, logging));
 		syncing_hashes.retain(|_, expiration_time| *expiration_time < current_time);
 	}
 
@@ -142,24 +142,24 @@ impl PrivateStateStorage {
 	fn mark_hash_stale(&self, stale_hash: &H256, logging: &Option<Logging>) {
 		let mut requests = self.requests.write();
 		requests.retain(|request| {
-			let mut delete_request = false;
-			if request.request_hashes.contains(stale_hash) {
-				let tx_hash;
-				match &request.request_type {
+			!if request.request_hashes.contains(stale_hash) {
+				let tx_hash = match &request.request_type {
 					RequestType::Verification(transaction) => {
-						tx_hash = transaction.transaction_hash;
+						transaction.transaction_hash
 					}
 					RequestType::Creation(transaction) => {
-						tx_hash = transaction.hash();
-						if let Some(ref logging) = logging {
+						let tx_hash = transaction.hash();
+						if let Some(logging) = logging {
 							logging.private_state_sync_failed(&tx_hash);
 						}
+						tx_hash
 					}
-				}
+				};
 				trace!(target: "privatetx", "Private state request for {:?} staled due to timeout", &tx_hash);
-				delete_request = true;
+				true
+			} else {
+				false
 			}
-			!delete_request
 		});
 	}
 }

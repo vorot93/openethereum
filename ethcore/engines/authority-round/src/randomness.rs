@@ -16,7 +16,7 @@
 
 //! On-chain randomness generation for authority round
 //!
-//! This module contains the support code for the on-chain randomness generation used by AuRa. Its
+//! This module contains the support code for the on-chain randomness generation used by `AuRa`. Its
 //! core is the finite state machine `RandomnessPhase`, which can be loaded from the blockchain
 //! state, then asked to perform potentially necessary transaction afterwards using the `advance()`
 //! method.
@@ -67,7 +67,7 @@
 //! 2. Call `RandomnessPhase::advance()`.
 //!
 //! A production implementation of a randomness contract can be found here:
-//! https://github.com/poanetwork/posdao-contracts/blob/4fddb108993d4962951717b49222327f3d94275b/contracts/RandomAuRa.sol
+//! <https://github.com/poanetwork/posdao-contracts/blob/4fddb108993d4962951717b49222327f3d94275b/contracts/RandomAuRa.sol>
 
 use derive_more::Display;
 use ethabi::Hash;
@@ -89,6 +89,7 @@ pub type RandNumber = H256;
 use_contract!(aura_random, "../../res/contracts/authority_round_random.json");
 
 /// Validated randomness phase state.
+#[allow(dead_code)] // Work-around rust-lang/rust#64362
 #[derive(Debug)]
 pub enum RandomnessPhase {
 	// NOTE: Some states include information already gathered during `load` (e.g. `our_address`,
@@ -133,8 +134,8 @@ pub enum PhaseError {
 }
 
 impl From<CryptoError> for PhaseError {
-	fn from(err: CryptoError) -> PhaseError {
-		PhaseError::Crypto(err)
+	fn from(err: CryptoError) -> Self {
+		Self::Crypto(err)
 	}
 }
 
@@ -147,7 +148,7 @@ impl RandomnessPhase {
 	pub fn load(
 		contract: &BoundContract,
 		our_address: Address,
-	) -> Result<RandomnessPhase, PhaseError> {
+	) -> Result<Self, PhaseError> {
 		// Determine the current round and which phase we are in.
 		let round = contract
 			.call_const(aura_random::functions::current_collect_round::call())
@@ -177,21 +178,21 @@ impl RandomnessPhase {
 			}
 
 			if !committed {
-				Ok(RandomnessPhase::BeforeCommit)
-			} else {
-				Ok(RandomnessPhase::Committed)
+				return Ok(Self::BeforeCommit);
 			}
+
+			Ok(Self::Committed)
 		} else {
 			if !committed {
 				// We apparently entered too late to make a commitment, wait until we get a chance again.
-				return Ok(RandomnessPhase::Waiting);
+				return Ok(Self::Waiting);
 			}
 
 			if !revealed {
-				Ok(RandomnessPhase::Reveal { our_address, round })
-			} else {
-				Ok(RandomnessPhase::Waiting)
+				return Ok(Self::Reveal { our_address, round });
 			}
+
+			Ok(Self::Waiting)
 		}
 	}
 
@@ -208,8 +209,8 @@ impl RandomnessPhase {
 		signer: &dyn EngineSigner,
 	) -> Result<Option<Bytes>, PhaseError> {
 		match self {
-			RandomnessPhase::Waiting | RandomnessPhase::Committed => Ok(None),
-			RandomnessPhase::BeforeCommit => {
+			Self::Waiting | Self::Committed => Ok(None),
+			Self::BeforeCommit => {
 				// Generate a new random number, but don't reveal it yet. Instead, we publish its hash to the
 				// randomness contract, together with the number encrypted to ourselves. That way we will later be
 				// able to decrypt and reveal it, and other parties are able to verify it against the hash.
@@ -223,7 +224,7 @@ impl RandomnessPhase {
 				let (data, _decoder) = aura_random::functions::commit_hash::call(number_hash, cipher);
 				Ok(Some(data))
 			}
-			RandomnessPhase::Reveal { round, our_address } => {
+			Self::Reveal { round, our_address } => {
 				// Load the hash and encrypted number that we stored in the commit phase.
 				let call = aura_random::functions::get_commit_and_cipher::call(round, our_address);
 				let (committed_hash, cipher) = contract

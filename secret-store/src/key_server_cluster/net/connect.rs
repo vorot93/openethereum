@@ -30,9 +30,9 @@ use key_server_cluster::net::Connection;
 pub fn connect(address: &SocketAddr, self_key_pair: Arc<dyn SigningKeyPair>, trusted_nodes: BTreeSet<NodeId>) -> Deadline<Connect> {
 	let connect = Connect {
 		state: ConnectState::TcpConnect(TcpStream::connect(address)),
-		address: address.clone(),
-		self_key_pair: self_key_pair,
-		trusted_nodes: trusted_nodes,
+		address: *address,
+		self_key_pair,
+		trusted_nodes,
 	};
 
 	deadline(Duration::new(5, 0), connect).expect("Failed to create timeout")

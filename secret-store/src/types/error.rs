@@ -93,90 +93,90 @@ pub enum Error {
 impl Error {
 	/// Is this a fatal error? Non-fatal means that it is possible to replay the same request with a non-zero
 	/// chance to success. I.e. the error is not about request itself (or current environment factors that
-	/// are affecting request processing), but about current SecretStore state.
+	/// are affecting request processing), but about current `SecretStore` state.
 	pub fn is_non_fatal(&self) -> bool {
-		match *self {
+		match self {
 			// non-fatal errors:
 
 			// session start errors => restarting session is a solution
-			Error::DuplicateSessionId | Error::NoActiveSessionWithId |
+			Self::DuplicateSessionId | Self::NoActiveSessionWithId |
 			// unexpected message errors => restarting session/excluding node is a solution
-			Error::TooEarlyForRequest | Error::InvalidStateForRequest | Error::InvalidNodeForRequest |
+			Self::TooEarlyForRequest | Self::InvalidStateForRequest | Self::InvalidNodeForRequest |
 			// invalid message errors => restarting/updating/excluding node is a solution
-			Error::InvalidMessage | Error::InvalidMessageVersion | Error::ReplayProtection |
+			Self::InvalidMessage | Self::InvalidMessageVersion | Self::ReplayProtection |
 			// connectivity problems => waiting for reconnect && restarting session is a solution
-			Error::NodeDisconnected |
+			Self::NodeDisconnected |
 			// temporary (?) consensus problems, related to other non-fatal errors => restarting is probably (!) a solution
-			Error::ConsensusTemporaryUnreachable |
+			Self::ConsensusTemporaryUnreachable |
 			// exclusive session errors => waiting && restarting is a solution
-			Error::ExclusiveSessionActive | Error::HasActiveSessions => true,
+			Self::ExclusiveSessionActive | Self::HasActiveSessions => true,
 
 			// fatal errors:
 
 			// config-related errors
-			Error::InvalidNodeAddress | Error::InvalidNodeId |
+			Self::InvalidNodeAddress | Self::InvalidNodeId |
 			// wrong session input params errors
-			Error::NotEnoughNodesForThreshold | Error::ServerKeyAlreadyGenerated | Error::ServerKeyIsNotFound |
-				Error::DocumentKeyAlreadyStored | Error::DocumentKeyIsNotFound | Error::InsufficientRequesterData(_) |
+			Self::NotEnoughNodesForThreshold | Self::ServerKeyAlreadyGenerated | Self::ServerKeyIsNotFound |
+				Self::DocumentKeyAlreadyStored | Self::DocumentKeyIsNotFound | Self::InsufficientRequesterData(_) |
 			// access denied/consensus error
-			Error::AccessDenied | Error::ConsensusUnreachable |
+			Self::AccessDenied | Self::ConsensusUnreachable |
 			// indeterminate internal errors, which could be either fatal (db failure, invalid request), or not (network error),
 			// but we still consider these errors as fatal
-			Error::EthKey(_) | Error::Serde(_) | Error::Hyper(_) | Error::Database(_) | Error::Internal(_) | Error::Io(_) => false,
+			Self::EthKey(_) | Self::Serde(_) | Self::Hyper(_) | Self::Database(_) | Self::Internal(_) | Self::Io(_) => false,
 		}
 	}
 }
 
 impl fmt::Display for Error {
 	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-		match *self {
-			Error::InvalidNodeAddress => write!(f, "invalid node address has been passed"),
-			Error::InvalidNodeId => write!(f, "invalid node id has been passed"),
-			Error::DuplicateSessionId => write!(f, "session with the same id is already registered"),
-			Error::NoActiveSessionWithId => write!(f, "no active session with given id"),
-			Error::NotEnoughNodesForThreshold => write!(f, "not enough nodes for passed threshold"),
-			Error::TooEarlyForRequest => write!(f, "session is not yet ready to process this request"),
-			Error::InvalidStateForRequest => write!(f, "session is in invalid state for processing this request"),
-			Error::InvalidNodeForRequest => write!(f, "invalid node for this request"),
-			Error::InvalidMessage => write!(f, "invalid message is received"),
-			Error::InvalidMessageVersion => write!(f, "unsupported message is received"),
-			Error::ReplayProtection => write!(f, "replay message is received"),
-			Error::NodeDisconnected => write!(f, "node required for this operation is currently disconnected"),
-			Error::ServerKeyAlreadyGenerated => write!(f, "Server key with this ID is already generated"),
-			Error::ServerKeyIsNotFound => write!(f, "Server key with this ID is not found"),
-			Error::DocumentKeyAlreadyStored => write!(f, "Document key with this ID is already stored"),
-			Error::DocumentKeyIsNotFound => write!(f, "Document key with this ID is not found"),
-			Error::ConsensusUnreachable => write!(f, "Consensus unreachable"),
-			Error::ConsensusTemporaryUnreachable => write!(f, "Consensus temporary unreachable"),
-			Error::AccessDenied => write!(f, "Access denied"),
-			Error::ExclusiveSessionActive => write!(f, "Exclusive session active"),
-			Error::HasActiveSessions => write!(f, "Unable to start exclusive session"),
-			Error::InsufficientRequesterData(ref e) => write!(f, "Insufficient requester data: {}", e),
-			Error::EthKey(ref e) => write!(f, "cryptographic error {}", e),
-			Error::Hyper(ref msg) => write!(f, "Hyper error: {}", msg),
-			Error::Serde(ref msg) => write!(f, "Serialization error: {}", msg),
-			Error::Database(ref msg) => write!(f, "Database error: {}", msg),
-			Error::Internal(ref msg) => write!(f, "Internal error: {}", msg),
-			Error::Io(ref msg) => write!(f, "IO error: {}", msg),
+		match self {
+			Self::InvalidNodeAddress => write!(f, "invalid node address has been passed"),
+			Self::InvalidNodeId => write!(f, "invalid node id has been passed"),
+			Self::DuplicateSessionId => write!(f, "session with the same id is already registered"),
+			Self::NoActiveSessionWithId => write!(f, "no active session with given id"),
+			Self::NotEnoughNodesForThreshold => write!(f, "not enough nodes for passed threshold"),
+			Self::TooEarlyForRequest => write!(f, "session is not yet ready to process this request"),
+			Self::InvalidStateForRequest => write!(f, "session is in invalid state for processing this request"),
+			Self::InvalidNodeForRequest => write!(f, "invalid node for this request"),
+			Self::InvalidMessage => write!(f, "invalid message is received"),
+			Self::InvalidMessageVersion => write!(f, "unsupported message is received"),
+			Self::ReplayProtection => write!(f, "replay message is received"),
+			Self::NodeDisconnected => write!(f, "node required for this operation is currently disconnected"),
+			Self::ServerKeyAlreadyGenerated => write!(f, "Server key with this ID is already generated"),
+			Self::ServerKeyIsNotFound => write!(f, "Server key with this ID is not found"),
+			Self::DocumentKeyAlreadyStored => write!(f, "Document key with this ID is already stored"),
+			Self::DocumentKeyIsNotFound => write!(f, "Document key with this ID is not found"),
+			Self::ConsensusUnreachable => write!(f, "Consensus unreachable"),
+			Self::ConsensusTemporaryUnreachable => write!(f, "Consensus temporary unreachable"),
+			Self::AccessDenied => write!(f, "Access denied"),
+			Self::ExclusiveSessionActive => write!(f, "Exclusive session active"),
+			Self::HasActiveSessions => write!(f, "Unable to start exclusive session"),
+			Self::InsufficientRequesterData(e) => write!(f, "Insufficient requester data: {}", e),
+			Self::EthKey(e) => write!(f, "cryptographic error {}", e),
+			Self::Hyper(msg) => write!(f, "Hyper error: {}", msg),
+			Self::Serde(msg) => write!(f, "Serialization error: {}", msg),
+			Self::Database(msg) => write!(f, "Database error: {}", msg),
+			Self::Internal(msg) => write!(f, "Internal error: {}", msg),
+			Self::Io(msg) => write!(f, "IO error: {}", msg),
 		}
 	}
 }
 
 impl From<crypto::publickey::Error> for Error {
 	fn from(err: crypto::publickey::Error) -> Self {
-		Error::EthKey(err.into())
+		Self::EthKey(err.into())
 	}
 }
 
 impl From<crypto::Error> for Error {
 	fn from(err: crypto::Error) -> Self {
-		Error::EthKey(err.to_string())
+		Self::EthKey(err.to_string())
 	}
 }
 
 impl From<IoError> for Error {
 	fn from(err: IoError) -> Self {
-		Error::Io(err.to_string())
+		Self::Io(err.to_string())
 	}
 }
 
@@ -187,7 +187,7 @@ impl Into<String> for Error {
 }
 
 impl From<net::AddrParseError> for Error {
-	fn from(err: net::AddrParseError) -> Error {
-		Error::Internal(err.to_string())
+	fn from(err: net::AddrParseError) -> Self {
+		Self::Internal(err.to_string())
 	}
 }

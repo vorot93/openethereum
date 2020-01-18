@@ -97,7 +97,7 @@ pub struct EthProtocolInfo {
 
 impl From<sync::EthProtocolInfo> for EthProtocolInfo {
 	fn from(info: sync::EthProtocolInfo) -> Self {
-		EthProtocolInfo {
+		Self {
 			version: info.version,
 			difficulty: info.difficulty.map(Into::into),
 			head: format!("{:x}", info.head),
@@ -118,7 +118,7 @@ pub struct PipProtocolInfo {
 
 impl From<sync::PipProtocolInfo> for PipProtocolInfo {
 	fn from(info: sync::PipProtocolInfo) -> Self {
-		PipProtocolInfo {
+		Self {
 			version: info.version,
 			difficulty: info.difficulty,
 			head: format!("{:x}", info.head),
@@ -138,9 +138,9 @@ pub enum SyncStatus {
 impl Serialize for SyncStatus {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where S: Serializer {
-		match *self {
-			SyncStatus::Info(ref info) => info.serialize(serializer),
-			SyncStatus::None => false.serialize(serializer)
+		match self {
+			Self::Info(info) => info.serialize(serializer),
+			Self::None => false.serialize(serializer)
 		}
 	}
 }
@@ -157,7 +157,7 @@ pub struct TransactionStats {
 
 impl From<SyncPeerInfo> for PeerInfo {
 	fn from(p: SyncPeerInfo) -> Self {
-		PeerInfo {
+		Self {
 			id: p.id,
 			name: p.client_version,
 			caps: p.capabilities,
@@ -175,7 +175,7 @@ impl From<SyncPeerInfo> for PeerInfo {
 
 impl From<SyncTransactionStats> for TransactionStats {
 	fn from(s: SyncTransactionStats) -> Self {
-		TransactionStats {
+		Self {
 			first_seen: s.first_seen,
 			propagated_to: s.propagated_to
 				.into_iter()

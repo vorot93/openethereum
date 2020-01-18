@@ -70,13 +70,13 @@ impl SigningTester {
 		let rpc = SigningQueueClient::new(&signer, dispatcher, executor, &account_signer);
 		io.extend_with(ParitySigning::to_delegate(rpc));
 
-		SigningTester {
+		Self {
 			runtime,
-			signer: signer,
-			client: client,
-			miner: miner,
-			accounts: accounts,
-			io: io,
+			signer,
+			client,
+			miner,
+			accounts,
+			io,
 		}
 	}
 }
@@ -91,7 +91,7 @@ fn rpc_eth_sign() {
 
 	let tester = eth_signing(true);
 
-	let account = tester.accounts.insert_account(Secret::from([69u8; 32]), &"abcd".into()).unwrap();
+	let account = tester.accounts.insert_account(Secret::from([69_u8; 32]), &"abcd".into()).unwrap();
 	tester.accounts.unlock_account_permanently(account, "abcd".into()).unwrap();
 	let _message = "0cc175b9c0f1b6a831c399e26977266192eb5ffee6ae2fec3ad71c777531578f".from_hex().unwrap();
 
@@ -197,7 +197,7 @@ fn should_check_status_of_request() {
 	let response = r#"{"jsonrpc":"2.0","result":null,"id":1}"#;
 
 	// then
-	assert_eq!(tester.io.handle_request_sync(&request), Some(response.to_owned()));
+	assert_eq!(tester.io.handle_request_sync(request), Some(response.to_owned()));
 }
 
 #[test]
@@ -231,7 +231,7 @@ fn should_check_status_of_request_when_its_resolved() {
 	let response = r#"{"jsonrpc":"2.0","result":"0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001","id":1}"#;
 
 	// then
-	assert_eq!(tester.io.handle_request_sync(&request), Some(response.to_owned()));
+	assert_eq!(tester.io.handle_request_sync(request), Some(response.to_owned()));
 }
 
 #[test]
@@ -284,8 +284,8 @@ fn eth_sign_locked_account() {
 fn should_sign_if_account_is_unlocked() {
 	// given
 	let tester = eth_signing(true);
-	let data = vec![5u8];
-	let acc = tester.accounts.insert_account(Secret::from([69u8; 32]), &"test".into()).unwrap();
+	let data = vec![5_u8];
+	let acc = tester.accounts.insert_account(Secret::from([69_u8; 32]), &"test".into()).unwrap();
 	tester.accounts.unlock_account_permanently(acc, "test".into()).unwrap();
 
 	// when
@@ -368,11 +368,11 @@ fn should_add_sign_transaction_to_the_queue() {
 
 	let t = Transaction {
 		nonce: U256::one(),
-		gas_price: U256::from(0x9184e72a000u64),
+		gas_price: U256::from(0x0918_4e72_a000_u64),
 		gas: U256::from(0x76c0),
 		action: Action::Call(Address::from_str("d46e8dd67c5d32be8058bb8eb970870f07244567").unwrap()),
-		value: U256::from(0x9184e72au64),
-		data: vec![]
+		value: U256::from(0x9184_e72a_u64),
+		data: Vec::new()
 	};
 	let signature = tester.accounts.sign(address, Some("test".into()), t.hash(None)).unwrap();
 	let t = t.with_signature(signature, None);
@@ -412,7 +412,7 @@ fn should_add_sign_transaction_to_the_queue() {
 			// respond
 			let sender = signer.take(&1.into()).unwrap();
 			signer.request_confirmed(sender, Ok(ConfirmationResponse::SignTransaction(
-				RichRawTransaction::from_signed(t.into())
+				RichRawTransaction::from_signed(t)
 			)));
 			break
 		}
@@ -420,7 +420,7 @@ fn should_add_sign_transaction_to_the_queue() {
 	});
 
 	let res = promise.wait().unwrap();
-	assert_eq!(res, Some(response.to_owned()));
+	assert_eq!(res, Some(response));
 }
 
 #[test]
@@ -432,11 +432,11 @@ fn should_dispatch_transaction_if_account_is_unlock() {
 
 	let t = Transaction {
 		nonce: U256::zero(),
-		gas_price: U256::from(0x9184e72a000u64),
+		gas_price: U256::from(0x0918_4e72_a000_u64),
 		gas: U256::from(0x76c0),
 		action: Action::Call(Address::from_str("d46e8dd67c5d32be8058bb8eb970870f07244567").unwrap()),
-		value: U256::from(0x9184e72au64),
-		data: vec![]
+		value: U256::from(0x9184_e72a_u64),
+		data: Vec::new()
 	};
 	let signature = tester.accounts.sign(acc, None, t.hash(None)).unwrap();
 	let t = t.with_signature(signature, None);
@@ -457,7 +457,7 @@ fn should_dispatch_transaction_if_account_is_unlock() {
 	let response = r#"{"jsonrpc":"2.0","result":""#.to_owned() + format!("0x{:x}", t.hash()).as_ref() + r#"","id":1}"#;
 
 	// then
-	assert_eq!(tester.io.handle_request_sync(&request), Some(response.to_owned()));
+	assert_eq!(tester.io.handle_request_sync(&request), Some(response));
 }
 
 #[test]
@@ -551,5 +551,5 @@ fn should_compose_transaction() {
 
 	// then
 	let res = tester.io.handle_request(&request).wait().unwrap();
-	assert_eq!(res, Some(response.to_owned()));
+	assert_eq!(res, Some(response));
 }

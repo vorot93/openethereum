@@ -28,9 +28,9 @@ pub struct Config {
 	pub max_cache_size: usize,
 }
 
-impl Default for Config {
-	fn default() -> Self {
-		Config {
+impl Config {
+	pub const fn default() -> Self {
+		Self {
 			enabled: false,
 			pref_cache_size: 15 * 1024 * 1024,
 			max_cache_size: 20 * 1024 * 1024,

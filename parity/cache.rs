@@ -26,7 +26,7 @@ const DEFAULT_TRACE_CACHE_SIZE: u32 = 20;
 const DEFAULT_STATE_CACHE_SIZE: u32 = 25;
 
 /// Configuration for application cache sizes.
-/// All	values are represented in MB.
+/// All values are represented in MB.
 #[derive(Debug, PartialEq)]
 pub struct CacheConfig {
 	/// Size of rocksDB cache. Almost all goes to the state column.
@@ -43,7 +43,7 @@ pub struct CacheConfig {
 
 impl Default for CacheConfig {
 	fn default() -> Self {
-		CacheConfig::new(
+		Self::new(
 			DEFAULT_DB_CACHE_SIZE,
 			DEFAULT_BC_CACHE_SIZE,
 			DEFAULT_BLOCK_QUEUE_SIZE_LIMIT_MB,
@@ -53,8 +53,8 @@ impl Default for CacheConfig {
 
 impl CacheConfig {
 	/// Creates new cache config with cumulative size equal `total`.
-	pub fn new_with_total_cache_size(total: u32) -> Self {
-		CacheConfig {
+	pub const fn new_with_total_cache_size(total: u32) -> Self {
+		Self {
 			db: total * 7 / 10,
 			blockchain: total / 10,
 			queue: DEFAULT_BLOCK_QUEUE_SIZE_LIMIT_MB,
@@ -64,13 +64,13 @@ impl CacheConfig {
 	}
 
 	/// Creates new cache config with gitven details.
-	pub fn new(db: u32, blockchain: u32, queue: u32, state: u32) -> Self {
-		CacheConfig {
-			db: db,
-			blockchain: blockchain,
-			queue: queue,
+	pub const fn new(db: u32, blockchain: u32, queue: u32, state: u32) -> Self {
+		Self {
+			db,
+			blockchain,
+			queue,
 			traces: DEFAULT_TRACE_CACHE_SIZE,
-			state: state,
+			state,
 		}
 	}
 
@@ -90,17 +90,17 @@ impl CacheConfig {
 	}
 
 	/// Size of the traces cache.
-	pub fn traces(&self) -> u32 {
+	pub const fn traces(&self) -> u32 {
 		self.traces
 	}
 
 	/// Size of the state cache.
-	pub fn state(&self) -> u32 {
+	pub const fn state(&self) -> u32 {
 		self.state * 3 / 4
 	}
 
 	/// Size of the jump-tables cache.
-	pub fn jump_tables(&self) -> u32 {
+	pub const fn jump_tables(&self) -> u32 {
 		self.state / 4
 	}
 }

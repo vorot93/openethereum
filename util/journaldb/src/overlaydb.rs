@@ -53,7 +53,7 @@ struct Payload {
 
 impl Payload {
 	fn new(count: u32, value: DBValue) -> Self {
-		Payload {
+		Self {
 			count,
 			value,
 		}
@@ -70,7 +70,7 @@ impl Encodable for Payload {
 
 impl Decodable for Payload {
 	fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-		let payload = Payload {
+		let payload = Self {
 			count: rlp.val_at(0)?,
 			value: rlp.at(1)?.data()?.to_vec(),
 		};
@@ -80,18 +80,18 @@ impl Decodable for Payload {
 }
 
 impl OverlayDB {
-	/// Create a new instance of OverlayDB given a `backing` database.
-	pub fn new(backing: Arc<dyn KeyValueDB>, column: u32) -> OverlayDB {
-		OverlayDB {
+	/// Create a new instance of `OverlayDB` given a `backing` database.
+	pub fn new(backing: Arc<dyn KeyValueDB>, column: u32) -> Self {
+		Self {
 			overlay: new_memory_db(),
 			backing,
 			column,
 		}
 	}
 
-	/// Create a new instance of OverlayDB with an anonymous temporary database.
+	/// Create a new instance of `OverlayDB` with an anonymous temporary database.
 	#[cfg(test)]
-	pub fn new_temp() -> OverlayDB {
+	pub fn new_temp() -> Self {
 		let backing = Arc::new(::kvdb_memorydb::create(1));
 		Self::new(backing, 0)
 	}
@@ -101,32 +101,29 @@ impl OverlayDB {
 	pub fn commit(&mut self) -> io::Result<u32> {
 		let mut batch = self.backing.transaction();
 		let res = self.commit_to_batch(&mut batch)?;
-		self.backing.write(batch).map(|_| res).map_err(|e| e.into())
+		self.backing.write(batch).map(|_| res).map_err(|e| e)
 	}
 
 	/// Commit all operations to given batch.
 	pub fn commit_to_batch(&mut self, batch: &mut DBTransaction) -> io::Result<u32> {
-		let mut ret = 0u32;
-		let mut deletes = 0usize;
+		let mut ret = 0_u32;
+		let mut deletes = 0_usize;
 		for i in self.overlay.drain() {
 			let (key, (value, rc)) = i;
 			if rc != 0 {
-				match self.payload(&key) {
-					Some(x) => {
+				if let Some(x) = self.payload(&key) {
 						let total_rc: i32 = x.count as i32 + rc;
 						if total_rc < 0 {
 							return Err(error_negatively_reference_hash(&key));
 						}
 						let payload = Payload::new(total_rc as u32, x.value);
 						deletes += if self.put_payload_in_batch(batch, &key, &payload) {1} else {0};
-					}
-					None => {
+				} else {
 						if rc < 0 {
 							return Err(error_negatively_reference_hash(&key));
 						}
 						let payload = Payload::new(rc as u32, value);
 						self.put_payload_in_batch(batch, &key, &payload);
-					}
 				};
 				ret += 1;
 			}

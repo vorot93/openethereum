@@ -71,54 +71,54 @@ pub enum Error {
 impl Error {
 	/// What level of punishment does this error warrant?
 	pub fn punishment(&self) -> Punishment {
-		match *self {
-			Error::Rlp(_) => Punishment::Disable,
-			Error::Network(_) => Punishment::None,
-			Error::NoCredits => Punishment::Disable,
-			Error::UnrecognizedPacket(_) => Punishment::Disconnect,
-			Error::UnexpectedHandshake => Punishment::Disconnect,
-			Error::WrongNetwork => Punishment::Disable,
-			Error::UnknownPeer => Punishment::Disconnect,
-			Error::UnsolicitedResponse => Punishment::Disable,
-			Error::BadBackReference => Punishment::Disable,
-			Error::NotServer => Punishment::Disable,
-			Error::UnsupportedProtocolVersion(_) => Punishment::Disable,
-			Error::BadProtocolVersion => Punishment::Disable,
-			Error::Overburdened => Punishment::None,
-			Error::RejectedByHandlers => Punishment::Disconnect,
+		match self {
+			Self::Rlp(_) => Punishment::Disable,
+			Self::Network(_) => Punishment::None,
+			Self::NoCredits => Punishment::Disable,
+			Self::UnrecognizedPacket(_) => Punishment::Disconnect,
+			Self::UnexpectedHandshake => Punishment::Disconnect,
+			Self::WrongNetwork => Punishment::Disable,
+			Self::UnknownPeer => Punishment::Disconnect,
+			Self::UnsolicitedResponse => Punishment::Disable,
+			Self::BadBackReference => Punishment::Disable,
+			Self::NotServer => Punishment::Disable,
+			Self::UnsupportedProtocolVersion(_) => Punishment::Disable,
+			Self::BadProtocolVersion => Punishment::Disable,
+			Self::Overburdened => Punishment::None,
+			Self::RejectedByHandlers => Punishment::Disconnect,
 		}
 	}
 }
 
 impl From<rlp::DecoderError> for Error {
 	fn from(err: rlp::DecoderError) -> Self {
-		Error::Rlp(err)
+		Self::Rlp(err)
 	}
 }
 
 impl From<network::Error> for Error {
 	fn from(err: network::Error) -> Self {
-		Error::Network(err)
+		Self::Network(err)
 	}
 }
 
 impl fmt::Display for Error {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match *self {
-			Error::Rlp(ref err) => err.fmt(f),
-			Error::Network(ref err) => err.fmt(f),
-			Error::NoCredits => write!(f, "Out of request credits"),
-			Error::UnrecognizedPacket(code) => write!(f, "Unrecognized packet: 0x{:x}", code),
-			Error::UnexpectedHandshake => write!(f, "Unexpected handshake"),
-			Error::WrongNetwork => write!(f, "Wrong network"),
-			Error::UnknownPeer => write!(f, "Unknown peer"),
-			Error::UnsolicitedResponse => write!(f, "Peer provided unsolicited data"),
-			Error::BadBackReference => write!(f, "Bad back-reference in request."),
-			Error::NotServer => write!(f, "Peer not a server."),
-			Error::UnsupportedProtocolVersion(pv) => write!(f, "Unsupported protocol version: {}", pv),
-			Error::BadProtocolVersion => write!(f, "Bad protocol version in handshake"),
-			Error::Overburdened => write!(f, "Peer overburdened"),
-			Error::RejectedByHandlers => write!(f, "No handler kept this peer"),
+		match self {
+			Self::Rlp(err) => err.fmt(f),
+			Self::Network(err) => err.fmt(f),
+			Self::NoCredits => write!(f, "Out of request credits"),
+			Self::UnrecognizedPacket(code) => write!(f, "Unrecognized packet: 0x{:x}", code),
+			Self::UnexpectedHandshake => write!(f, "Unexpected handshake"),
+			Self::WrongNetwork => write!(f, "Wrong network"),
+			Self::UnknownPeer => write!(f, "Unknown peer"),
+			Self::UnsolicitedResponse => write!(f, "Peer provided unsolicited data"),
+			Self::BadBackReference => write!(f, "Bad back-reference in request."),
+			Self::NotServer => write!(f, "Peer not a server."),
+			Self::UnsupportedProtocolVersion(pv) => write!(f, "Unsupported protocol version: {}", pv),
+			Self::BadProtocolVersion => write!(f, "Bad protocol version in handshake"),
+			Self::Overburdened => write!(f, "Peer overburdened"),
+			Self::RejectedByHandlers => write!(f, "No handler kept this peer"),
 		}
 	}
 }

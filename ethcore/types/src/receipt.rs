@@ -64,15 +64,15 @@ impl Receipt {
 
 impl Encodable for Receipt {
 	fn rlp_append(&self, s: &mut RlpStream) {
-		match self.outcome {
+		match &self.outcome {
 			TransactionOutcome::Unknown => {
 				s.begin_list(3);
 			},
-			TransactionOutcome::StateRoot(ref root) => {
+			TransactionOutcome::StateRoot(root) => {
 				s.begin_list(4);
 				s.append(root);
 			},
-			TransactionOutcome::StatusCode(ref status_code) => {
+			TransactionOutcome::StatusCode(status_code) => {
 				s.begin_list(4);
 				s.append(status_code);
 			},
@@ -86,14 +86,14 @@ impl Encodable for Receipt {
 impl Decodable for Receipt {
 	fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
 		if rlp.item_count()? == 3 {
-			Ok(Receipt {
+			Ok(Self {
 				outcome: TransactionOutcome::Unknown,
 				gas_used: rlp.val_at(0)?,
 				log_bloom: rlp.val_at(1)?,
 				logs: rlp.list_at(2)?,
 			})
 		} else {
-			Ok(Receipt {
+			Ok(Self {
 				gas_used: rlp.val_at(1)?,
 				log_bloom: rlp.val_at(2)?,
 				logs: rlp.list_at(3)?,
@@ -184,8 +184,8 @@ mod tests {
 			0x40cae.into(),
 			vec![LogEntry {
 				address: Address::from_str("dcf421d093428b096ca501a7cd1a740855a7976f").unwrap(),
-				topics: vec![],
-				data: vec![0u8; 32]
+				topics: Vec::new(),
+				data: vec![0_u8; 32]
 			}]
 		);
 		assert_eq!(&::rlp::encode(&r)[..], &expected[..]);
@@ -199,8 +199,8 @@ mod tests {
 			0x40cae.into(),
 			vec![LogEntry {
 				address: Address::from_str("dcf421d093428b096ca501a7cd1a740855a7976f").unwrap(),
-				topics: vec![],
-				data: vec![0u8; 32]
+				topics: Vec::new(),
+				data: vec![0_u8; 32]
 			}]
 		);
 		let encoded = rlp::encode(&r);
@@ -217,8 +217,8 @@ mod tests {
 			0x40cae.into(),
 			vec![LogEntry {
 				address: Address::from_str("dcf421d093428b096ca501a7cd1a740855a7976f").unwrap(),
-				topics: vec![],
-				data: vec![0u8; 32]
+				topics: Vec::new(),
+				data: vec![0_u8; 32]
 			}]
 		);
 		let encoded = rlp::encode(&r);

@@ -35,10 +35,10 @@ pub enum ConsensusCapability {
 impl Into<ConsensusCapability> for CapState {
 	fn into(self) -> ConsensusCapability {
 		match self {
-			CapState::Unknown => ConsensusCapability::Unknown,
-			CapState::Capable => ConsensusCapability::Capable,
-			CapState::CapableUntil(n) => ConsensusCapability::CapableUntil(n),
-			CapState::IncapableSince(n) => ConsensusCapability::IncapableSince(n),
+			Self::Unknown => ConsensusCapability::Unknown,
+			Self::Capable => ConsensusCapability::Capable,
+			Self::CapableUntil(n) => ConsensusCapability::CapableUntil(n),
+			Self::IncapableSince(n) => ConsensusCapability::IncapableSince(n),
 		}
 	}
 }
@@ -61,9 +61,9 @@ pub enum ReleaseTrack {
 impl Into<ReleaseTrack> for updater::ReleaseTrack {
 	fn into(self) -> ReleaseTrack {
 		match self {
-			updater::ReleaseTrack::Stable => ReleaseTrack::Stable,
-			updater::ReleaseTrack::Nightly => ReleaseTrack::Nightly,
-			updater::ReleaseTrack::Unknown => ReleaseTrack::Unknown,
+			Self::Stable => ReleaseTrack::Stable,
+			Self::Nightly => ReleaseTrack::Nightly,
+			Self::Unknown => ReleaseTrack::Unknown,
 		}
 	}
 }
@@ -123,13 +123,13 @@ pub struct ReleaseInfo {
 	pub binary: Option<H256>,
 }
 
-impl Into<ReleaseInfo> for updater::ReleaseInfo {
-	fn into(self) -> ReleaseInfo {
-		ReleaseInfo {
-			version: self.version.into(),
-			is_critical: self.is_critical,
-			fork: self.fork,
-			binary: self.binary.map(Into::into),
+impl From<updater::ReleaseInfo> for ReleaseInfo {
+	fn from(info: updater::ReleaseInfo) -> Self {
+		Self {
+			version: info.version.into(),
+			is_critical: info.is_critical,
+			fork: info.fork,
+			binary: info.binary.map(Into::into),
 		}
 	}
 }

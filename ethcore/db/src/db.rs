@@ -17,12 +17,12 @@
 //! Database utilities and definitions.
 
 use std::convert::AsRef;
-use std::hash::Hash;
+use std::hash::{Hash, BuildHasher};
 use std::collections::HashMap;
 use parking_lot::RwLock;
 use kvdb::{DBTransaction, KeyValueDB};
 
-use rlp;
+
 
 // Database column indexes.
 /// Column for State
@@ -67,17 +67,17 @@ pub trait Cache<K, V> {
 	fn get(&self, k: &K) -> Option<&V>;
 }
 
-impl<K, V> Cache<K, V> for HashMap<K, V> where K: Hash + Eq {
+impl<K, V, S> Cache<K, V> for HashMap<K, V, S> where K: Hash + Eq, S: BuildHasher {
 	fn insert(&mut self, k: K, v: V) -> Option<V> {
-		HashMap::insert(self, k, v)
+		Self::insert(self, k, v)
 	}
 
 	fn remove(&mut self, k: &K) -> Option<V> {
-		HashMap::remove(self, k)
+		Self::remove(self, k)
 	}
 
 	fn get(&self, k: &K) -> Option<&V> {
-		HashMap::get(self, k)
+		Self::get(self, k)
 	}
 }
 
@@ -168,8 +168,8 @@ pub trait Writable {
 		match policy {
 			CacheUpdatePolicy::Overwrite => {
 				for (key, value) in values {
-					match value {
-						Some(ref v) => self.write(col, &key, v),
+					match &value {
+						Some(v) => self.write(col, &key, v),
 						None => self.delete(col, &key),
 					}
 					cache.insert(key, value);
@@ -271,7 +271,7 @@ impl<KVDB: KeyValueDB + ?Sized> Readable for KVDB {
 	fn read<T, R>(&self, col: u32, key: &dyn Key<T, Target = R>) -> Option<T>
 		where T: rlp::Decodable, R: AsRef<[u8]> {
 		self.get(col, key.key().as_ref())
-			.expect(&format!("db get failed, key: {:?}", key.key().as_ref()))
+			.unwrap_or_else(|e| panic!("db get failed, key: {:?}: {}", key.key().as_ref(), e))
 			.map(|v| rlp::decode(&v).expect("decode db value failed") )
 
 	}

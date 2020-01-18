@@ -26,16 +26,16 @@ pub enum Deprecated {
 
 impl fmt::Display for Deprecated {
 	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-		match *self {
-			Deprecated::DoesNothing(s) => write!(f, "Option '{}' does nothing. It's on by default.", s),
-			Deprecated::Replaced(old, new) => write!(f, "Option '{}' is deprecated. Please use '{}' instead.", old, new),
-			Deprecated::Removed(s) => write!(f, "Option '{}' has been removed and is no longer supported.", s)
+		match self {
+			Self::DoesNothing(s) => write!(f, "Option '{}' does nothing. It's on by default.", s),
+			Self::Replaced(old, new) => write!(f, "Option '{}' is deprecated. Please use '{}' instead.", old, new),
+			Self::Removed(s) => write!(f, "Option '{}' has been removed and is no longer supported.", s)
 		}
 	}
 }
 
 pub fn find_deprecated(args: &Args) -> Vec<Deprecated> {
-	let mut result = vec![];
+	let mut result = Vec::new();
 
 	// Removed in 1.6 or before.
 
@@ -253,7 +253,7 @@ mod tests {
 
 	#[test]
 	fn test_find_deprecated() {
-		assert_eq!(find_deprecated(&Args::default()), vec![]);
+		assert_eq!(find_deprecated(&Args::default()), Vec::new());
 		assert_eq!(find_deprecated(&{
 			let mut args = Args::default();
 			args.flag_warp = true;
@@ -264,17 +264,17 @@ mod tests {
 			args.flag_dapps_off = true;
 			args.flag_ipcdisable = true;
 			args.flag_ipc_off = true;
-			args.arg_etherbase = Some(Default::default());
-			args.arg_extradata = Some(Default::default());
+			args.arg_etherbase = Some(String::new());
+			args.arg_extradata = Some(String::new());
 			args.arg_dapps_port = Some(Default::default());
-			args.arg_dapps_interface = Some(Default::default());
-			args.arg_dapps_hosts = Some(Default::default());
-			args.arg_dapps_cors = Some(Default::default());
-			args.arg_dapps_user = Some(Default::default());
-			args.arg_dapps_pass = Some(Default::default());
+			args.arg_dapps_interface = Some(String::new());
+			args.arg_dapps_hosts = Some(String::new());
+			args.arg_dapps_cors = Some(String::new());
+			args.arg_dapps_user = Some(String::new());
+			args.arg_dapps_pass = Some(String::new());
 			args.flag_dapps_apis_all = true;
 			args.flag_fast_and_loose = true;
-			args.arg_ntp_servers = Some(Default::default());
+			args.arg_ntp_servers = Some(String::new());
 			args.flag_whisper = true;
 			args.arg_whisper_pool_size = Some(Default::default());
 			args

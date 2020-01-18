@@ -53,14 +53,14 @@ impl<'a> Visitor<'a> for InputVisitor {
 		loop {
 			let key_str: Option<String> = visitor.next_key()?;
 			let key = match key_str {
-				Some(ref k) if k.starts_with("0x") => Bytes::from_str(k).map_err(V::Error::custom)?,
+				Some(k) if k.starts_with("0x") => Bytes::from_str(&k).map_err(V::Error::custom)?,
 				Some(k) => Bytes::new(k.into_bytes()),
 				None => { break; }
 			};
 
 			let val_str: Option<String> = visitor.next_value()?;
 			let val = match val_str {
-				Some(ref v) if v.starts_with("0x") => Some(Bytes::from_str(v).map_err(V::Error::custom)?),
+				Some(v) if v.starts_with("0x") => Some(Bytes::from_str(&v).map_err(V::Error::custom)?),
 				Some(v) => Some(Bytes::new(v.into_bytes())),
 				None => None,
 			};
@@ -80,10 +80,7 @@ impl<'a> Visitor<'a> for InputVisitor {
 
 		loop {
 			let keyval: Option<Vec<Option<String>>> = visitor.next_element()?;
-			let keyval = match keyval {
-				Some(k) => k,
-				_ => { break; },
-			};
+			let keyval = if let Some(k) = keyval { k } else { break; };
 
 			if keyval.len() != 2 {
 				return Err(V::Error::custom("Invalid key value pair."));
@@ -92,15 +89,15 @@ impl<'a> Visitor<'a> for InputVisitor {
 			let key_str = &keyval[0];
 			let val_str = &keyval[1];
 
-			let key = match *key_str {
-				Some(ref k) if k.starts_with("0x") => Bytes::from_str(k).map_err(V::Error::custom)?,
-				Some(ref k) => Bytes::new(k.clone().into_bytes()),
+			let key = match key_str {
+				Some(k) if k.starts_with("0x") => Bytes::from_str(k).map_err(V::Error::custom)?,
+				Some(k) => Bytes::new(k.clone().into_bytes()),
 				None => { break; }
 			};
 
-			let val = match *val_str {
-				Some(ref v) if v.starts_with("0x") => Some(Bytes::from_str(v).map_err(V::Error::custom)?),
-				Some(ref v) => Some(Bytes::new(v.clone().into_bytes())),
+			let val = match val_str {
+				Some(v) if v.starts_with("0x") => Some(Bytes::from_str(v).map_err(V::Error::custom)?),
+				Some(v) => Some(Bytes::new(v.clone().into_bytes())),
 				None => None,
 			};
 

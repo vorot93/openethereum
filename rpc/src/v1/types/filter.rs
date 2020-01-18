@@ -37,16 +37,16 @@ pub enum VariadicValue<T> where T: DeserializeOwned {
 }
 
 impl<'a, T> Deserialize<'a> for VariadicValue<T> where T: DeserializeOwned {
-	fn deserialize<D>(deserializer: D) -> Result<VariadicValue<T>, D::Error>
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
 	where D: Deserializer<'a> {
 		let v: Value = Deserialize::deserialize(deserializer)?;
 
 		if v.is_null() {
-			return Ok(VariadicValue::Null);
+			return Ok(Self::Null);
 		}
 
-		from_value(v.clone()).map(VariadicValue::Single)
-			.or_else(|_| from_value(v).map(VariadicValue::Multiple))
+		from_value(v.clone()).map(Self::Single)
+			.or_else(|_| from_value(v).map(Self::Multiple))
 			.map_err(|err| D::Error::custom(format!("Invalid variadic value type: {}", err)))
 	}
 }
@@ -121,7 +121,7 @@ impl Filter {
 	}
 }
 
-/// Results of the filter_changes RPC.
+/// Results of the `filter_changes` RPC.
 #[derive(Debug, PartialEq)]
 pub enum FilterChanges {
 	/// New logs.
@@ -134,10 +134,10 @@ pub enum FilterChanges {
 
 impl Serialize for FilterChanges {
 	fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error> where S: Serializer {
-		match *self {
-			FilterChanges::Logs(ref logs) => logs.serialize(s),
-			FilterChanges::Hashes(ref hashes) => hashes.serialize(s),
-			FilterChanges::Empty => (&[] as &[Value]).serialize(s),
+		match self {
+			Self::Logs(logs) => logs.serialize(s),
+			Self::Hashes(hashes) => hashes.serialize(s),
+			Self::Empty => (&[] as &[Value]).serialize(s),
 		}
 	}
 }
@@ -157,11 +157,11 @@ mod tests {
 		let s = r#"["0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b", null, ["0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b", "0x0000000000000000000000000aff3454fce5edbc8cca8697c15331677e6ebccc"]]"#;
 		let deserialized: Vec<Topic> = serde_json::from_str(s).unwrap();
 		assert_eq!(deserialized, vec![
-				   VariadicValue::Single(H256::from_str("000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b").unwrap().into()),
+				   VariadicValue::Single(H256::from_str("000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b").unwrap()),
 				   VariadicValue::Null,
 				   VariadicValue::Multiple(vec![
-								   H256::from_str("000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b").unwrap().into(),
-								   H256::from_str("0000000000000000000000000aff3454fce5edbc8cca8697c15331677e6ebccc").unwrap().into(),
+								   H256::from_str("000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b").unwrap(),
+								   H256::from_str("0000000000000000000000000aff3454fce5edbc8cca8697c15331677e6ebccc").unwrap(),
 				   ])
 		]);
 	}
@@ -186,7 +186,7 @@ mod tests {
 			from_block: Some(BlockNumber::Earliest),
 			to_block: Some(BlockNumber::Latest),
 			block_hash: None,
-			address: Some(VariadicValue::Multiple(vec![])),
+			address: Some(VariadicValue::Multiple(Vec::new())),
 			topics: Some(vec![
 				VariadicValue::Null,
 				VariadicValue::Single(H256::from_str("000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b").unwrap()),
@@ -199,7 +199,7 @@ mod tests {
 		assert_eq!(eth_filter, EthFilter {
 			from_block: BlockId::Earliest,
 			to_block: BlockId::Latest,
-			address: Some(vec![]),
+			address: Some(Vec::new()),
 			topics: vec![
 				None,
 				Some(vec![H256::from_str("000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b").unwrap()]),

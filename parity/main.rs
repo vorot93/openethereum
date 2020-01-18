@@ -16,7 +16,53 @@
 
 //! Ethcore client application.
 
-#![warn(missing_docs)]
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
 
 extern crate ctrlc;
 extern crate dir;
@@ -123,6 +169,7 @@ fn global_cleanup() {
 }
 
 #[cfg(not(windows))]
+#[allow(clippy::missing_const_for_fn)]
 fn global_init() {}
 
 #[cfg(windows)]
@@ -136,6 +183,7 @@ fn global_init() {
 }
 
 #[cfg(not(windows))]
+#[allow(clippy::missing_const_for_fn)]
 fn global_cleanup() {}
 
 // Starts parity binary installed via `parity-updater` and returns the code it exits with.
@@ -301,7 +349,6 @@ fn main_direct(force_can_restart: bool) -> i32 {
 
 				CtrlC::set_handler({
 					let e = exit.clone();
-					let exiting = exiting.clone();
 					move || {
 						if !exiting.swap(true, Ordering::SeqCst) {
 							*e.0.lock() = ExitStatus {
@@ -324,22 +371,20 @@ fn main_direct(force_can_restart: bool) -> i32 {
 				// Wait for signal
 				let mut lock = exit.0.lock();
 				if !lock.should_exit {
-					let _ = exit.1.wait(&mut lock);
+					exit.1.wait(&mut lock);
 				}
 
 				client.shutdown();
 
 				if lock.should_restart {
-					if let Some(ref spec_name) = lock.spec_name_override {
+					if let Some(spec_name) = &lock.spec_name_override {
 						set_spec_name_override(&spec_name.clone());
 					}
 					PLEASE_RESTART_EXIT_CODE
+				} else if lock.panicking {
+					1
 				} else {
-					if lock.panicking {
-						1
-					} else {
-						0
-					}
+					0
 				}
 			},
 		},
@@ -383,8 +428,8 @@ fn main() {
 		.as_ref()
 		.and_then(|p| {
 			p.parent()
-				.and_then(|p| p.parent())
-				.and_then(|p| p.file_name())
+				.and_then(std::path::Path::parent)
+				.and_then(std::path::Path::file_name)
 				.map(|n| n == "target")
 		})
 		.unwrap_or(false);

@@ -17,6 +17,54 @@
 //! Types for declaring block rewards and a client interface for interacting with a
 //! block reward contract.
 
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
+
 use std::sync::Arc;
 
 use ethabi::FunctionOutputDecoder;
@@ -29,7 +77,7 @@ use common_types::{
 use keccak_hash::keccak;
 use machine::{Machine, ExecutedBlock};
 use engine::{SystemOrCodeCall, SystemOrCodeCallKind};
-use trace;
+
 use trace::{Tracer, ExecutiveTracer, Tracing};
 
 use_contract!(block_reward_contract, "res/block_reward.json");
@@ -52,7 +100,7 @@ pub enum RewardKind {
 impl RewardKind {
 	/// Create `RewardKind::Uncle` from given current block number and uncle block number.
 	pub fn uncle(number: BlockNumber, uncle: BlockNumber) -> Self {
-		RewardKind::Uncle(if number > uncle && number - uncle <= u8::max_value().into() { (number - uncle) as u8 } else { 0 })
+		Self::Uncle(if number > uncle && number - uncle <= u8::max_value().into() { (number - uncle) as u8 } else { 0 })
 	}
 }
 
@@ -63,7 +111,7 @@ impl From<RewardKind> for u16 {
 			RewardKind::EmptyStep => 2,
 			RewardKind::External => 3,
 
-			RewardKind::Uncle(depth) => 100 + depth as u16,
+			RewardKind::Uncle(depth) => 100 + depth as Self,
 		}
 	}
 }
@@ -71,10 +119,10 @@ impl From<RewardKind> for u16 {
 impl Into<trace::RewardType> for RewardKind {
 	fn into(self) -> trace::RewardType {
 		match self {
-			RewardKind::Author => trace::RewardType::Block,
-			RewardKind::Uncle(_) => trace::RewardType::Uncle,
-			RewardKind::EmptyStep => trace::RewardType::EmptyStep,
-			RewardKind::External => trace::RewardType::External,
+			Self::Author => trace::RewardType::Block,
+			Self::Uncle(_) => trace::RewardType::Uncle,
+			Self::EmptyStep => trace::RewardType::EmptyStep,
+			Self::External => trace::RewardType::External,
 		}
 	}
 }
@@ -87,19 +135,19 @@ pub struct BlockRewardContract {
 
 impl BlockRewardContract {
 	/// Create a new block reward contract client targeting the system call kind.
-	pub fn new(kind: SystemOrCodeCallKind) -> BlockRewardContract {
-		BlockRewardContract {
+	pub const fn new(kind: SystemOrCodeCallKind) -> Self {
+		Self {
 			kind,
 		}
 	}
 
 	/// Create a new block reward contract client targeting the contract address.
-	pub fn new_from_address(address: Address) -> BlockRewardContract {
+	pub fn new_from_address(address: Address) -> Self {
 		Self::new(SystemOrCodeCallKind::Address(address))
 	}
 
 	/// Create a new block reward contract client targeting the given code.
-	pub fn new_from_code(code: Arc<Vec<u8>>) -> BlockRewardContract {
+	pub fn new_from_code(code: Arc<Vec<u8>>) -> Self {
 		let code_hash = keccak(&code[..]);
 
 		Self::new(SystemOrCodeCallKind::Code(code, code_hash))
@@ -142,11 +190,11 @@ pub fn apply_block_rewards(
 	block: &mut ExecutedBlock,
 	machine: &Machine,
 ) -> Result<(), Error> {
-	for &(ref author, _, ref block_reward) in rewards {
+	for (author, _, block_reward) in rewards {
 		machine.add_balance(block, author, block_reward)?;
 	}
 
-	if let Tracing::Enabled(ref mut traces) = *block.traces_mut() {
+	if let Tracing::Enabled(traces) = block.traces_mut() {
 		let mut tracer = ExecutiveTracer::default();
 
 		for &(address, reward_kind, amount) in rewards {
@@ -168,7 +216,7 @@ mod test {
 	};
 	use ethereum_types::{U256, Address};
 	use engine::SystemOrCodeCallKind;
-	use spec;
+	
 
 	use crate::{BlockRewardContract, RewardKind};
 
@@ -186,8 +234,8 @@ mod test {
 		let mut call = |to, data| {
 			let mut block = client.prepare_open_block(
 				Address::from_str("0000000000000000000000000000000000000001").unwrap(),
-				(3141562.into(), 31415620.into()),
-				vec![],
+				(3_141_562.into(), 31_415_620.into()),
+				Vec::new(),
 			).unwrap();
 
 			let result = match to {
@@ -206,7 +254,7 @@ mod test {
 		};
 
 		// if no beneficiaries are given no rewards are attributed
-		assert!(block_reward_contract.reward(vec![], &mut call).unwrap().is_empty());
+		assert!(block_reward_contract.reward(Vec::new(), &mut call).unwrap().is_empty());
 
 		// the contract rewards (1000 + kind) for each benefactor
 		let beneficiaries = vec![

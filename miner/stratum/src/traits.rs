@@ -28,13 +28,13 @@ pub enum Error {
 
 impl From<std::io::Error> for Error {
 	fn from(err: std::io::Error) -> Self {
-		Error::Io(err.to_string())
+		Self::Io(err.to_string())
 	}
 }
 
 impl From<PushMessageError> for Error {
 	fn from(err: PushMessageError) -> Self {
-		Error::Tcp(format!("Push message error: {:?}", err))
+		Self::Tcp(format!("Push message error: {:?}", err))
 	}
 }
 

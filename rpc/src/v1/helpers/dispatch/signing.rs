@@ -36,14 +36,14 @@ pub struct Signer {
 impl Signer {
 	/// Create new instance of signer
 	pub fn new(accounts: Arc<AccountProvider>) -> Self {
-		Signer { accounts }
+		Self { accounts }
 	}
 }
 
 impl super::Accounts for Signer {
 	fn sign_transaction(&self, filled: FilledTransactionRequest, chain_id: Option<u64>, nonce: U256, password: SignWith) -> Result<WithToken<SignedTransaction>> {
 		let t = Transaction {
-			nonce: nonce,
+			nonce,
 			action: filled.to.map_or(Action::Create, Action::Call),
 			gas: filled.gas,
 			gas_price: filled.gas_price,

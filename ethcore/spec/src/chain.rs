@@ -141,13 +141,13 @@ mod tests {
 		let engine = &spec.engine;
 		let genesis_header = spec.genesis_header();
 		let db = spec.ensure_db_good(get_temp_state_db(), &Default::default()).unwrap();
-		let s = State::from_existing(db, genesis_header.state_root().clone(), engine.account_start_nonce(0), Default::default()).unwrap();
-		assert_eq!(s.balance(&"0000000000000000000000000000000000000001".parse().unwrap()).unwrap(), 1u64.into());
-		assert_eq!(s.balance(&"0000000000000000000000000000000000000002".parse().unwrap()).unwrap(), 1u64.into());
-		assert_eq!(s.balance(&"0000000000000000000000000000000000000003".parse().unwrap()).unwrap(), 1u64.into());
-		assert_eq!(s.balance(&"0000000000000000000000000000000000000004".parse().unwrap()).unwrap(), 1u64.into());
-		assert_eq!(s.balance(&"874b54a8bd152966d63f706bae1ffeb0411921e5".parse().unwrap()).unwrap(), U256::from(1000000000000000000000000000000u128));
-		assert_eq!(s.balance(&"0000000000000000000000000000000000000000".parse().unwrap()).unwrap(), 1u64.into());
+		let s = State::from_existing(db, *genesis_header.state_root(), engine.account_start_nonce(0), Default::default()).unwrap();
+		assert_eq!(s.balance(&"0000000000000000000000000000000000000001".parse().unwrap()).unwrap(), 1_u64.into());
+		assert_eq!(s.balance(&"0000000000000000000000000000000000000002".parse().unwrap()).unwrap(), 1_u64.into());
+		assert_eq!(s.balance(&"0000000000000000000000000000000000000003".parse().unwrap()).unwrap(), 1_u64.into());
+		assert_eq!(s.balance(&"0000000000000000000000000000000000000004".parse().unwrap()).unwrap(), 1_u64.into());
+		assert_eq!(s.balance(&"874b54a8bd152966d63f706bae1ffeb0411921e5".parse().unwrap()).unwrap(), U256::from(1_000_000_000_000_000_000_000_000_000_000_u128));
+		assert_eq!(s.balance(&"0000000000000000000000000000000000000000".parse().unwrap()).unwrap(), 1_u64.into());
 	}
 
 	#[test]

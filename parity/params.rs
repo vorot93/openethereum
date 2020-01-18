@@ -59,7 +59,7 @@ pub enum SpecType {
 
 impl Default for SpecType {
 	fn default() -> Self {
-		SpecType::Foundation
+		Self::Foundation
 	}
 }
 
@@ -68,28 +68,28 @@ impl str::FromStr for SpecType {
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		let spec = match s {
-			"eth" | "ethereum"  | "foundation" | "mainnet" => SpecType::Foundation,
-			"etc" | "classic" => SpecType::Classic,
-			"poanet" | "poacore" => SpecType::Poanet,
-			"xdai" => SpecType::Xdai,
-			"volta" => SpecType::Volta,
-			"ewc" | "energyweb" => SpecType::Ewc,
-			"musicoin" => SpecType::Musicoin,
-			"ellaism" => SpecType::Ellaism,
-			"mix" => SpecType::Mix,
-			"callisto" => SpecType::Callisto,
-			"ethercore" => SpecType::EtherCore,
-			"mordor" | "classic-testnet" => SpecType::Mordor,
-			"ropsten" => SpecType::Ropsten,
-			"kovan" => SpecType::Kovan,
-			"rinkeby" => SpecType::Rinkeby,
-			"goerli" | "görli" | "testnet" => SpecType::Goerli,
-			"kotti" => SpecType::Kotti,
-			"sokol" | "poasokol" => SpecType::Sokol,
-			"evantestcore" => SpecType::Evantestcore,
-			"evancore" => SpecType::Evancore,
-			"dev" => SpecType::Dev,
-			other => SpecType::Custom(other.into()),
+			"eth" | "ethereum"  | "foundation" | "mainnet" => Self::Foundation,
+			"etc" | "classic" => Self::Classic,
+			"poanet" | "poacore" => Self::Poanet,
+			"xdai" => Self::Xdai,
+			"volta" => Self::Volta,
+			"ewc" | "energyweb" => Self::Ewc,
+			"musicoin" => Self::Musicoin,
+			"ellaism" => Self::Ellaism,
+			"mix" => Self::Mix,
+			"callisto" => Self::Callisto,
+			"ethercore" => Self::EtherCore,
+			"mordor" | "classic-testnet" => Self::Mordor,
+			"ropsten" => Self::Ropsten,
+			"kovan" => Self::Kovan,
+			"rinkeby" => Self::Rinkeby,
+			"goerli" | "görli" | "testnet" => Self::Goerli,
+			"kotti" => Self::Kotti,
+			"sokol" | "poasokol" => Self::Sokol,
+			"evantestcore" => Self::Evantestcore,
+			"evancore" => Self::Evancore,
+			"dev" => Self::Dev,
+			other => Self::Custom(other.into()),
 		};
 		Ok(spec)
 	}
@@ -97,29 +97,29 @@ impl str::FromStr for SpecType {
 
 impl fmt::Display for SpecType {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		f.write_str(match *self {
-			SpecType::Foundation => "foundation",
-			SpecType::Classic => "classic",
-			SpecType::Poanet => "poanet",
-			SpecType::Xdai => "xdai",
-			SpecType::Volta => "volta",
-			SpecType::Ewc => "energyweb",
-			SpecType::Musicoin => "musicoin",
-			SpecType::Ellaism => "ellaism",
-			SpecType::Mix => "mix",
-			SpecType::Callisto => "callisto",
-			SpecType::EtherCore => "ethercore",
-			SpecType::Mordor => "mordor",
-			SpecType::Ropsten => "ropsten",
-			SpecType::Kovan => "kovan",
-			SpecType::Rinkeby => "rinkeby",
-			SpecType::Goerli => "goerli",
-			SpecType::Kotti => "kotti",
-			SpecType::Sokol => "sokol",
-			SpecType::Evantestcore => "evantestcore",
-			SpecType::Evancore => "evancore",
-			SpecType::Dev => "dev",
-			SpecType::Custom(ref custom) => custom,
+		f.write_str(match self {
+			Self::Foundation => "foundation",
+			Self::Classic => "classic",
+			Self::Poanet => "poanet",
+			Self::Xdai => "xdai",
+			Self::Volta => "volta",
+			Self::Ewc => "energyweb",
+			Self::Musicoin => "musicoin",
+			Self::Ellaism => "ellaism",
+			Self::Mix => "mix",
+			Self::Callisto => "callisto",
+			Self::EtherCore => "ethercore",
+			Self::Mordor => "mordor",
+			Self::Ropsten => "ropsten",
+			Self::Kovan => "kovan",
+			Self::Rinkeby => "rinkeby",
+			Self::Goerli => "goerli",
+			Self::Kotti => "kotti",
+			Self::Sokol => "sokol",
+			Self::Evantestcore => "evantestcore",
+			Self::Evancore => "evancore",
+			Self::Dev => "dev",
+			Self::Custom(custom) => custom,
 		})
 	}
 }
@@ -127,29 +127,29 @@ impl fmt::Display for SpecType {
 impl SpecType {
 	pub fn spec<'a, T: Into<SpecParams<'a>>>(&self, params: T) -> Result<Spec, String> {
 		let params = params.into();
-		match *self {
-			SpecType::Foundation => Ok(spec::new_foundation(params)),
-			SpecType::Classic => Ok(spec::new_classic(params)),
-			SpecType::Poanet => Ok(spec::new_poanet(params)),
-			SpecType::Xdai => Ok(spec::new_xdai(params)),
-			SpecType::Volta => Ok(spec::new_volta(params)),
-			SpecType::Ewc => Ok(spec::new_ewc(params)),
-			SpecType::Musicoin => Ok(spec::new_musicoin(params)),
-			SpecType::Ellaism => Ok(spec::new_ellaism(params)),
-			SpecType::Mix => Ok(spec::new_mix(params)),
-			SpecType::Callisto => Ok(spec::new_callisto(params)),
-			SpecType::EtherCore => Ok(spec::new_ethercore(params)),
-			SpecType::Mordor => Ok(spec::new_mordor(params)),
-			SpecType::Ropsten => Ok(spec::new_ropsten(params)),
-			SpecType::Kovan => Ok(spec::new_kovan(params)),
-			SpecType::Rinkeby => Ok(spec::new_rinkeby(params)),
-			SpecType::Goerli => Ok(spec::new_goerli(params)),
-			SpecType::Kotti => Ok(spec::new_kotti(params)),
-			SpecType::Sokol => Ok(spec::new_sokol(params)),
-			SpecType::Evantestcore => Ok(spec::new_evantestcore(params)),
-			SpecType::Evancore => Ok(spec::new_evancore(params)),
-			SpecType::Dev => Ok(spec::new_instant()),
-			SpecType::Custom(ref filename) => {
+		match self {
+			Self::Foundation => Ok(spec::new_foundation(params)),
+			Self::Classic => Ok(spec::new_classic(params)),
+			Self::Poanet => Ok(spec::new_poanet(params)),
+			Self::Xdai => Ok(spec::new_xdai(params)),
+			Self::Volta => Ok(spec::new_volta(params)),
+			Self::Ewc => Ok(spec::new_ewc(params)),
+			Self::Musicoin => Ok(spec::new_musicoin(params)),
+			Self::Ellaism => Ok(spec::new_ellaism(params)),
+			Self::Mix => Ok(spec::new_mix(params)),
+			Self::Callisto => Ok(spec::new_callisto(params)),
+			Self::EtherCore => Ok(spec::new_ethercore(params)),
+			Self::Mordor => Ok(spec::new_mordor(params)),
+			Self::Ropsten => Ok(spec::new_ropsten(params)),
+			Self::Kovan => Ok(spec::new_kovan(params)),
+			Self::Rinkeby => Ok(spec::new_rinkeby(params)),
+			Self::Goerli => Ok(spec::new_goerli(params)),
+			Self::Kotti => Ok(spec::new_kotti(params)),
+			Self::Sokol => Ok(spec::new_sokol(params)),
+			Self::Evantestcore => Ok(spec::new_evantestcore(params)),
+			Self::Evancore => Ok(spec::new_evancore(params)),
+			Self::Dev => Ok(spec::new_instant()),
+			Self::Custom(filename) => {
 				let file = fs::File::open(filename).map_err(|e| format!("Could not load specification file at {}: {}", filename, e))?;
 				Spec::load(params, file).map_err(|e| e.to_string())
 			}
@@ -157,9 +157,9 @@ impl SpecType {
 	}
 
 	pub fn legacy_fork_name(&self) -> Option<String> {
-		match *self {
-			SpecType::Classic => Some("classic".to_owned()),
-			SpecType::Musicoin => Some("musicoin".to_owned()),
+		match self {
+			Self::Classic => Some("classic".to_owned()),
+			Self::Musicoin => Some("musicoin".to_owned()),
 			_ => None,
 		}
 	}
@@ -173,7 +173,7 @@ pub enum Pruning {
 
 impl Default for Pruning {
 	fn default() -> Self {
-		Pruning::Auto
+		Self::Auto
 	}
 }
 
@@ -182,17 +182,17 @@ impl str::FromStr for Pruning {
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		match s {
-			"auto" => Ok(Pruning::Auto),
-			other => other.parse().map(Pruning::Specific),
+			"auto" => Ok(Self::Auto),
+			other => other.parse().map(Self::Specific),
 		}
 	}
 }
 
 impl Pruning {
 	pub fn to_algorithm(&self, user_defaults: &UserDefaults) -> Algorithm {
-		match *self {
-			Pruning::Specific(algo) => algo,
-			Pruning::Auto => user_defaults.pruning,
+		match self {
+			Self::Specific(algo) => *algo,
+			Self::Auto => user_defaults.pruning,
 		}
 	}
 }
@@ -205,7 +205,7 @@ pub struct ResealPolicy {
 
 impl Default for ResealPolicy {
 	fn default() -> Self {
-		ResealPolicy {
+		Self {
 			own: true,
 			external: true,
 		}
@@ -224,9 +224,9 @@ impl str::FromStr for ResealPolicy {
 			x => return Err(format!("Invalid reseal value: {}", x)),
 		};
 
-		let reseal = ResealPolicy {
-			own: own,
-			external: external,
+		let reseal = Self {
+			own,
+			external,
 		};
 
 		Ok(reseal)
@@ -245,7 +245,7 @@ pub struct AccountsConfig {
 
 impl Default for AccountsConfig {
 	fn default() -> Self {
-		AccountsConfig {
+		Self {
 			iterations: 10240,
 			refresh_time: 5,
 			testnet: false,
@@ -268,8 +268,8 @@ pub enum GasPricerConfig {
 
 impl Default for GasPricerConfig {
 	fn default() -> Self {
-		GasPricerConfig::Calibrated {
-			usd_per_tx: 0.0001f32,
+		Self::Calibrated {
+			usd_per_tx: 0.0001_f32,
 			recalibration_period: Duration::from_secs(3600),
 			api_endpoint: configuration::ETHERSCAN_ETH_PRICE_ENDPOINT.to_string(),
 		}
@@ -278,14 +278,14 @@ impl Default for GasPricerConfig {
 
 impl GasPricerConfig {
 	pub fn to_gas_pricer(&self, fetch: FetchClient, p: Executor) -> GasPricer {
-		match *self {
-			GasPricerConfig::Fixed(u) => GasPricer::Fixed(u),
-			GasPricerConfig::Calibrated { usd_per_tx, recalibration_period, ref api_endpoint } => {
+		match self {
+			Self::Fixed(u) => GasPricer::Fixed(*u),
+			Self::Calibrated { usd_per_tx, recalibration_period, api_endpoint } => {
 				GasPricer::new_calibrated(
 					GasPriceCalibrator::new(
 						GasPriceCalibratorOptions {
-							usd_per_tx: usd_per_tx,
-							recalibration_period: recalibration_period,
+							usd_per_tx: *usd_per_tx,
+							recalibration_period: *recalibration_period,
 						},
 						fetch,
 						p,
@@ -309,13 +309,13 @@ pub struct MinerExtras {
 
 impl Default for MinerExtras {
 	fn default() -> Self {
-		MinerExtras {
-			author: Default::default(),
-			engine_signer: Default::default(),
+		Self {
+			author: Address::default(),
+			engine_signer: Address::default(),
 			extra_data: version_data(),
 			gas_range_target: (8_000_000.into(), 10_000_000.into()),
-			work_notify: Default::default(),
-			local_accounts: Default::default(),
+			work_notify: Vec::new(),
+			local_accounts: HashSet::new(),
 		}
 	}
 }
@@ -333,7 +333,7 @@ pub enum Switch {
 
 impl Default for Switch {
 	fn default() -> Self {
-		Switch::Auto
+		Self::Auto
 	}
 }
 
@@ -342,9 +342,9 @@ impl str::FromStr for Switch {
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		match s {
-			"on" => Ok(Switch::On),
-			"off" => Ok(Switch::Off),
-			"auto" => Ok(Switch::Auto),
+			"on" => Ok(Self::On),
+			"off" => Ok(Self::Off),
+			"auto" => Ok(Self::Auto),
 			other => Err(format!("Invalid switch value: {}", other))
 		}
 	}
@@ -360,17 +360,16 @@ pub fn tracing_switch_to_bool(switch: Switch, user_defaults: &UserDefaults) -> R
 }
 
 pub fn fatdb_switch_to_bool(switch: Switch, user_defaults: &UserDefaults, _algorithm: Algorithm) -> Result<bool, String> {
-	let result = match (user_defaults.is_first_launch, switch, user_defaults.fat_db) {
+	match (user_defaults.is_first_launch, switch, user_defaults.fat_db) {
 		(false, Switch::On, false) => Err("FatDB resync required".into()),
 		(_, Switch::On, _) => Ok(true),
 		(_, Switch::Off, _) => Ok(false),
 		(_, Switch::Auto, def) => Ok(def),
-	};
-	result
+	}
 }
 
 pub fn mode_switch_to_bool(switch: Option<Mode>, user_defaults: &UserDefaults) -> Result<Mode, String> {
-	Ok(switch.unwrap_or(user_defaults.mode().clone()))
+	Ok(switch.unwrap_or_else(|| user_defaults.mode()))
 }
 
 #[cfg(test)]

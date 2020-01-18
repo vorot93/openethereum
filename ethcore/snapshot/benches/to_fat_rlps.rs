@@ -14,7 +14,55 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Benchmark snapshot::account::to_fat_rlps() which is a hot call during snapshots.
+//! Benchmark `snapshot::account::to_fat_rlps()` which is a hot call during snapshots.
+
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
 
 use std::collections::HashSet;
 
@@ -57,7 +105,7 @@ fn fat_rlps(c: &mut Criterion) {
 
 	let flag = std::sync::atomic::AtomicBool::new(true);
 	for chunk in &chunks {
-		state_rebuilder.feed(&chunk, &flag).expect("feed fail");
+		state_rebuilder.feed(chunk, &flag).expect("feed fail");
 	}
 	let state_root = state_rebuilder.state_root();
 	let journal_db = state_rebuilder.finalize(123, H256::random()).expect("finalize fail");
@@ -81,8 +129,8 @@ fn fat_rlps(c: &mut Criterion) {
 					black_box(&basic_account),
 					black_box(&account_db),
 					black_box(&mut used_code),
-					black_box(4194304),
-					black_box(4194304),
+					black_box(4_194_304),
+					black_box(4_194_304),
 					&progress
 				);
 			})

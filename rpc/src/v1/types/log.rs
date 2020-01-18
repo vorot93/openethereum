@@ -49,8 +49,8 @@ pub struct Log {
 }
 
 impl From<LocalizedLogEntry> for Log {
-	fn from(e: LocalizedLogEntry) -> Log {
-		Log {
+	fn from(e: LocalizedLogEntry) -> Self {
+		Self {
 			address: e.entry.address,
 			topics: e.entry.topics.into_iter().map(Into::into).collect(),
 			data: e.entry.data.into(),
@@ -67,8 +67,8 @@ impl From<LocalizedLogEntry> for Log {
 }
 
 impl From<LogEntry> for Log {
-	fn from(e: LogEntry) -> Log {
-		Log {
+	fn from(e: LogEntry) -> Self {
+		Self {
 			address: e.address,
 			topics: e.topics.into_iter().map(Into::into).collect(),
 			data: e.data.into(),
@@ -101,11 +101,11 @@ mod tests {
 				H256::from_str("a6697e974e6a320f454390be03f74955e8978f1a6971ea6730542e37b66179bc").unwrap(),
 				H256::from_str("4861736852656700000000000000000000000000000000000000000000000000").unwrap(),
 			],
-			data: vec![].into(),
+			data: Vec::new().into(),
 			block_hash: Some(H256::from_str("ed76641c68a1c641aee09a94b3b471f4dc0316efe5ac19cf488e2674cf8d05b5").unwrap()),
 			block_number: Some(U256::from(0x4510c)),
 			transaction_hash: Some(H256::zero()),
-			transaction_index: Some(U256::default()),
+			transaction_index: Some(U256::zero()),
 			transaction_log_index: Some(1.into()),
 			log_index: Some(U256::from(1)),
 			log_type: "mined".to_owned(),

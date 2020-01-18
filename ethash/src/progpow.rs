@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-//! ProgPoW (Programmatic Proof-of-Work) is the Ethereum network's proposed new Application-Specific Integrated
+//! `ProgPoW` (Programmatic Proof-of-Work) is the Ethereum network's proposed new Application-Specific Integrated
 //! Circuit (ASIC) resistant Proof-of-Work mining algorithm.
 //!
-//! ProgPoW's aim is to reduce the efficiencies of specialized mining devices known as ASIC chips
+//! `ProgPoW`'s aim is to reduce the efficiencies of specialized mining devices known as ASIC chips
 //! (and accelerated GPU-based setups), and to maximize the performance of General Purpose Hardware (GPUs) to enable
 //! more users to compete for new cryptocurrency awarded by the protocol.
 //!
@@ -25,13 +25,13 @@
 //!
 //! GPU mining setups are less specialised are struggle to compete for mining rewards.
 //!
-//! It would be a change from Ethereum's current PoW mining algorithm known as Ethash.
+//! It would be a change from Ethereum's current `PoW` mining algorithm known as Ethash.
 //!
-//! ProgPoW audits have been proposed to analyse the efficiency of a ProgPoW ASICs over
+//! `ProgPoW` audits have been proposed to analyse the efficiency of a `ProgPoW` ASICs over
 //! GPUs and analysis of the economic impact on the Ethereum protocol.
 //!
-//! We use ProgPoW 0.9.3 version as suggested on Specification
-//! https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1057.md#specification
+//! We use `ProgPoW` 0.9.3 version as suggested on
+//! [Specification](https://github.com/ethereum/EIPs/blob/master/EIPS/eip-1057.md#specification)
 
 use compute::{FNV_PRIME, calculate_dag_item};
 use keccak::H256;
@@ -48,13 +48,13 @@ const PROGPOW_PERIOD_LENGTH: usize = 10; // blocks per progpow epoch (N)
 const PROGPOW_LANES: usize = 16;
 const PROGPOW_REGS: usize = 32;
 
-const FNV_HASH: u32 = 0x811c9dc5;
+const FNV_HASH: u32 = 0x811c_9dc5;
 
 const KECCAKF_RNDC: [u32; 24] = [
-	0x00000001, 0x00008082, 0x0000808a, 0x80008000, 0x0000808b, 0x80000001,
-	0x80008081, 0x00008009, 0x0000008a, 0x00000088, 0x80008009, 0x8000000a,
-	0x8000808b, 0x0000008b, 0x00008089, 0x00008003, 0x00008002, 0x00000080,
-	0x0000800a, 0x8000000a, 0x80008081, 0x00008080, 0x80000001, 0x80008008
+	0x0000_0001, 0x0000_8082, 0x0000_808a, 0x8000_8000, 0x0000_808b, 0x8000_0001,
+	0x8000_8081, 0x0000_8009, 0x0000_008a, 0x0000_0088, 0x8000_8009, 0x8000_000a,
+	0x8000_808b, 0x0000_008b, 0x0000_8089, 0x0000_8003, 0x0000_8002, 0x0000_0080,
+	0x0000_800a, 0x8000_000a, 0x8000_8081, 0x0000_8080, 0x8000_0001, 0x8000_8008
 ];
 
 const KECCAKF_ROTC: [u32; 24] = [
@@ -69,7 +69,7 @@ const KECCAKF_PILN: [usize; 24] = [
 
 fn keccak_f800_round(st: &mut [u32; 25], r: usize) {
 	// Theta
-	let mut bc = [0u32; 5];
+	let mut bc = [0_u32; 5];
 	for i in 0..bc.len() {
 		bc[i] = st[i] ^ st[i + 5] ^ st[i + 10] ^ st[i + 15] ^ st[i + 20];
 	}
@@ -94,9 +94,8 @@ fn keccak_f800_round(st: &mut [u32; 25], r: usize) {
 
 	// Chi
 	for j in (0..st.len()).step_by(5) {
-		for i in 0..bc.len() {
-			bc[i] = st[j + i];
-		}
+		let l = bc.len();
+		bc.copy_from_slice(&st[j..(l + j)]);
 		for i in 0..bc.len() {
 			st[j + i] ^= (!bc[(i + 1) % 5]) & bc[(i + 2) % 5];
 		}
@@ -118,9 +117,7 @@ fn keccak_f800(header_hash: H256, nonce: u64, result: [u32; 8], st: &mut [u32; 2
 	st[8] = nonce as u32;
 	st[9] = (nonce >> 32) as u32;
 
-	for i in 0..8 {
-		st[10 + i] = result[i];
-	}
+	st[10..(8 + 10)].copy_from_slice(&result[..8]);
 
 	for r in 0..22 {
 		keccak_f800_round(st, r);
@@ -128,13 +125,13 @@ fn keccak_f800(header_hash: H256, nonce: u64, result: [u32; 8], st: &mut [u32; 2
 }
 
 pub fn keccak_f800_short(header_hash: H256, nonce: u64, result: [u32; 8]) -> u64 {
-	let mut st = [0u32; 25];
+	let mut st = [0_u32; 25];
 	keccak_f800(header_hash, nonce, result, &mut st);
 	(st[0].swap_bytes() as u64) << 32 | st[1].swap_bytes() as u64
 }
 
 pub fn keccak_f800_long(header_hash: H256, nonce: u64, result: [u32; 8]) -> H256 {
-	let mut st = [0u32; 25];
+	let mut st = [0_u32; 25];
 	keccak_f800(header_hash, nonce, result, &mut st);
 
 	// NOTE: transmute from `[u32; 8]` to `[u8; 32]`
@@ -146,7 +143,7 @@ pub fn keccak_f800_long(header_hash: H256, nonce: u64, result: [u32; 8]) -> H256
 }
 
 #[inline]
-fn fnv1a_hash(h: u32, d: u32) -> u32 {
+const fn fnv1a_hash(h: u32, d: u32) -> u32 {
 	(h ^ d).wrapping_mul(FNV_PRIME)
 }
 
@@ -159,19 +156,19 @@ struct Kiss99 {
 }
 
 impl Kiss99 {
-	fn new(z: u32, w: u32, jsr: u32, jcong: u32) -> Kiss99 {
-		Kiss99 { z, w, jsr, jcong }
+	const fn new(z: u32, w: u32, jsr: u32, jcong: u32) -> Self {
+		Self { z, w, jsr, jcong }
 	}
 
 	#[inline]
 	fn next_u32(&mut self) -> u32 {
-		self.z = 36969u32.wrapping_mul(self.z & 65535).wrapping_add(self.z >> 16);
-		self.w = 18000u32.wrapping_mul(self.w & 65535).wrapping_add(self.w >> 16);
+		self.z = 36969_u32.wrapping_mul(self.z & 65535).wrapping_add(self.z >> 16);
+		self.w = 18000_u32.wrapping_mul(self.w & 65535).wrapping_add(self.w >> 16);
 		let mwc = (self.z << 16).wrapping_add(self.w);
 		self.jsr ^= self.jsr << 17;
 		self.jsr ^= self.jsr >> 13;
 		self.jsr ^= self.jsr << 5;
-		self.jcong = 69069u32.wrapping_mul(self.jcong).wrapping_add(1234567);
+		self.jcong = 69069_u32.wrapping_mul(self.jcong).wrapping_add(1_234_567);
 
 		(mwc ^ self.jcong).wrapping_add(self.jsr)
 	}
@@ -190,8 +187,8 @@ fn fill_mix(seed: u64, lane_id: u32) -> [u32; PROGPOW_REGS] {
 	let mut mix = [0; PROGPOW_REGS];
 
 	debug_assert_eq!(PROGPOW_REGS, 32);
-	for i in 0..32 {
-		mix[i] = rnd.next_u32();
+	for m in &mut mix {
+		*m = rnd.next_u32();
 	}
 
 	mix
@@ -236,8 +233,8 @@ fn progpow_init(seed: u64) -> (Kiss99, [u32; PROGPOW_REGS], [u32; PROGPOW_REGS])
 	// for cache reads guarantees every destination merged once and guarantees
 	// no duplicate cache reads, which could be optimized away. Uses
 	// Fisher-Yates shuffle.
-	let mut mix_seq_dst = [0u32; PROGPOW_REGS];
-	let mut mix_seq_cache = [0u32; PROGPOW_REGS];
+	let mut mix_seq_dst = [0_u32; PROGPOW_REGS];
+	let mut mix_seq_cache = [0_u32; PROGPOW_REGS];
 	for i in 0..mix_seq_dst.len() {
 		mix_seq_dst[i] = i as u32;
 		mix_seq_cache[i] = i as u32;
@@ -270,19 +267,19 @@ fn progpow_loop(
 		(64 * data_size / (PROGPOW_LANES * PROGPOW_DAG_LOADS));
 
 	// 256 bytes of dag data
-	let mut dag_item = [0u32; 64];
+	let mut dag_item = [0_u32; 64];
 
 	// Fetch DAG nodes (64 bytes each)
 	for l in 0..PROGPOW_DAG_LOADS {
 		let index = g_offset * PROGPOW_LANES * PROGPOW_DAG_LOADS + l * 16;
 		let node = calculate_dag_item(index as u32 / 16, cache);
-		dag_item[l * 16..(l + 1) * 16].clone_from_slice(node.as_words());
+		dag_item[l * 16..(l + 1) * 16].copy_from_slice(node.as_words());
 	}
 
 	let (rnd, mix_seq_dst, mix_seq_cache) = progpow_init(seed);
 
 	// Lanes can execute in parallel and will be convergent
-	for l in 0..mix.len() {
+	for (l, m) in mix.iter_mut().enumerate() {
 		let mut rnd = rnd.clone();
 
 		// Initialize the seed and mix destination sequence
@@ -304,11 +301,11 @@ fn progpow_loop(
 			if i < PROGPOW_CNT_CACHE {
 				// Cached memory access, lanes access random 32-bit locations
 				// within the first portion of the DAG
-				let offset = mix[l][mix_cache()] as usize % PROGPOW_CACHE_WORDS;
+				let offset = m[mix_cache()] as usize % PROGPOW_CACHE_WORDS;
 				let data = c_dag[offset];
 				let dst = mix_dst();
 
-				mix[l][dst] = merge(mix[l][dst], data, rnd.next_u32());
+				m[dst] = merge(m[dst], data, rnd.next_u32());
 			}
 
 			if i < PROGPOW_CNT_MATH {
@@ -321,27 +318,25 @@ fn progpow_loop(
 					src2 += 1; // src2 is now any reg other than src1
 				}
 
-				let data = math(mix[l][src1 as usize], mix[l][src2 as usize], rnd.next_u32());
+				let data = math(m[src1 as usize], m[src2 as usize], rnd.next_u32());
 				let dst = mix_dst();
 
-				mix[l][dst] = merge(mix[l][dst], data, rnd.next_u32());
+				m[dst] = merge(m[dst], data, rnd.next_u32());
 			}
 		}
 
 		// Global load to sequential locations
-		let mut data_g = [0u32; PROGPOW_DAG_LOADS];
+		let mut data_g = [0_u32; PROGPOW_DAG_LOADS];
 		let index = ((l ^ loop_) % PROGPOW_LANES) * PROGPOW_DAG_LOADS;
-		for i in 0..PROGPOW_DAG_LOADS {
-			data_g[i] = dag_item[index + i];
-		}
+		data_g[..PROGPOW_DAG_LOADS].copy_from_slice(&dag_item[index..(index + PROGPOW_DAG_LOADS)]);
 
 		// Consume the global load data at the very end of the loop to allow
 		// full latency hiding. Always merge into `mix[0]` to feed the offset
 		// calculation.
-		mix[l][0] = merge(mix[l][0], data_g[0], rnd.next_u32());
-		for i in 1..PROGPOW_DAG_LOADS {
+		m[0] = merge(m[0], data_g[0], rnd.next_u32());
+		for d in data_g.iter().take(PROGPOW_DAG_LOADS).skip(1) {
 			let dst = mix_dst();
-			mix[l][dst] = merge(mix[l][dst], data_g[i], rnd.next_u32());
+			m[dst] = merge(m[dst], *d, rnd.next_u32());
 		}
 	}
 }
@@ -353,9 +348,9 @@ pub fn progpow(
 	cache: &[Node],
 	c_dag: &CDag,
 ) -> (H256, H256) {
-	let mut mix = [[0u32; PROGPOW_REGS]; PROGPOW_LANES];
-	let mut lane_results = [0u32; PROGPOW_LANES];
-	let mut result = [0u32; 8];
+	let mut mix = [[0_u32; PROGPOW_REGS]; PROGPOW_LANES];
+	let mut lane_results = [0_u32; PROGPOW_LANES];
+	let mut result = [0_u32; 8];
 
 	let data_size = get_data_size(block_number) / PROGPOW_MIX_BYTES;
 
@@ -366,8 +361,8 @@ pub fn progpow(
 	// Initialize mix for all lanes
 	let seed = keccak_f800_short(header_hash, nonce, result);
 
-	for l in 0..mix.len() {
-		mix[l] = fill_mix(seed, l as u32);
+	for (l, m) in mix.iter_mut().enumerate() {
+		*m = fill_mix(seed, l as u32);
 	}
 
 	// Execute the randomly generated inner loop
@@ -406,7 +401,7 @@ pub fn progpow(
 }
 
 pub fn generate_cdag(cache: &[Node]) -> CDag {
-	let mut c_dag = [0u32; PROGPOW_CACHE_WORDS];
+	let mut c_dag = [0_u32; PROGPOW_CACHE_WORDS];
 
 	for i in 0..PROGPOW_CACHE_WORDS / 16 {
 		let node = calculate_dag_item(i as u32, cache);
@@ -446,10 +441,10 @@ mod test {
 		let c_dag = generate_cdag(cache.as_ref());
 
 		let expected = vec![
-			690150178u32, 1181503948, 2248155602, 2118233073, 2193871115,
-			1791778428, 1067701239, 724807309, 530799275, 3480325829, 3899029234,
-			1998124059, 2541974622, 1100859971, 1297211151, 3268320000, 2217813733,
-			2690422980, 3172863319, 2651064309
+			690_150_178_u32, 1_181_503_948, 2_248_155_602, 2_118_233_073, 2_193_871_115,
+			1_791_778_428, 1_067_701_239, 724_807_309, 530_799_275, 3_480_325_829, 3_899_029_234,
+			1_998_124_059, 2_541_974_622, 1_100_859_971, 1_297_211_151, 3_268_320_000, 2_217_813_733,
+			2_690_422_980, 3_172_863_319, 2_651_064_309
 		];
 
 		assert_eq!(
@@ -461,14 +456,14 @@ mod test {
 	#[test]
 	fn test_random_merge() {
 		let tests = [
-			(1000000u32, 101u32, 33000101u32),
-			(2000000, 102, 66003366),
-			(3000000, 103, 6000103),
-			(4000000, 104, 2000104),
-			(1000000, 0, 33000000),
-			(2000000, 0, 66000000),
-			(3000000, 0, 6000000),
-			(4000000, 0, 2000000),
+			(1_000_000_u32, 101_u32, 33_000_101_u32),
+			(2_000_000, 102, 66_003_366),
+			(3_000_000, 103, 6_000_103),
+			(4_000_000, 104, 2_000_104),
+			(1_000_000, 0, 33_000_000),
+			(2_000_000, 0, 66_000_000),
+			(3_000_000, 0, 6_000_000),
+			(4_000_000, 0, 2_000_000),
 		];
 
 		for (i, &(a, b, expected)) in tests.iter().enumerate() {
@@ -482,19 +477,19 @@ mod test {
 	#[test]
 	fn test_random_math() {
 		let tests = [
-			(20u32, 22u32, 42u32),
-			(70000, 80000, 1305032704),
+			(20_u32, 22_u32, 42_u32),
+			(70000, 80000, 1_305_032_704),
 			(70000, 80000, 1),
 			(1, 2, 1),
-			(3, 10000, 196608),
+			(3, 10000, 196_608),
 			(3, 0, 3),
 			(3, 6, 2),
 			(3, 6, 7),
 			(3, 6, 5),
-			(0, 0xffffffff, 32),
+			(0, 0xffff_ffff, 32),
 			(3 << 13, 1 << 5, 3),
 			(22, 20, 42),
-			(80000, 70000, 1305032704),
+			(80000, 70000, 1_305_032_704),
 			(80000, 70000, 1),
 			(2, 1, 1),
 			(10000, 3, 80000),
@@ -502,7 +497,7 @@ mod test {
 			(6, 3, 2),
 			(6, 3, 7),
 			(6, 3, 5),
-			(0, 0xffffffff, 32),
+			(0, 0xffff_ffff, 32),
 			(3 << 13, 1 << 5, 3),
 		];
 
@@ -525,7 +520,7 @@ mod test {
 
 	#[test]
 	fn test_keccak_64() {
-		let expected: u64 = 0x5dd431e5fbc604f4;
+		let expected: u64 = 0x5dd4_31e5_fbc6_04f4;
 		assert_eq!(
 			keccak_f800_short([0; 32], 0, [0; 8]),
 			expected,

@@ -33,16 +33,16 @@ pub struct Stats {
 
 impl Stats {
 	pub fn new(number: BlockNumber) -> Self {
-		Stats {
+		Self {
 			first_seen: number,
-			propagated_to: Default::default(),
+			propagated_to: HashMap::new(),
 		}
 	}
 }
 
 impl<'a> From<&'a Stats> for TransactionStats {
 	fn from(other: &'a Stats) -> Self {
-		TransactionStats {
+		Self {
 			first_seen: other.first_seen,
 			propagated_to: other.propagated_to
 				.iter()
@@ -72,7 +72,7 @@ impl TransactionsStats {
 		self.pending_transactions.get(hash)
 	}
 
-	pub fn stats(&self) -> &H256FastMap<Stats> {
+	pub const fn stats(&self) -> &H256FastMap<Stats> {
 		&self.pending_transactions
 	}
 

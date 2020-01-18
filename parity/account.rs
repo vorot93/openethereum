@@ -146,7 +146,7 @@ mod command {
 		let geth_accounts = read_geth_accounts(i.testnet);
 		match secret_store.import_geth_accounts(SecretVaultRef::Root, geth_accounts, i.testnet) {
 			Ok(v) => Ok(format!("Successfully imported {} account(s) from geth.", v.len())),
-			Err(Error::Io(ref io_err)) if io_err.kind() == ErrorKind::NotFound => Err("Failed to find geth keys folder.".into()),
+			Err(Error::Io(io_err)) if io_err.kind() == ErrorKind::NotFound => Err("Failed to find geth keys folder.".into()),
 			Err(err) => Err(format!("Import geth accounts failed. {}", err))
 		}
 	}

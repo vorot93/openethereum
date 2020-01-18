@@ -34,7 +34,7 @@ pub struct SyncPollFilter(Arc<Mutex<PollFilter>>);
 impl SyncPollFilter {
 	/// New `SyncPollFilter`
 	pub fn new(f: PollFilter) -> Self {
-		SyncPollFilter(Arc::new(Mutex::new(f)))
+		Self(Arc::new(Mutex::new(f)))
 	}
 
 	/// Modify underlying filter

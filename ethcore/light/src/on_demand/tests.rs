@@ -42,11 +42,11 @@ enum Context {
 
 impl EventContext for Context {
 	fn peer(&self) -> PeerId {
-		match *self {
-			Context::WithPeer(id)
-			| Context::RequestFrom(id, _)
-			| Context::Punish(id) => id,
-			| Context::FaultyRequest => 0,
+		match self {
+			Self::WithPeer(id)
+			| Self::RequestFrom(id, _)
+			| Self::Punish(id) => *id,
+			| Self::FaultyRequest => 0,
 			_ => panic!("didn't expect to have peer queried."),
 		}
 	}
@@ -55,15 +55,15 @@ impl EventContext for Context {
 }
 
 impl BasicContext for Context {
-	/// Returns the relevant's peer persistent Id (aka NodeId).
+	/// Returns the relevant's peer persistent Id (aka `NodeId`).
 	fn persistent_peer_id(&self, _: PeerId) -> Option<NodeId> {
 		panic!("didn't expect to provide persistent ID")
 	}
 
 	fn request_from(&self, peer_id: PeerId, _: ::request::NetworkRequests) -> Result<ReqId, Error> {
-		match *self {
-			Context::RequestFrom(id, req_id) => if peer_id == id { Ok(req_id) } else { Err(Error::NoCredits) },
-			Context::FaultyRequest => Err(Error::NoCredits),
+		match self {
+			Self::RequestFrom(id, req_id) => if peer_id == *id { Ok(*req_id) } else { Err(Error::NoCredits) },
+			Self::FaultyRequest => Err(Error::NoCredits),
 			_ => panic!("didn't expect to have requests dispatched."),
 		}
 	}
@@ -77,8 +77,8 @@ impl BasicContext for Context {
 	}
 
 	fn disable_peer(&self, peer_id: PeerId) {
-		match *self {
-			Context::Punish(id) if id == peer_id => {},
+		match self {
+			Self::Punish(id) if *id == peer_id => {},
 			_ => panic!("Unexpectedly punished peer."),
 		}
 	}
@@ -92,7 +92,7 @@ struct Harness {
 impl Harness {
 	fn create() -> Self {
 		let cache = Arc::new(Mutex::new(Cache::new(Default::default(), Duration::from_secs(60))));
-		Harness {
+		Self {
 			service: OnDemand::new_test(
 				cache,
 				// Response `time_to_live`
@@ -194,7 +194,7 @@ fn no_capabilities() {
 
 	harness.inject_peer(peer_id, Peer {
 		status: dummy_status(),
-		capabilities: capabilities,
+		capabilities,
 	});
 
 	let _recv = harness.service.request_raw(
@@ -357,7 +357,7 @@ fn part_bad_part_good() {
 		req_ids.0,
 		&[
 			Response::Headers(basic_request::HeadersResponse { headers: vec![encoded1] }),
-			Response::Receipts(basic_request::ReceiptsResponse { receipts: vec![] } ),
+			Response::Receipts(basic_request::ReceiptsResponse { receipts: Vec::new() } ),
 		]
 	);
 
@@ -407,7 +407,7 @@ fn wrong_kind() {
 	harness.service.on_responses(
 		&Context::Punish(peer_id),
 		req_id,
-		&[Response::Receipts(basic_request::ReceiptsResponse { receipts: vec![] })]
+		&[Response::Receipts(basic_request::ReceiptsResponse { receipts: Vec::new() })]
 	);
 
 	assert_eq!(harness.service.pending.read().len(), 1);
@@ -447,7 +447,7 @@ fn back_references() {
 		req_id,
 		&[
 			Response::Headers(basic_request::HeadersResponse { headers: vec![encoded] }),
-			Response::Receipts(basic_request::ReceiptsResponse { receipts: vec![] }),
+			Response::Receipts(basic_request::ReceiptsResponse { receipts: Vec::new() }),
 		]
 	);
 

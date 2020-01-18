@@ -30,7 +30,7 @@ pub struct BadBlocks {
 
 impl Default for BadBlocks {
 	fn default() -> Self {
-		BadBlocks {
+		Self {
 			last_blocks: RwLock::new(MemoryLruCache::new(8 * 1024 * 1024)),
 		}
 	}

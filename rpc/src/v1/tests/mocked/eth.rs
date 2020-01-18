@@ -104,7 +104,7 @@ impl EthTester {
 		io.extend_with(eth);
 		io.extend_with(filter);
 
-		EthTester {
+		Self {
 			runtime,
 			client,
 			sync,
@@ -208,7 +208,7 @@ fn rpc_eth_logs() {
 		block_hash: H256::zero(),
 		entry: LogEntry {
 			address: Address::zero(),
-			topics: vec![],
+			topics: Vec::new(),
 			data: vec![1,2,3],
 		},
 		transaction_index: 0,
@@ -220,7 +220,7 @@ fn rpc_eth_logs() {
 		block_hash: H256::zero(),
 		entry: LogEntry {
 			address: Address::zero(),
-			topics: vec![],
+			topics: Vec::new(),
 			data: vec![1,2,3],
 		},
 		transaction_index: 0,
@@ -244,8 +244,8 @@ fn rpc_eth_logs() {
 
 #[test]
 fn rpc_eth_logs_error() {
-	fn h256_from_digit_be(d: u8) -> H256 {
-		let mut bytes = [0u8; 32];
+	const fn h256_from_digit_be(d: u8) -> H256 {
+		let mut bytes = [0_u8; 32];
 		bytes[0] = d;
 		H256(bytes)
 	}
@@ -266,7 +266,7 @@ fn rpc_logs_filter() {
 		block_hash: H256::zero(),
 		entry: LogEntry {
 			address: Address::zero(),
-			topics: vec![],
+			topics: Vec::new(),
 			data: vec![1,2,3],
 		},
 		transaction_index: 0,
@@ -278,7 +278,7 @@ fn rpc_logs_filter() {
 		block_hash: H256::zero(),
 		entry: LogEntry {
 			address: Address::zero(),
-			topics: vec![],
+			topics: Vec::new(),
 			data: vec![1,2,3],
 		},
 		transaction_index: 0,
@@ -327,7 +327,7 @@ fn rpc_blocks_filter() {
 		hash1,
 		hash2);
 
-	assert_eq!(tester.io.handle_request_sync(request_changes), Some(response.to_owned()));
+	assert_eq!(tester.io.handle_request_sync(request_changes), Some(response));
 
 	// in the case of a re-org we get same block number if hash is different - BlockId::Number(2)
 	tester.client.blocks.write().remove(&hash2).unwrap();
@@ -341,7 +341,7 @@ fn rpc_blocks_filter() {
 		tester.client.block_hash(BlockId::Number(2)).unwrap(),
 		tester.client.block_hash(BlockId::Number(3)).unwrap());
 
-	assert_eq!(tester.io.handle_request_sync(request_changes), Some(response.to_owned()));
+	assert_eq!(tester.io.handle_request_sync(request_changes), Some(response));
 }
 
 #[test]
@@ -420,7 +420,7 @@ fn rpc_eth_accounts() {
 	// with current policy it should return the account
 	let request = r#"{"jsonrpc": "2.0", "method": "eth_accounts", "params": [], "id": 1}"#;
 	let response = r#"{"jsonrpc":"2.0","result":[""#.to_owned() + &format!("0x{:x}", address) + r#""],"id":1}"#;
-	assert_eq!(tester.io.handle_request_sync(request), Some(response.to_owned()));
+	assert_eq!(tester.io.handle_request_sync(request), Some(response));
 }
 
 #[test]
@@ -636,10 +636,10 @@ fn rpc_eth_call_latest() {
 		gas_used: U256::from(0xff30),
 		refunded: U256::from(0x5),
 		cumulative_gas_used: U256::zero(),
-		logs: vec![],
-		contracts_created: vec![],
+		logs: Vec::new(),
+		contracts_created: Vec::new(),
 		output: vec![0x12, 0x34, 0xff],
-		trace: vec![],
+		trace: Vec::new(),
 		vm_trace: None,
 		state_diff: None,
 	}));
@@ -672,10 +672,10 @@ fn rpc_eth_call_pending() {
 		gas_used: U256::from(0xff30),
 		refunded: U256::from(0x5),
 		cumulative_gas_used: U256::zero(),
-		logs: vec![],
-		contracts_created: vec![],
+		logs: Vec::new(),
+		contracts_created: Vec::new(),
 		output: vec![0x12, 0x34, 0xff],
-		trace: vec![],
+		trace: Vec::new(),
 		vm_trace: None,
 		state_diff: None,
 	}));
@@ -709,10 +709,10 @@ fn rpc_eth_call() {
 		gas_used: U256::from(0xff30),
 		refunded: U256::from(0x5),
 		cumulative_gas_used: U256::zero(),
-		logs: vec![],
-		contracts_created: vec![],
+		logs: Vec::new(),
+		contracts_created: Vec::new(),
 		output: vec![0x12, 0x34, 0xff],
-		trace: vec![],
+		trace: Vec::new(),
 		vm_trace: None,
 		state_diff: None,
 	}));
@@ -745,10 +745,10 @@ fn rpc_eth_call_default_block() {
 		gas_used: U256::from(0xff30),
 		refunded: U256::from(0x5),
 		cumulative_gas_used: U256::zero(),
-		logs: vec![],
-		contracts_created: vec![],
+		logs: Vec::new(),
+		contracts_created: Vec::new(),
 		output: vec![0x12, 0x34, 0xff],
-		trace: vec![],
+		trace: Vec::new(),
 		vm_trace: None,
 		state_diff: None,
 	}));
@@ -780,10 +780,10 @@ fn rpc_eth_estimate_gas() {
 		gas_used: U256::from(0xff30),
 		refunded: U256::from(0x5),
 		cumulative_gas_used: U256::zero(),
-		logs: vec![],
-		contracts_created: vec![],
+		logs: Vec::new(),
+		contracts_created: Vec::new(),
 		output: vec![0x12, 0x34, 0xff],
-		trace: vec![],
+		trace: Vec::new(),
 		vm_trace: None,
 		state_diff: None,
 	}));
@@ -816,10 +816,10 @@ fn rpc_eth_estimate_gas_pending() {
 		gas_used: U256::from(0xff30),
 		refunded: U256::from(0x5),
 		cumulative_gas_used: U256::zero(),
-		logs: vec![],
-		contracts_created: vec![],
+		logs: Vec::new(),
+		contracts_created: Vec::new(),
 		output: vec![0x12, 0x34, 0xff],
-		trace: vec![],
+		trace: Vec::new(),
 		vm_trace: None,
 		state_diff: None,
 	}));
@@ -853,10 +853,10 @@ fn rpc_eth_estimate_gas_default_block() {
 		gas_used: U256::from(0xff30),
 		refunded: U256::from(0x5),
 		cumulative_gas_used: U256::zero(),
-		logs: vec![],
-		contracts_created: vec![],
+		logs: Vec::new(),
+		contracts_created: Vec::new(),
 		output: vec![0x12, 0x34, 0xff],
-		trace: vec![],
+		trace: Vec::new(),
 		vm_trace: None,
 		state_diff: None,
 	}));
@@ -893,7 +893,7 @@ fn rpc_eth_send_raw_transaction_error() {
 	}"#;
 	let res = r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid RLP.","data":"RlpExpectedToBeList"},"id":1}"#.into();
 
-	assert_eq!(tester.io.handle_request_sync(&req), Some(res));
+	assert_eq!(tester.io.handle_request_sync(req), Some(res));
 }
 
 #[test]
@@ -904,11 +904,11 @@ fn rpc_eth_send_raw_transaction() {
 
 	let t = Transaction {
 		nonce: U256::zero(),
-		gas_price: U256::from(0x9184e72a000u64),
+		gas_price: U256::from(0x0918_4e72_a000_u64),
 		gas: U256::from(0x76c0),
 		action: Action::Call(Address::from_str("d46e8dd67c5d32be8058bb8eb970870f07244567").unwrap()),
-		value: U256::from(0x9184e72au64),
-		data: vec![]
+		value: U256::from(0x9184_e72a_u64),
+		data: Vec::new()
 	};
 	let signature = tester.accounts_provider.sign(address, None, t.hash(None)).unwrap();
 	let t = t.with_signature(signature, None);
@@ -948,7 +948,7 @@ fn rpc_eth_transaction_receipt() {
 					H256::from_str("a6697e974e6a320f454390be03f74955e8978f1a6971ea6730542e37b66179bc").unwrap(),
 					H256::from_str("4861736852656700000000000000000000000000000000000000000000000000").unwrap()
 				],
-				data: vec![],
+				data: Vec::new(),
 			},
 			block_hash: H256::from_str("ed76641c68a1c641aee09a94b3b471f4dc0316efe5ac19cf488e2674cf8d05b5").unwrap(),
 			block_number: 0x4510c,
@@ -1108,7 +1108,7 @@ fn rpc_get_work_should_timeout() {
 		r#"{{"jsonrpc":"2.0","result":["0x{:x}","0x0000000000000000000000000000000000000000000000000000000000000000","0x0000800000000000000000000000000000000000000000000000000000000000","0x1"],"id":1}}"#,
 		hash,
 	);
-	assert_eq!(eth_tester.io.handle_request_sync(request), Some(work_response.to_owned()));
+	assert_eq!(eth_tester.io.handle_request_sync(request), Some(work_response));
 
 	// Request with timeout of 0 seconds. This should work since we're disabling timeout.
 	let request = r#"{"jsonrpc": "2.0", "method": "eth_getWork", "params": [0], "id": 1}"#;
@@ -1120,7 +1120,7 @@ fn rpc_get_work_should_timeout() {
 
 	// Request with timeout of 10K seconds. This should work.
 	let request = r#"{"jsonrpc": "2.0", "method": "eth_getWork", "params": [10000], "id": 1}"#;
-	assert_eq!(eth_tester.io.handle_request_sync(request), Some(work_response.to_owned()));
+	assert_eq!(eth_tester.io.handle_request_sync(request), Some(work_response));
 
 	// Request with timeout of 10 seconds. This should fail.
 	let request = r#"{"jsonrpc": "2.0", "method": "eth_getWork", "params": [10], "id": 1}"#;

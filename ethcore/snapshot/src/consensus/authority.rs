@@ -44,17 +44,17 @@ use rlp::{RlpStream, Rlp};
 use crate::{SnapshotComponents, Rebuilder};
 
 
-/// Snapshot creation and restoration for PoA chains.
+/// Snapshot creation and restoration for proof-of-authority chains.
 /// Chunk format:
 ///
-/// [FLAG, [header, epoch data], ...]
+/// `[FLAG, [header, epoch data], ...]`
 ///   - Header data at which transition occurred,
 ///   - epoch data (usually list of validators and proof of change)
 ///
-/// FLAG is a bool: true for last chunk, false otherwise.
+/// `FLAG` is a bool: `true` for last chunk, `false` otherwise.
 ///
 /// The last item of the last chunk will be a list containing data for the warp target block:
-/// [header, transactions, uncles, receipts, parent_td].
+/// `[header, transactions, uncles, receipts, parent_td]`.
 pub struct PoaSnapshot;
 
 impl SnapshotComponents for PoaSnapshot {
@@ -73,7 +73,7 @@ impl SnapshotComponents for PoaSnapshot {
 		let mut rlps = Vec::new();
 
 		for (_, transition) in chain.epoch_transitions()
-			.take_while(|&(_, ref t)| t.block_number <= number)
+			.take_while(|(_, t)| t.block_number <= number)
 		{
 			// this can happen when our starting block is non-canonical.
 			if transition.block_number == number && transition.block_hash != block_at {
@@ -204,8 +204,8 @@ impl ChunkRebuilder {
 		let new_verifier = match engine.epoch_verifier(&header, &epoch_data) {
 			ConstructedVerifier::Trusted(v) => v,
 			ConstructedVerifier::Unconfirmed(v, finality_proof, hash) => {
-				match *last_verifier {
-					Some(ref last) =>
+				match last_verifier {
+					Some(last) =>
 						if last.check_finality_proof(finality_proof).map_or(true, |hashes| !hashes.contains(&hash))
 					{
 						return Err(SnapshotError::BadEpochProof(header.number()).into());
@@ -214,7 +214,7 @@ impl ChunkRebuilder {
 						// genesis never requires additional validation.
 
 						let idx = self.unverified_firsts
-							.binary_search_by_key(&header.number(), |&(ref h, _, _)| h.number())
+							.binary_search_by_key(&header.number(), |(h, _, _)| h.number())
 							.unwrap_or_else(|x| x);
 
 						let entry = (header.clone(), finality_proof.to_owned(), hash);
@@ -303,7 +303,7 @@ impl Rebuilder for ChunkRebuilder {
 			}
 			if is_last {
 				let idx = self.last_epochs
-					.binary_search_by_key(&verified.header.number(), |&(ref h, _)| h.number())
+					.binary_search_by_key(&verified.header.number(), |(h, _)| h.number())
 					.unwrap_or_else(|x| x);
 
 				let entry = (
@@ -369,11 +369,11 @@ impl Rebuilder for ChunkRebuilder {
 		// we store all last verifiers, but not all firsts.
 		// match each unverified first epoch with a last epoch verifier.
 		let mut lasts_reversed = self.last_epochs.iter().rev();
-		for &(ref header, ref finality_proof, hash) in self.unverified_firsts.iter().rev() {
+		for (header, finality_proof, hash) in self.unverified_firsts.iter().rev() {
 			let mut found = false;
-			while let Some(&(ref last_header, ref last_verifier)) = lasts_reversed.next() {
+			while let Some((last_header, last_verifier)) = lasts_reversed.next() {
 				if last_header.number() < header.number() {
-					if last_verifier.check_finality_proof(&finality_proof).map_or(true, |hashes| !hashes.contains(&hash)) {
+					if last_verifier.check_finality_proof(finality_proof).map_or(true, |hashes| !hashes.contains(hash)) {
 						return Err(SnapshotError::BadEpochProof(header.number()).into());
 					}
 					found = true;
@@ -389,10 +389,10 @@ impl Rebuilder for ChunkRebuilder {
 		// verify that the warp target verifies correctly the
 		// most recent epoch. if the warp target was a transition itself,
 		// it's already verified and doesn't need any more verification.
-		let &(ref header, ref last_epoch) = self.last_epochs.last()
+		let (header, last_epoch) = self.last_epochs.last()
 			.expect("last_epochs known to have at least one element by the check above; qed");
 
-		if header != &target_header {
+		if *header != target_header {
 			last_epoch.verify_heavy(&target_header)?;
 		}
 

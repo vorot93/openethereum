@@ -91,7 +91,7 @@ pub trait Ext {
 
 	/// Creates new contract.
 	///
-	/// Returns gas_left and contract address if contract creation was successful.
+	/// Returns `gas_left` and contract address if contract creation was successful.
 	fn create(
 		&mut self,
 		gas: &U256,
@@ -105,8 +105,9 @@ pub trait Ext {
 	/// Message call.
 	///
 	/// Returns Err, if we run out of gas.
-	/// Otherwise returns call_result which contains gas left
-	/// and true if subcall was successfull.
+	/// Otherwise returns `call_result` which contains gas left
+	/// and true if subcall was successful.
+	#[allow(clippy::too_many_arguments)]
 	fn call(
 		&mut self,
 		gas: &U256,
@@ -132,7 +133,7 @@ pub trait Ext {
 	fn log(&mut self, topics: Vec<H256>, data: &[u8]) -> Result<()>;
 
 	/// Should be called when transaction calls `RETURN` opcode.
-	/// Returns gas_left if cost of returning the data is not too high.
+	/// Returns `gas_left` if cost of returning the data is not too high.
 	fn ret(self, gas: &U256, data: &ReturnData, apply_state: bool) -> Result<U256>;
 
 	/// Should be called when contract commits suicide.

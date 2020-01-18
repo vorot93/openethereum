@@ -65,7 +65,7 @@ pub struct FilledTransactionRequest {
 
 impl From<FilledTransactionRequest> for TransactionRequest {
 	fn from(r: FilledTransactionRequest) -> Self {
-		TransactionRequest {
+		Self {
 			from: Some(r.from),
 			to: r.to,
 			gas_price: Some(r.gas_price),
@@ -125,12 +125,9 @@ pub enum ConfirmationPayload {
 
 impl ConfirmationPayload {
 	pub fn sender(&self) -> Address {
-		match *self {
-			ConfirmationPayload::SendTransaction(ref request) => request.from,
-			ConfirmationPayload::SignTransaction(ref request) => request.from,
-			ConfirmationPayload::EthSignMessage(ref address, _) => *address,
-			ConfirmationPayload::SignMessage(ref address, _) => *address,
-			ConfirmationPayload::Decrypt(ref address, _) => *address,
+		match self {
+			Self::SendTransaction(request) | Self::SignTransaction(request) => request.from,
+			Self::EthSignMessage(address, _) | Self::SignMessage(address, _) | Self::Decrypt(address, _) => *address,
 		}
 	}
 }

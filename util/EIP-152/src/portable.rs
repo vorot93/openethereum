@@ -17,7 +17,7 @@
 
 use crate::{IV, SIGMA};
 
-/// The G mixing function. See https://tools.ietf.org/html/rfc7693#section-3.1
+/// The G mixing function. See <https://tools.ietf.org/html/rfc7693#section-3.1>
 #[inline(always)]
 fn g(v: &mut [u64], a: usize, b: usize, c: usize, d: usize, x: u64, y: u64) {
 	v[a] = v[a].wrapping_add(v[b]).wrapping_add(x);
@@ -31,12 +31,12 @@ fn g(v: &mut [u64], a: usize, b: usize, c: usize, d: usize, x: u64, y: u64) {
 	v[b] = (v[b] ^ v[c]).rotate_right(63);
 }
 
-/// The Blake2b compression function F. See https://tools.ietf.org/html/rfc7693#section-3.2
+/// The Blake2b compression function F. See <https://tools.ietf.org/html/rfc7693#section-3.2>
 /// Takes as an argument the state vector `h`, message block vector `m`, offset counter `t`, final
 /// block indicator flag `f`, and number of rounds `rounds`. The state vector provided as the first
 /// parameter is modified by the function.
 pub fn compress(h: &mut [u64; 8], m: [u64; 16], t: [u64; 2], f: bool, rounds: usize) {
-	let mut v = [0u64; 16];
+	let mut v = [0_u64; 16];
 	v[..8].copy_from_slice(h);    // First half from state.
 	v[8..].copy_from_slice(&IV);  // Second half from IV.
 

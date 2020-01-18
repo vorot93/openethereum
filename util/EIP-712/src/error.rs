@@ -90,14 +90,14 @@ impl Error {
 }
 
 impl From<ErrorKind> for Error {
-	fn from(kind: ErrorKind) -> Error {
-		Error { inner: Context::new(kind) }
+	fn from(kind: ErrorKind) -> Self {
+		Self { inner: Context::new(kind) }
 	}
 }
 
 impl From<Context<ErrorKind>> for Error {
-	fn from(inner: Context<ErrorKind>) -> Error {
-		Error { inner }
+	fn from(inner: Context<ErrorKind>) -> Self {
+		Self { inner }
 	}
 }
 

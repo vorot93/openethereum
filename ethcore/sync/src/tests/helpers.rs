@@ -65,7 +65,7 @@ impl FlushingBlockChainClient for EthcoreClient {
 
 impl FlushingBlockChainClient for TestBlockChainClient {}
 
-pub struct TestIo<'p, C> where C: FlushingBlockChainClient, C: 'p {
+pub struct TestIo<'p, C> where C: FlushingBlockChainClient + 'p {
 	pub chain: &'p C,
 	pub snapshot_service: &'p TestSnapshotService,
 	pub queue: &'p RwLock<VecDeque<TestPacket>>,
@@ -77,7 +77,7 @@ pub struct TestIo<'p, C> where C: FlushingBlockChainClient, C: 'p {
 	overlay: RwLock<HashMap<BlockNumber, Bytes>>,
 }
 
-impl<'p, C> TestIo<'p, C> where C: FlushingBlockChainClient, C: 'p {
+impl<'p, C> TestIo<'p, C> where C: FlushingBlockChainClient + 'p {
 	pub fn new(
 		chain: &'p C,
 		ss: &'p TestSnapshotService,
@@ -99,13 +99,13 @@ impl<'p, C> TestIo<'p, C> where C: FlushingBlockChainClient, C: 'p {
 	}
 }
 
-impl<'p, C> Drop for TestIo<'p, C> where C: FlushingBlockChainClient, C: 'p {
+impl<'p, C> Drop for TestIo<'p, C> where C: FlushingBlockChainClient + 'p {
 	fn drop(&mut self) {
 		self.queue.write().extend(self.packets.drain(..));
 	}
 }
 
-impl<'p, C> SyncIo for TestIo<'p, C> where C: FlushingBlockChainClient, C: 'p {
+impl<'p, C> SyncIo for TestIo<'p, C> where C: FlushingBlockChainClient + 'p {
 	fn disable_peer(&mut self, peer_id: PeerId) {
 		self.disconnect_peer(peer_id);
 	}
@@ -159,8 +159,8 @@ impl<'p, C> SyncIo for TestIo<'p, C> where C: FlushingBlockChainClient, C: 'p {
 		ETH_PROTOCOL_VERSION_63.0
 	}
 
-	fn protocol_version(&self, protocol: &ProtocolId, peer_id: PeerId) -> u8 {
-		if protocol == &WARP_SYNC_PROTOCOL_ID { PAR_PROTOCOL_VERSION_4.0 } else { self.eth_protocol_version(peer_id) }
+	fn protocol_version(&self, protocol: ProtocolId, peer_id: PeerId) -> u8 {
+		if protocol == WARP_SYNC_PROTOCOL_ID { PAR_PROTOCOL_VERSION_4.0 } else { self.eth_protocol_version(peer_id) }
 	}
 
 	fn is_expired(&self) -> bool {
@@ -375,7 +375,7 @@ impl TestNet<EthPeer<TestBlockChainClient>> {
 	}
 
 	pub fn new_with_config(n: usize, config: SyncConfig) -> Self {
-		let mut net = TestNet {
+		let mut net = Self {
 			peers: Vec::new(),
 			started: false,
 			disconnect_events: Vec::new(),
@@ -384,7 +384,7 @@ impl TestNet<EthPeer<TestBlockChainClient>> {
 			let chain = TestBlockChainClient::new();
 			let ss = Arc::new(TestSnapshotService::new());
 			let private_tx_handler = Arc::new(SimplePrivateTxHandler::default());
-			let sync = ChainSync::new(config.clone(), &chain, Some(private_tx_handler.clone()));
+			let sync = ChainSync::new(config, &chain, Some(private_tx_handler.clone()));
 			net.peers.push(Arc::new(EthPeer {
 				sync: RwLock::new(sync),
 				snapshot_service: ss,
@@ -414,7 +414,7 @@ impl TestNet<EthPeer<EthcoreClient>> {
 	) -> Self
 		where F: Fn() -> Spec
 	{
-		let mut net = TestNet {
+		let mut net = Self {
 			peers: Vec::new(),
 			started: false,
 			disconnect_events: Vec::new(),
@@ -433,7 +433,7 @@ impl TestNet<EthPeer<EthcoreClient>> {
 			&spec,
 			test_helpers::new_db(),
 			miner.clone(),
-			channel.clone()
+			channel
 		).unwrap();
 
 		let private_tx_handler = Arc::new(SimplePrivateTxHandler::default());
@@ -528,13 +528,13 @@ impl<P> TestNet<P> where P: Peer {
 	}
 
 	pub fn deliver_io_messages(&mut self) {
-		for peer in self.peers.iter() {
+		for peer in &self.peers {
 			peer.process_all_io_messages();
 		}
 	}
 
 	pub fn deliver_new_block_messages(&mut self) {
-		for peer in self.peers.iter() {
+		for peer in &self.peers {
 			peer.process_all_new_block_messages();
 		}
 	}
@@ -558,7 +558,7 @@ pub struct TestIoHandler {
 
 impl TestIoHandler {
 	pub fn new(client: Arc<EthcoreClient>) -> Self {
-		TestIoHandler {
+		Self {
 			client,
 			private_tx_queued: Mutex::default(),
 		}
@@ -567,13 +567,11 @@ impl TestIoHandler {
 
 impl IoHandler<ClientIoMessage<EthcoreClient>> for TestIoHandler {
 	fn message(&self, _io: &IoContext<ClientIoMessage<EthcoreClient>>, net_message: &ClientIoMessage<EthcoreClient>) {
-		match *net_message {
-			ClientIoMessage::Execute(ref exec) => {
-				*self.private_tx_queued.lock() += 1;
-				(*exec.0)(&self.client);
-			},
-			_ => {} // ignore other messages
+		if let ClientIoMessage::Execute(exec) = net_message {
+			*self.private_tx_queued.lock() += 1;
+			(*exec.0)(&self.client);
 		}
+		// ignore other messages
 	}
 }
 

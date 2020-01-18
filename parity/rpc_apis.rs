@@ -44,7 +44,7 @@ use parking_lot::{Mutex, RwLock};
 use sync::{LightSync, ManageNetwork, SyncProvider};
 use updater::Updater;
 
-#[derive(Debug, PartialEq, Clone, Eq, Hash)]
+#[derive(Debug, PartialEq, Clone, Copy, Eq, Hash)]
 pub enum Api {
 	/// Web3 (Safe)
 	Web3,
@@ -128,7 +128,7 @@ pub enum ApiSet {
 
 impl Default for ApiSet {
 	fn default() -> Self {
-		ApiSet::UnsafeContext
+		Self::UnsafeContext
 	}
 }
 
@@ -147,14 +147,14 @@ impl FromStr for ApiSet {
 		for api in s.split(',') {
 			match api {
 				"all" => {
-					apis.extend(ApiSet::All.list_apis());
+					apis.extend(Self::All.list_apis());
 				}
 				"safe" => {
 					// Safe APIs are those that are safe even in UnsafeContext.
-					apis.extend(ApiSet::UnsafeContext.list_apis());
+					apis.extend(Self::UnsafeContext.list_apis());
 				}
 				// Remove the API
-				api if api.starts_with("-") => {
+				api if api.starts_with('-') => {
 					let api = api[1..].parse()?;
 					apis.remove(&api);
 				}
@@ -165,14 +165,14 @@ impl FromStr for ApiSet {
 			}
 		}
 
-		Ok(ApiSet::List(apis))
+		Ok(Self::List(apis))
 	}
 }
 
 fn to_modules(apis: &HashSet<Api>) -> BTreeMap<String, String> {
 	let mut modules = BTreeMap::new();
 	for api in apis {
-		let (name, version) = match *api {
+		let (name, version) = match api {
 			Api::Debug => ("debug", "1.0"),
 			Api::Eth => ("eth", "1.0"),
 			Api::EthPubSub => ("pubsub", "1.0"),
@@ -274,14 +274,14 @@ impl FullDependencies {
 		let dispatcher = FullDispatcher::new(
 			self.client.clone(),
 			self.miner.clone(),
-			nonces.clone(),
+			nonces,
 			self.gas_price_percentile,
 		);
 		let account_signer = Arc::new(dispatch::Signer::new(self.accounts.clone())) as _;
 		let accounts = account_utils::accounts_list(self.accounts.clone());
 
 		for api in apis {
-			match *api {
+			match api {
 				Api::Debug => {
 					handler.extend_with(DebugClient::new(self.client.clone()).to_delegate());
 				}
@@ -376,9 +376,10 @@ impl FullDependencies {
 					);
 				}
 				Api::Parity => {
-					let signer = match self.signer_service.is_enabled() {
-						true => Some(self.signer_service.clone()),
-						false => None,
+					let signer = if self.signer_service.is_enabled() {
+						Some(self.signer_service.clone())
+					} else {
+						None
 					};
 					handler.extend_with(
 						ParityClient::new(
@@ -437,7 +438,7 @@ impl FullDependencies {
 				}
 				Api::Traces => handler.extend_with(TracesClient::new(&self.client).to_delegate()),
 				Api::Rpc => {
-					let modules = to_modules(&apis);
+					let modules = to_modules(apis);
 					handler.extend_with(RpcClient::new(modules).to_delegate());
 				}
 				Api::SecretStore => {
@@ -526,7 +527,7 @@ impl<C: LightChainClient + 'static> LightDependencies<C> {
 		let accounts = account_utils::accounts_list(self.accounts.clone());
 
 		for api in apis {
-			match *api {
+			match api {
 				Api::Debug => {
 					warn!(target: "rpc", "Debug API is not available in light client mode.")
 				}
@@ -613,9 +614,10 @@ impl<C: LightChainClient + 'static> LightDependencies<C> {
 					);
 				}
 				Api::Parity => {
-					let signer = match self.signer_service.is_enabled() {
-						true => Some(self.signer_service.clone()),
-						false => None,
+					let signer = if self.signer_service.is_enabled() {
+						Some(self.signer_service.clone())
+					} else {
+						None
 					};
 					handler.extend_with(
 						light::ParityClient::new(
@@ -658,7 +660,7 @@ impl<C: LightChainClient + 'static> LightDependencies<C> {
 				),
 				Api::Traces => handler.extend_with(light::TracesClient.to_delegate()),
 				Api::Rpc => {
-					let modules = to_modules(&apis);
+					let modules = to_modules(apis);
 					handler.extend_with(RpcClient::new(modules).to_delegate());
 				}
 				Api::SecretStore => {
@@ -666,7 +668,7 @@ impl<C: LightChainClient + 'static> LightDependencies<C> {
 					handler.extend_with(SecretStoreClient::new(&self.accounts).to_delegate());
 				}
 				Api::Private => {
-					if let Some(ref tx_manager) = self.private_tx_service {
+					if let Some(tx_manager) = &self.private_tx_service {
 						let private_tx_service = Some(tx_manager.clone());
 						handler.extend_with(PrivateClient::new(private_tx_service).to_delegate());
 					}
@@ -695,7 +697,7 @@ impl<T: LightChainClient + 'static> Dependencies for LightDependencies<T> {
 impl ApiSet {
 	/// Retains only APIs in given set.
 	pub fn retain(self, set: Self) -> Self {
-		ApiSet::List(&self.list_apis() & &set.list_apis())
+		Self::List(&self.list_apis() & &set.list_apis())
 	}
 
 	pub fn list_apis(&self) -> HashSet<Api> {
@@ -712,25 +714,25 @@ impl ApiSet {
 			.cloned()
 			.collect();
 
-		match *self {
-			ApiSet::List(ref apis) => apis.into_iter()
+		match self {
+			Self::List(apis) => apis.iter()
 				.filter(|api| *api != &Api::Deprecated)
 				.cloned()
 				.collect(),
-			ApiSet::UnsafeContext => {
+			Self::UnsafeContext => {
 				public_list.insert(Api::Traces);
 				public_list.insert(Api::ParityPubSub);
 				public_list.insert(Api::ParityTransactionsPool);
 				public_list
 			}
-			ApiSet::IpcContext => {
+			Self::IpcContext => {
 				public_list.insert(Api::Traces);
 				public_list.insert(Api::ParityPubSub);
 				public_list.insert(Api::ParityAccounts);
 				public_list.insert(Api::ParityTransactionsPool);
 				public_list
 			}
-			ApiSet::All => {
+			Self::All => {
 				public_list.insert(Api::Debug);
 				public_list.insert(Api::Traces);
 				public_list.insert(Api::ParityPubSub);
@@ -742,7 +744,7 @@ impl ApiSet {
 				public_list.insert(Api::ParityTransactionsPool);
 				public_list
 			}
-			ApiSet::PubSub => [
+			Self::PubSub => [
 				Api::Eth,
 				Api::Parity,
 				Api::ParityAccounts,

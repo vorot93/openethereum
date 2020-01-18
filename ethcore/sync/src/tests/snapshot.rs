@@ -47,24 +47,24 @@ impl TestSnapshotService {
 		Default::default()
 	}
 
-	pub fn new_with_snapshot(num_chunks: usize, block_hash: H256, block_number: BlockNumber) -> TestSnapshotService {
+	pub fn new_with_snapshot(num_chunks: usize, block_hash: H256, block_number: BlockNumber) -> Self {
 		let num_state_chunks = num_chunks / 2;
 		let num_block_chunks = num_chunks - num_state_chunks;
 		let state_chunks: Vec<Bytes> = (0..num_state_chunks).map(|_| H256::random().as_bytes().to_vec()).collect();
 		let block_chunks: Vec<Bytes> = (0..num_block_chunks).map(|_| H256::random().as_bytes().to_vec()).collect();
 		let manifest = ManifestData {
 			version: 2,
-			state_hashes: state_chunks.iter().map(|data| keccak(data)).collect(),
-			block_hashes: block_chunks.iter().map(|data| keccak(data)).collect(),
+			state_hashes: state_chunks.iter().map(keccak).collect(),
+			block_hashes: block_chunks.iter().map(keccak).collect(),
 			state_root: H256::zero(),
-			block_number: block_number,
-			block_hash: block_hash,
+			block_number,
+			block_hash,
 		};
 		let mut chunks: HashMap<H256, Bytes> = state_chunks.into_iter().map(|data| (keccak(&data), data)).collect();
 		chunks.extend(block_chunks.into_iter().map(|data| (keccak(&data), data)));
-		TestSnapshotService {
+		Self {
 			manifest: Some(manifest),
-			chunks: chunks,
+			chunks,
 			restoration_manifest: Mutex::new(None),
 			state_restoration_chunks: Mutex::new(HashMap::new()),
 			block_restoration_chunks: Mutex::new(HashMap::new()),
@@ -82,7 +82,7 @@ impl SnapshotService for TestSnapshotService {
 	}
 
 	fn completed_chunks(&self) -> Option<Vec<H256>> {
-		Some(vec![])
+		Some(Vec::new())
 	}
 
 	fn chunk(&self, hash: H256) -> Option<Bytes> {
@@ -90,10 +90,10 @@ impl SnapshotService for TestSnapshotService {
 	}
 
 	fn status(&self) -> RestorationStatus {
-		match *self.restoration_manifest.lock() {
-			Some(ref manifest) if self.state_restoration_chunks.lock().len() == manifest.state_hashes.len() &&
+		match self.restoration_manifest.lock().as_ref() {
+			Some(manifest) if self.state_restoration_chunks.lock().len() == manifest.state_hashes.len() &&
 				self.block_restoration_chunks.lock().len() == manifest.block_hashes.len() => RestorationStatus::Inactive,
-			Some(ref manifest) => RestorationStatus::Ongoing {
+			Some(manifest) => RestorationStatus::Ongoing {
 				state_chunks: manifest.state_hashes.len() as u32,
 				block_chunks: manifest.block_hashes.len() as u32,
 				state_chunks_done: self.state_restoration_chunks.lock().len() as u32,
@@ -106,7 +106,7 @@ impl SnapshotService for TestSnapshotService {
 	fn begin_restore(&self, manifest: ManifestData) {
 		let mut restoration_manifest = self.restoration_manifest.lock();
 
-		if let Some(ref c_manifest) = *restoration_manifest {
+		if let Some(c_manifest) = restoration_manifest.as_ref() {
 			if c_manifest.state_root == manifest.state_root {
 				return;
 			}
@@ -148,7 +148,7 @@ fn snapshot_sync() {
 	let mut config = SyncConfig::default();
 	config.warp_sync = WarpSync::Enabled;
 	let mut net = TestNet::new_with_config(5, config);
-	let snapshot_service = Arc::new(TestSnapshotService::new_with_snapshot(16, H256::zero(), 500000));
+	let snapshot_service = Arc::new(TestSnapshotService::new_with_snapshot(16, H256::zero(), 500_000));
 	for i in 0..4 {
 		net.peer_mut(i).snapshot_service = snapshot_service.clone();
 		net.peer(i).chain.add_blocks(1, EachBlockWith::Nothing);

@@ -23,7 +23,7 @@ use crossbeam_deque as deque;
 use futures::future::{self, Loop};
 use log::{trace, error};
 use parking_lot::{Condvar, Mutex};
-use tokio;
+
 
 use crate::{
 	IoHandler,
@@ -65,11 +65,11 @@ impl Worker {
 		channel: IoChannel<Message>,
 		wait: Arc<Condvar>,
 		wait_mutex: Arc<Mutex<()>>,
-	) -> Worker
+	) -> Self
 	where Message: Send + Sync + 'static
 	{
 		let deleting = Arc::new(AtomicBool::new(false));
-		let mut worker = Worker {
+		let mut worker = Self {
 			thread: None,
 			wait: wait.clone(),
 			deleting: deleting.clone(),
@@ -90,7 +90,7 @@ impl Worker {
 
 					while !deleting.load(AtomicOrdering::Acquire) {
 						match stealer.steal() {
-							deque::Steal::Data(work) => Worker::do_work(work, channel.clone()),
+							deque::Steal::Data(work) => Self::do_work(work, channel.clone()),
 							deque::Steal::Retry => {},
 							deque::Steal::Empty => break,
 						}

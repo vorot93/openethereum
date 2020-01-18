@@ -91,11 +91,11 @@ impl SecretStoreEncryptor {
 		client: FetchClient,
 		signer: Arc<dyn Signer>,
 	) -> Result<Self, Error> {
-		Ok(SecretStoreEncryptor {
+		Ok(Self {
 			config,
 			client,
 			signer,
-			sessions: Mutex::default(),
+			sessions: Mutex::new(HashMap::new()),
 		})
 	}
 
@@ -149,7 +149,7 @@ impl SecretStoreEncryptor {
 		BodyReader::new(response).read_to_string(&mut result)?;
 
 		// response is JSON string (which is, in turn, hex-encoded, encrypted Public)
-		let encrypted_bytes: ethjson::bytes::Bytes = result.trim_matches('\"').parse().map_err(|e| Error::Encrypt(e))?;
+		let encrypted_bytes: ethjson::bytes::Bytes = result.trim_matches('\"').parse().map_err(Error::Encrypt)?;
 
 		// decrypt Public
 		let decrypted_bytes = self.signer.decrypt(requester, &crypto::DEFAULT_MAC, &encrypted_bytes)?;
@@ -216,7 +216,7 @@ impl Encryptor for SecretStoreEncryptor {
 		cypher.extend(repeat(0).take(plain_data.len()));
 		crypto::aes::encrypt_128_ctr(&key, initialisation_vector.as_bytes(), plain_data, &mut cypher)
 			.map_err(|e| Error::Encrypt(e.to_string()))?;
-		cypher.extend_from_slice(&initialisation_vector.as_bytes());
+		cypher.extend_from_slice(initialisation_vector.as_bytes());
 
 		Ok(cypher)
 	}
@@ -238,9 +238,8 @@ impl Encryptor for SecretStoreEncryptor {
 
 		// use symmetric decryption to decrypt document
 		let (cypher, iv) = cypher.split_at(cypher_len - INIT_VEC_LEN);
-		let mut plain_data = Vec::with_capacity(cypher_len - INIT_VEC_LEN);
-		plain_data.extend(repeat(0).take(cypher_len - INIT_VEC_LEN));
-		crypto::aes::decrypt_128_ctr(&key, &iv, cypher, &mut plain_data)
+		let mut plain_data = vec![0; cypher_len - INIT_VEC_LEN];
+		crypto::aes::decrypt_128_ctr(&key, iv, cypher, &mut plain_data)
 			.map_err(|e| Error::Decrypt(e.to_string()))?;
 		Ok(plain_data)
 	}

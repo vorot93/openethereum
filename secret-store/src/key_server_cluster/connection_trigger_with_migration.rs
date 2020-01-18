@@ -121,22 +121,22 @@ impl ConnectionTriggerWithMigration {
 		let snapshot = key_server_set.snapshot();
 		let migration = snapshot.migration.clone();
 
-		ConnectionTriggerWithMigration {
+		Self {
 			self_key_pair: self_key_pair.clone(),
 			key_server_set: key_server_set.clone(),
-			snapshot: snapshot,
+			snapshot,
 			connected: BTreeSet::new(),
 			connections: TriggerConnections {
 				self_key_pair: self_key_pair.clone(),
 			},
 			session: TriggerSession {
 				connector: Arc::new(ServersSetChangeSessionCreatorConnectorWithMigration {
-					self_node_id: self_key_pair.public().clone(),
+					self_node_id: *self_key_pair.public(),
 					migration: Mutex::new(migration),
 					session: Mutex::new(None),
 				}),
-				self_key_pair: self_key_pair,
-				key_server_set: key_server_set,
+				self_key_pair,
+				key_server_set,
 			},
 			connections_action: None,
 			session_action: None,
@@ -214,22 +214,23 @@ impl ServersSetChangeSessionCreatorConnector for ServersSetChangeSessionCreatorC
 		// then master node is selected of all nodes set && this master signs the old set && new set
 		// (signatures are inputs to ServerSetChangeSession)
 		self.migration.lock().as_ref()
-			.map(|migration| {
-				let is_migration_id_same = migration_id.map(|mid| mid == &migration.id).unwrap_or_default();
-				let is_migration_set_same = new_server_set == migration.set.keys().cloned().collect();
-				if is_migration_id_same && is_migration_set_same {
-					Ok(migration.master.clone())
-				} else {
-					warn!(target: "secretstore_net", "{}: failed to accept auto-migration session: same_migration_id={}, same_migration_set={}",
-						self.self_node_id, is_migration_id_same, is_migration_set_same);
-
+			.map_or_else(
+				|| {
+					warn!(target: "secretstore_net", "{}: failed to accept non-scheduled auto-migration session", self.self_node_id);
 					Err(Error::AccessDenied)
-				}
-			})
-			.unwrap_or_else(|| {
-				warn!(target: "secretstore_net", "{}: failed to accept non-scheduled auto-migration session", self.self_node_id);
-				Err(Error::AccessDenied)
-			})
+				},
+				|migration| {
+					let is_migration_id_same = migration_id.map(|mid| mid == &migration.id).unwrap_or_default();
+					let is_migration_set_same = new_server_set == migration.set.keys().cloned().collect();
+					if is_migration_id_same && is_migration_set_same {
+						Ok(migration.master)
+					} else {
+						warn!(target: "secretstore_net", "{}: failed to accept auto-migration session: same_migration_id={}, same_migration_set={}",
+							self.self_node_id, is_migration_id_same, is_migration_set_same);
+
+						Err(Error::AccessDenied)
+					}
+				})
 	}
 
 	fn set_key_servers_set_change_session(&self, session: Arc<AdminSession>) {
@@ -317,7 +318,7 @@ fn migration_state(self_node_id: &NodeId, snapshot: &KeyServerSetSnapshot) -> Mi
 		return MigrationState::Idle;
 	}
 
-	return MigrationState::Required;
+	MigrationState::Required
 }
 
 fn session_state(session: Option<Arc<AdminSession>>) -> SessionState {
@@ -344,37 +345,40 @@ fn maintain_session(self_node_id: &NodeId, connected: &BTreeSet<NodeId>, snapsho
 		(MigrationState::Idle, SessionState::Idle) => None,
 		// migration is required && no active session => start migration
 		(MigrationState::Required, SessionState::Idle) => {
-			match select_master_node(snapshot) == self_node_id {
-				true => Some(SessionAction::StartMigration(H256::random())),
+			if select_master_node(snapshot) == self_node_id {
+				Some(SessionAction::StartMigration(H256::random()))
+			} else {
 				// we are not on master node
-				false => None,
+				None
 			}
 		},
 		// migration is active && there's no active session => start it
 		(MigrationState::Started, SessionState::Idle) => {
-			match is_connected_to_all_nodes(self_node_id, &snapshot.migration.as_ref().expect(migration_data_proof).set, connected) &&
+			if is_connected_to_all_nodes(self_node_id, &snapshot.migration.as_ref().expect(migration_data_proof).set, connected) &&
 				select_master_node(snapshot) == self_node_id {
-				true => Some(SessionAction::Start),
+				Some(SessionAction::Start)
+			} else {
 				// we are not connected to all required nodes yet or we are not on master node => wait for it
-				false => None,
+				None
 			}
 		},
 		// migration is active && session is not yet started/finished => ok
-		(MigrationState::Started, SessionState::Active(ref session_migration_id))
+		(MigrationState::Started, SessionState::Active(session_migration_id))
 			if snapshot.migration.as_ref().expect(migration_data_proof).id == session_migration_id.unwrap_or_default() =>
 				None,
 		// migration has finished => confirm migration
-		(MigrationState::Started, SessionState::Finished(ref session_migration_id))
+		(MigrationState::Started, SessionState::Finished(session_migration_id))
 			if snapshot.migration.as_ref().expect(migration_data_proof).id == session_migration_id.unwrap_or_default() =>
-				match snapshot.migration.as_ref().expect(migration_data_proof).set.contains_key(self_node_id) {
-					true => Some(SessionAction::ConfirmAndDrop(
-						snapshot.migration.as_ref().expect(migration_data_proof).id.clone()
-					)),
+				if snapshot.migration.as_ref().expect(migration_data_proof).set.contains_key(self_node_id) {
+					Some(SessionAction::ConfirmAndDrop(
+						snapshot.migration.as_ref().expect(migration_data_proof).id
+					))
+				} else {
 					// we are not on migration set => we do not need to confirm
-					false => Some(SessionAction::Drop),
+					Some(SessionAction::Drop)
 				},
 		// migration has failed => it should be dropped && restarted later
-		(MigrationState::Started, SessionState::Failed(ref session_migration_id))
+		(MigrationState::Started, SessionState::Failed(session_migration_id))
 			if snapshot.migration.as_ref().expect(migration_data_proof).id == session_migration_id.unwrap_or_default() =>
 				Some(SessionAction::Drop),
 
@@ -437,10 +441,9 @@ fn select_master_node(snapshot: &KeyServerSetSnapshot) -> &NodeId {
 	match snapshot.migration.as_ref() {
 		Some(migration) => &migration.master,
 		None => snapshot.current_set.keys()
-			.filter(|n| snapshot.new_set.contains_key(n))
-			.nth(0)
-			.or_else(|| snapshot.new_set.keys().nth(0))
-			.unwrap_or_else(|| snapshot.current_set.keys().nth(0)
+			.find(|n| snapshot.new_set.contains_key(n))
+			.or_else(|| snapshot.new_set.keys().next())
+			.unwrap_or_else(|| snapshot.current_set.keys().next()
 				.expect("select_master_node is only called when migration is Required or Started;\
 					when Started: migration.is_some() && we return migration.master; qed;\
 					when Required: current_set != new_set; this means that at least one set is non-empty; we try to take node from each set; qed"))

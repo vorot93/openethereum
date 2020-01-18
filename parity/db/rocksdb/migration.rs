@@ -59,7 +59,7 @@ const BLOOMS_DB_VERSION: u32 = 13;
 /// Defines how many items are migrated to the new version of database at once.
 const BATCH_SIZE: usize = 1024;
 /// Version file name.
-const VERSION_FILE_NAME: &'static str = "db_version";
+const VERSION_FILE_NAME: &str = "db_version";
 
 /// Migration related erorrs.
 #[derive(Debug)]
@@ -79,12 +79,12 @@ pub enum Error {
 
 impl Display for Error {
 	fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
-		let out = match *self {
-			Error::UnknownDatabaseVersion => "Current database version cannot be read".into(),
-			Error::FutureDBVersion => "Database was created with newer client version. Upgrade your client or delete DB and resync.".into(),
-			Error::MigrationImpossible => format!("Database migration to version {} is not possible.", CURRENT_VERSION),
-			Error::BloomsDB(ref err) => format!("blooms-db migration error: {}", err),
-			Error::Io(ref err) => format!("Unexpected io error on DB migration: {}.", err),
+		let out = match self {
+			Self::UnknownDatabaseVersion => "Current database version cannot be read".into(),
+			Self::FutureDBVersion => "Database was created with newer client version. Upgrade your client or delete DB and resync.".into(),
+			Self::MigrationImpossible => format!("Database migration to version {} is not possible.", CURRENT_VERSION),
+			Self::BloomsDB(err) => format!("blooms-db migration error: {}", err),
+			Self::Io(err) => format!("Unexpected io error on DB migration: {}.", err),
 		};
 
 		write!(f, "{}", out)
@@ -93,7 +93,7 @@ impl Display for Error {
 
 impl From<IoError> for Error {
 	fn from(err: IoError) -> Self {
-		Error::Io(err)
+		Self::Io(err)
 	}
 }
 
@@ -108,7 +108,7 @@ fn version_file_path(path: &Path) -> PathBuf {
 /// If the file does not exist returns `DEFAULT_VERSION`.
 fn current_version(path: &Path) -> Result<u32, Error> {
 	match fs::File::open(version_file_path(path)) {
-		Err(ref err) if err.kind() == ErrorKind::NotFound => Ok(DEFAULT_VERSION),
+		Err(err) if err.kind() == ErrorKind::NotFound => Ok(DEFAULT_VERSION),
 		Err(_) => Err(Error::UnknownDatabaseVersion),
 		Ok(mut file) => {
 			let mut s = String::new();
@@ -143,15 +143,15 @@ fn backup_database_path(path: &Path) -> PathBuf {
 }
 
 /// Default migration settings.
-pub fn default_migration_settings(compaction_profile: &CompactionProfile) -> MigrationConfig {
+pub const fn default_migration_settings(compaction_profile: CompactionProfile) -> MigrationConfig {
 	MigrationConfig {
 		batch_size: BATCH_SIZE,
-		compaction_profile: *compaction_profile,
+		compaction_profile,
 	}
 }
 
 /// Migrations on the consolidated database.
-fn consolidated_database_migrations(compaction_profile: &CompactionProfile) -> Result<MigrationManager, Error> {
+fn consolidated_database_migrations(compaction_profile: CompactionProfile) -> Result<MigrationManager, Error> {
 	let mut manager = MigrationManager::new(default_migration_settings(compaction_profile));
 	manager.add_migration(TO_V11).map_err(|_| Error::MigrationImpossible)?;
 	manager.add_migration(TO_V12).map_err(|_| Error::MigrationImpossible)?;
@@ -166,12 +166,12 @@ fn migrate_database(version: u32, db_path: &Path, mut migrations: MigrationManag
 		return Ok(())
 	}
 
-	let backup_path = backup_database_path(&db_path);
+	let backup_path = backup_database_path(db_path);
 	// remove the backup dir if it exists
 	let _ = fs::remove_dir_all(&backup_path);
 
 	// migrate old database to the new one
-	let temp_path = migrations.execute(&db_path, version)?;
+	let temp_path = migrations.execute(db_path, version)?;
 
 	// completely in-place migration leads to the paths being equal.
 	// in that case, no need to shuffle directories.
@@ -197,7 +197,7 @@ fn exists(path: &Path) -> bool {
 
 /// Migrates the database.
 pub fn migrate(path: &Path, compaction_profile: &DatabaseCompactionProfile) -> Result<(), Error> {
-	let compaction_profile = helpers::compaction_profile(&compaction_profile, path);
+	let compaction_profile = helpers::compaction_profile(compaction_profile, path);
 
 	// read version file.
 	let version = current_version(path)?;
@@ -218,7 +218,7 @@ pub fn migrate(path: &Path, compaction_profile: &DatabaseCompactionProfile) -> R
 	// Further migrations
 	if version < CURRENT_VERSION && exists(&db_path) {
 		info!(target: "migration", "Migrating database from version {} to {}", version, CURRENT_VERSION);
-		migrate_database(version, &db_path, consolidated_database_migrations(&compaction_profile)?)?;
+		migrate_database(version, &db_path, consolidated_database_migrations(compaction_profile)?)?;
 
 		if version < BLOOMS_DB_VERSION {
 			info!(target: "migration", "Migrating blooms to blooms-db...");
@@ -226,7 +226,7 @@ pub fn migrate(path: &Path, compaction_profile: &DatabaseCompactionProfile) -> R
 				max_open_files: 64,
 				compaction: compaction_profile,
 				columns: ethcore_db::NUM_COLUMNS,
-				..Default::default()
+				..DatabaseConfig::default()
 			};
 
 			migrate_blooms(&db_path, &db_config).map_err(Error::BloomsDB)?;

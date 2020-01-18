@@ -36,7 +36,7 @@ pub enum Type {
 }
 
 impl From<Type> for String {
-	fn from(field_type: Type) -> String {
+	fn from(field_type: Type) -> Self {
 		match field_type {
 			Type::Address => "address".into(),
 			Type::Uint => "uint".into(),
@@ -50,7 +50,7 @@ impl From<Type> for String {
 				inner,
 				length
 			} => {
-				let inner: String = (*inner).into();
+				let inner: Self = (*inner).into();
 				match length {
 					None => format!("{}[]", inner),
 					Some(length) => format!("{}[{}]", inner, length)
@@ -117,13 +117,13 @@ pub fn parse_type(field_type: &str) -> Result<Type> {
 					array_depth += 1;
 					continue;
 				} else {
-					return Err(ErrorKind::UnexpectedToken(lexer.slice().to_owned(), field_type.to_owned()))?;
+					return Err(ErrorKind::UnexpectedToken(lexer.slice().to_owned(), field_type.to_owned()).into());
 				}
 			}
 			Token::BracketClose if array_depth == 10 => {
-				return Err(ErrorKind::UnsupportedArrayDepth)?;
+				return Err(ErrorKind::UnsupportedArrayDepth.into());
 			}
-			_ => return Err(ErrorKind::UnexpectedToken(lexer.slice().to_owned(), field_type.to_owned()))?
+			_ => return Err(ErrorKind::UnexpectedToken(lexer.slice().to_owned(), field_type.to_owned()).into())
 		};
 
 		token = Some(type_);

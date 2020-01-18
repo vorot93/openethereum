@@ -44,9 +44,9 @@ struct ChunkInfo(H256, u64, u64);
 /// A packed snapshot writer. This writes snapshots to a single concatenated file.
 ///
 /// The file format is very simple and consists of three parts:
-/// 	[Concatenated chunk data]
-/// 	[manifest as RLP]
-///     [manifest start offset (8 bytes little-endian)]
+/// - [Concatenated chunk data]
+/// - [manifest as RLP]
+/// - [manifest start offset (8 bytes little-endian)]
 ///
 /// The manifest contains all the same information as a standard `ManifestData`,
 /// but also maps chunk hashes to their lengths and offsets in the file
@@ -59,9 +59,9 @@ pub struct PackedWriter {
 }
 
 impl PackedWriter {
-	/// Create a new "PackedWriter", to write into the file at the given path.
+	/// Create a new `PackedWriter`, to write into the file at the given path.
 	pub fn new(path: &Path) -> io::Result<Self> {
-		Ok(PackedWriter {
+		Ok(Self {
 			file: File::create(path)?,
 			state_hashes: Vec::new(),
 			block_hashes: Vec::new(),
@@ -133,12 +133,12 @@ pub struct LooseWriter {
 }
 
 impl LooseWriter {
-	/// Create a new LooseWriter which will write into the given directory,
+	/// Create a new `LooseWriter` which will write into the given directory,
 	/// creating it if it doesn't exist.
 	pub fn new(path: PathBuf) -> io::Result<Self> {
 		fs::create_dir_all(&path)?;
 
-		Ok(LooseWriter {
+		Ok(Self {
 			dir: path,
 		})
 	}
@@ -163,7 +163,7 @@ impl SnapshotWriter for LooseWriter {
 
 	fn finish(self, manifest: ManifestData) -> io::Result<()> {
 		let rlp = manifest.into_rlp();
-		let mut path = self.dir.clone();
+		let mut path = self.dir;
 		path.push("MANIFEST");
 
 		let mut file = File::create(path)?;
@@ -219,7 +219,7 @@ impl PackedReader {
 		}
 
 		file.seek(SeekFrom::End(-8))?;
-		let mut off_bytes = [0u8; 8];
+		let mut off_bytes = [0_u8; 8];
 
 		file.read_exact(&mut off_bytes[..])?;
 
@@ -253,11 +253,11 @@ impl PackedReader {
 			return Err(SnapshotError::VersionNotSupported(version));
 		}
 
-		let state: Vec<ChunkInfo> = rlp.list_at(0 + start)?;
+		let state: Vec<ChunkInfo> = rlp.list_at(start)?;
 		let blocks: Vec<ChunkInfo> = rlp.list_at(1 + start)?;
 
 		let manifest = ManifestData {
-			version: version,
+			version,
 			state_hashes: state.iter().map(|c| c.0).collect(),
 			block_hashes: blocks.iter().map(|c| c.0).collect(),
 			state_root: rlp.val_at(2 + start)?,
@@ -265,11 +265,11 @@ impl PackedReader {
 			block_hash: rlp.val_at(4 + start)?,
 		};
 
-		Ok(Some(PackedReader {
-			file: file,
+		Ok(Some(Self {
+			file,
 			state_hashes: state.into_iter().map(|c| (c.0, (c.1, c.2))).collect(),
 			block_hashes: blocks.into_iter().map(|c| (c.0, (c.1, c.2))).collect(),
-			manifest: manifest
+			manifest,
 		}))
 	}
 }
@@ -314,7 +314,7 @@ impl LooseReader {
 
 		dir.pop();
 
-		Ok(LooseReader { dir, manifest })
+		Ok(Self { dir, manifest })
 	}
 }
 

@@ -35,8 +35,8 @@ impl ::std::ops::Deref for ReturnData {
 
 impl ReturnData {
 	/// Create empty `ReturnData`.
-	pub fn empty() -> Self {
-		ReturnData {
+	pub const fn empty() -> Self {
+		Self {
 			mem: Vec::new(),
 			offset: 0,
 			size: 0,
@@ -44,7 +44,7 @@ impl ReturnData {
 	}
 	/// Create `ReturnData` from give buffer and slice.
 	pub fn new(mem: Vec<u8>, offset: usize, size: usize) -> Self {
-		ReturnData { mem, offset, size }
+		Self { mem, offset, size }
 	}
 }
 

@@ -32,7 +32,7 @@ pub struct Histogram {
 
 impl From<stats::Histogram<U256>> for Histogram {
 	fn from(h: stats::Histogram<U256>) -> Self {
-		Histogram {
+		Self {
 			bucket_bounds: h.bucket_bounds.into_iter().map(Into::into).collect(),
 			counts: h.counts
 		}

@@ -17,7 +17,7 @@
 use std::io::{Seek, SeekFrom, Write, Read};
 use std::path::Path;
 use std::{io, fs};
-use ethbloom;
+
 
 /// Autoresizable file containing blooms.
 pub struct File {
@@ -29,7 +29,7 @@ pub struct File {
 
 impl File {
 	/// Opens database file. Creates new file if database file does not exist.
-	pub fn open<P>(path: P) -> io::Result<File> where P: AsRef<Path> {
+	pub fn open<P>(path: P) -> io::Result<Self> where P: AsRef<Path> {
 		let file = fs::OpenOptions::new()
 			.read(true)
 			.write(true)
@@ -39,7 +39,7 @@ impl File {
 			.open(path)?;
 		let len = file.metadata()?.len();
 
-		let file = File {
+		let file = Self {
 			file,
 			len,
 		};
@@ -89,7 +89,7 @@ impl File {
 	/// Returns an iterator over file.
 	///
 	/// This function needs to be mutable `fs::File` is just a shared reference a system file handle.
-	/// https://users.rust-lang.org/t/how-to-handle-match-with-irrelevant-ok--/6291/15
+	/// <https://users.rust-lang.org/t/how-to-handle-match-with-irrelevant-ok--/6291/15/>
 	pub fn iterator_from(&mut self, pos: u64) -> io::Result<FileIterator> {
 		let start = std::cmp::min(self.len, pos * 256);
 		let mut buf_reader = io::BufReader::new(&self.file);
@@ -129,7 +129,7 @@ impl<'a> Iterator for FileIterator<'a> {
 		let mut bloom = ethbloom::Bloom::default();
 		match self.file.read_exact(bloom.as_bytes_mut()) {
 			Ok(_) => Some(Ok(bloom)),
-			Err(ref err) if err.kind() == io::ErrorKind::UnexpectedEof => None,
+			Err(err) if err.kind() == io::ErrorKind::UnexpectedEof => None,
 			Err(err) => Some(Err(err)),
 		}
 	}

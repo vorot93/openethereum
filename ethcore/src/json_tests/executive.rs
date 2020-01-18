@@ -64,7 +64,7 @@ struct CallCreate {
 impl From<ethjson::vm::Call> for CallCreate {
 	fn from(c: ethjson::vm::Call) -> Self {
 		let dst: Option<ethjson::hash::Address> = c.destination.into();
-		CallCreate {
+		Self {
 			data: c.data.into(),
 			destination: dst.map(Into::into),
 			gas_limit: c.gas_limit.into(),
@@ -104,7 +104,7 @@ impl<'a, T: 'a, V: 'a, B: 'a> TestExt<'a, T, V, B>
 		Ok(TestExt {
 			nonce: state.nonce(&address)?,
 			ext: Externalities::new(state, info, machine, schedule, depth, 0, origin_info, substate, output, tracer, vm_tracer, static_call),
-			callcreates: vec![],
+			callcreates: Vec::new(),
 			sender: address,
 		})
 	}
@@ -160,7 +160,7 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for TestExt<'a, T, V, B>
 			gas_limit: *gas,
 			value: *value
 		});
-		let contract_address = contract_address(address, &self.sender, &self.nonce, &code).0;
+		let contract_address = contract_address(address, &self.sender, &self.nonce, code).0;
 		Ok(ContractCreateResult::Created(contract_address, *gas))
 	}
 
@@ -177,7 +177,7 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for TestExt<'a, T, V, B>
 	) -> Result<MessageCallResult, vm::TrapKind> {
 		self.callcreates.push(CallCreate {
 			data: data.to_vec(),
-			destination: Some(receive_address.clone()),
+			destination: Some(*receive_address),
 			gas_limit: *gas,
 			value: value.unwrap()
 		});
@@ -241,11 +241,11 @@ fn do_json_test<H: FnMut(&str, HookType)>(
 	start_stop_hook: &mut H
 ) -> Vec<String> {
 	let tests = ethjson::test_helpers::vm::Test::load(json_data)
-		.expect(&format!("Could not parse JSON executive test data from {}", path.display()));
+		.unwrap_or_else(|_| panic!("Could not parse JSON executive test data from {}", path.display()));
 	let mut failed = Vec::new();
 
-	for (name, vm) in tests.into_iter() {
-		start_stop_hook(&format!("{}", name), HookType::OnStart);
+	for (name, vm) in tests {
+		start_stop_hook(&name.to_string(), HookType::OnStart);
 
 		info!(target: "jsontests", "name: {:?}", name);
 		let mut fail = false;
@@ -298,7 +298,7 @@ fn do_json_test<H: FnMut(&str, HookType)>(
 				&origin_info,
 				&mut substate,
 				OutputPolicy::Return,
-				params.address.clone(),
+				params.address,
 				&mut tracer,
 				&mut vm_tracer,
 			));
@@ -331,14 +331,14 @@ fn do_json_test<H: FnMut(&str, HookType)>(
 				fail_unless(Some(output) == vm_output, "output is incorrect");
 				fail_unless(Some(log_hash) == vm.logs.map(|h| h.0), "logs are incorrect");
 
-				for (address, account) in vm.post_state.unwrap().into_iter() {
+				for (address, account) in vm.post_state.unwrap() {
 					let address = address.into();
 					let code: Vec<u8> = account.code.expect("code is missing from json; test should have code").into();
 					let found_code = try_fail!(state.code(&address));
 					let found_balance = try_fail!(state.balance(&address));
 					let found_nonce = try_fail!(state.nonce(&address));
 
-					fail_unless(found_code.as_ref().map_or_else(|| code.is_empty(), |c| &**c == &code), "code is incorrect");
+					fail_unless(found_code.as_ref().map_or_else(|| code.is_empty(), |c| **c == code), "code is incorrect");
 					fail_unless(account.balance.as_ref().map_or(false, |b| b.0 == found_balance), "balance is incorrect");
 					fail_unless(account.nonce.as_ref().map_or(false, |n| n.0 == found_nonce), "nonce is incorrect");
 					for (k, v) in account.storage.expect("test should have storage") {
@@ -354,7 +354,7 @@ fn do_json_test<H: FnMut(&str, HookType)>(
 			}
 		};
 
-		start_stop_hook(&format!("{}", name), HookType::OnStop);
+		start_stop_hook(&name.to_string(), HookType::OnStop);
 	}
 
 	for f in &failed {

@@ -100,8 +100,8 @@ mod tests {
 		assert_eq!(deserialized, TraceFilter {
 			from_block: Some(BlockNumber::Latest),
 			to_block: Some(BlockNumber::Latest),
-			from_address: Some(vec![Address::from_low_u64_be(3).into()]),
-			to_address: Some(vec![Address::from_low_u64_be(5).into()]),
+			from_address: Some(vec![Address::from_low_u64_be(3)]),
+			to_address: Some(vec![Address::from_low_u64_be(5)]),
 			after: 50.into(),
 			count: 100.into(),
 		});

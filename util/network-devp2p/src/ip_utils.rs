@@ -70,29 +70,29 @@ impl SocketAddrExt for Ipv4Addr {
 	// Used for communications between a service provider and its subscribers when using a carrier-grade NAT
 	// see: https://en.wikipedia.org/wiki/Reserved_IP_addresses
 	fn is_shared_space(&self) -> bool {
-		*self >= Ipv4Addr::new(100, 64, 0, 0) &&
-		*self <= Ipv4Addr::new(100, 127, 255, 255)
+		*self >= Self::new(100, 64, 0, 0) &&
+		*self <= Self::new(100, 127, 255, 255)
 	}
 
 	// Used for the IANA IPv4 Special Purpose Address Registry
 	// see: https://en.wikipedia.org/wiki/Reserved_IP_addresses
 	fn is_special_purpose(&self) -> bool {
-		*self >= Ipv4Addr::new(192, 0, 0, 0) &&
-		*self <= Ipv4Addr::new(192, 0, 0, 255)
+		*self >= Self::new(192, 0, 0, 0) &&
+		*self <= Self::new(192, 0, 0, 255)
 	}
 
 	// Used for testing of inter-network communications between two separate subnets
 	// see: https://en.wikipedia.org/wiki/Reserved_IP_addresses
 	fn is_benchmarking(&self) -> bool {
-		*self >= Ipv4Addr::new(198, 18, 0, 0) &&
-		*self <= Ipv4Addr::new(198, 19, 255, 255)
+		*self >= Self::new(198, 18, 0, 0) &&
+		*self <= Self::new(198, 19, 255, 255)
 	}
 
 	// Reserved for future use
 	// see: https://en.wikipedia.org/wiki/Reserved_IP_addresses
 	fn is_future_use(&self) -> bool {
-		*self >= Ipv4Addr::new(240, 0, 0, 0) &&
-		*self <= Ipv4Addr::new(255, 255, 255, 254)
+		*self >= Self::new(240, 0, 0, 0) &&
+		*self <= Self::new(255, 255, 255, 254)
 	}
 
 	fn is_reserved(&self) -> bool {
@@ -185,37 +185,37 @@ impl SocketAddrExt for Ipv6Addr {
 
 impl SocketAddrExt for IpAddr {
 	fn is_global_s(&self) -> bool {
-		match *self {
-			IpAddr::V4(ref ip) => ip.is_global_s(),
-			IpAddr::V6(ref ip) => ip.is_global_s(),
+		match self {
+			Self::V4(ip) => ip.is_global_s(),
+			Self::V6(ip) => ip.is_global_s(),
 		}
 	}
 
 	fn is_reserved(&self) -> bool {
-		match *self {
-			IpAddr::V4(ref ip) => SocketAddrExt::is_reserved(ip),
-			IpAddr::V6(ref ip) => ip.is_reserved(),
+		match self {
+			Self::V4(ip) => SocketAddrExt::is_reserved(ip),
+			Self::V6(ip) => ip.is_reserved(),
 		}
 	}
 
 	fn is_usable_public(&self) -> bool {
-		match *self {
-			IpAddr::V4(ref ip) => ip.is_usable_public(),
-			IpAddr::V6(ref ip) => ip.is_usable_public(),
+		match self {
+			Self::V4(ip) => ip.is_usable_public(),
+			Self::V6(ip) => ip.is_usable_public(),
 		}
 	}
 
 	fn is_usable_private(&self) -> bool {
-		match *self {
-			IpAddr::V4(ref ip) => ip.is_usable_private(),
-			IpAddr::V6(ref ip) => ip.is_usable_private(),
+		match self {
+			Self::V4(ip) => ip.is_usable_private(),
+			Self::V6(ip) => ip.is_usable_private(),
 		}
 	}
 
 	fn is_within(&self, ipnet: &IpNetwork) -> bool {
-		match *self {
-			IpAddr::V4(ref ip) => ip.is_within(ipnet),
-			IpAddr::V6(ref ip) => ip.is_within(ipnet)
+		match self {
+			Self::V4(ip) => ip.is_within(ipnet),
+			Self::V6(ip) => ip.is_within(ipnet)
 		}
 	}
 }
@@ -318,7 +318,7 @@ pub fn select_public_address(port: u16) -> SocketAddr {
 }
 
 fn search_upnp(local: &NodeEndpoint) -> Option<NodeEndpoint> {
-	if let SocketAddr::V4(ref local_addr) = local.address {
+	if let SocketAddr::V4(local_addr) = local.address {
 		let local_ip = *local_addr.ip();
 		let local_port = local_addr.port();
 		let local_udp_port = local.udp_port;
@@ -328,24 +328,24 @@ fn search_upnp(local: &NodeEndpoint) -> Option<NodeEndpoint> {
 			// igd 0.7 used port 0 by default.
 			// Let's not change this behaviour
 			bind_addr: SocketAddr::V4(SocketAddrV4::new(local_ip, 0)),
-			..Default::default()
+			..SearchOptions::default()
 		};
 		let search_gateway_child = ::std::thread::spawn(move || {
 			match search_gateway(search_options) {
-				Err(ref err) => debug!("Gateway search error: {}", err),
+				Err(err) => debug!("Gateway search error: {}", err),
 				Ok(gateway) => {
 					match gateway.get_external_ip() {
-						Err(ref err) => {
+						Err(err) => {
 							debug!("IP request error: {}", err);
 						},
 						Ok(external_addr) => {
 							match gateway.add_any_port(PortMappingProtocol::TCP, SocketAddrV4::new(local_ip, local_port), 0, "Parity Node/TCP") {
-								Err(ref err) => {
+								Err(err) => {
 									debug!("Port mapping error: {}", err);
 								},
 								Ok(tcp_port) => {
 									match gateway.add_any_port(PortMappingProtocol::UDP, SocketAddrV4::new(local_ip, local_udp_port), 0, "Parity Node/UDP") {
-										Err(ref err) => {
+										Err(err) => {
 											debug!("Port mapping error: {}", err);
 										},
 										Ok(udp_port) => {
@@ -366,7 +366,7 @@ fn search_upnp(local: &NodeEndpoint) -> Option<NodeEndpoint> {
 }
 
 fn search_natpmp(local: &NodeEndpoint) -> Option<NodeEndpoint> {
-	if let SocketAddr::V4(ref local_addr) = local.address {
+	if let SocketAddr::V4(local_addr) = local.address {
 		let local_port = local_addr.port();
 		let local_udp_port = local.udp_port;
 
@@ -382,7 +382,7 @@ fn search_natpmp(local: &NodeEndpoint) -> Option<NodeEndpoint> {
 					debug!(target: "network", "IP request error: {}", e);
 					Err(e)
 				},
-				_ => Err(natpmp::Error::NATPMP_ERR_UNDEFINEDERROR.into())
+				_ => Err(natpmp::Error::NATPMP_ERR_UNDEFINEDERROR)
 			}?;
 
 			// this function call want to receive `Response::TCP` response from router, if other then it is an Error.
@@ -394,7 +394,7 @@ fn search_natpmp(local: &NodeEndpoint) -> Option<NodeEndpoint> {
 					debug!(target: "network", "Port mapping for TCP error: {}", e);
 					Err(e)
 				},
-				_ => Err(natpmp::Error::NATPMP_ERR_UNDEFINEDERROR.into())
+				_ => Err(natpmp::Error::NATPMP_ERR_UNDEFINEDERROR)
 			}?;
 
 			// this function call want to receive `Response::UDP` response from router, if other then it is an Error.
@@ -406,7 +406,7 @@ fn search_natpmp(local: &NodeEndpoint) -> Option<NodeEndpoint> {
 					debug!(target: "network", "Port mapping for UDP error: {}", e);
 					Err(e)
 				},
-				_ => Err(natpmp::Error::NATPMP_ERR_UNDEFINEDERROR.into())
+				_ => Err(natpmp::Error::NATPMP_ERR_UNDEFINEDERROR)
 			}?;
 
 			Ok(NodeEndpoint {
@@ -422,10 +422,10 @@ fn search_natpmp(local: &NodeEndpoint) -> Option<NodeEndpoint> {
 	None
 }
 
-/// Port mapping using ether UPnP or Nat-PMP.
-/// NAT PMP has higher priority than UPnP.
+/// Port mapping using ether `UPnP` or `NAT-PMP`.
+/// `NAT-PMP` has higher priority than `UPnP`.
 pub fn map_external_address(local: &NodeEndpoint, nat_type: &NatType) -> Option<NodeEndpoint> {
-	match *nat_type {
+	match nat_type {
 		NatType::Any => {
 			match search_natpmp(local) {
 				Some(end_point) => Some(end_point),
@@ -463,11 +463,11 @@ fn can_map_external_address_natpmp_or_fail() {
 
 #[test]
 fn ipv4_properties() {
-	fn check(octets: &[u8; 4], unspec: bool, loopback: bool,
+	fn check(octets: [u8; 4], unspec: bool, loopback: bool,
 			 private: bool, link_local: bool, global: bool,
 			 multicast: bool, broadcast: bool, documentation: bool) {
 		let ip = Ipv4Addr::new(octets[0], octets[1], octets[2], octets[3]);
-		assert_eq!(octets, &ip.octets());
+		assert_eq!(octets, ip.octets());
 
 		assert_eq!(ip.is_unspecified(), unspec);
 		assert_eq!(ip.is_loopback(), loopback);
@@ -480,22 +480,22 @@ fn ipv4_properties() {
 	}
 
 	//    address                unspec loopbk privt  linloc global multicast brdcast doc
-	check(&[0, 0, 0, 0],         true,  false, false, false, true,  false,    false,  false);
-	check(&[0, 0, 0, 1],         false, false, false, false, true,  false,    false,  false);
-	check(&[1, 0, 0, 0],         false, false, false, false, true,  false,    false,  false);
-	check(&[10, 9, 8, 7],        false, false, true,  false, false, false,    false,  false);
-	check(&[127, 1, 2, 3],       false, true,  false, false, false, false,    false,  false);
-	check(&[172, 31, 254, 253],  false, false, true,  false, false, false,    false,  false);
-	check(&[169, 254, 253, 242], false, false, false, true,  false, false,    false,  false);
-	check(&[192, 0, 2, 183],     false, false, false, false, false, false,    false,  true);
-	check(&[192, 1, 2, 183],     false, false, false, false, true,  false,    false,  false);
-	check(&[192, 168, 254, 253], false, false, true,  false, false, false,    false,  false);
-	check(&[198, 51, 100, 0],    false, false, false, false, false, false,    false,  true);
-	check(&[203, 0, 113, 0],     false, false, false, false, false, false,    false,  true);
-	check(&[203, 2, 113, 0],     false, false, false, false, true,  false,    false,  false);
-	check(&[224, 0, 0, 0],       false, false, false, false, true,  true,     false,  false);
-	check(&[239, 255, 255, 255], false, false, false, false, true,  true,     false,  false);
-	check(&[255, 255, 255, 255], false, false, false, false, false, false,    true,   false);
+	check([0, 0, 0, 0],         true,  false, false, false, true,  false,    false,  false);
+	check([0, 0, 0, 1],         false, false, false, false, true,  false,    false,  false);
+	check([1, 0, 0, 0],         false, false, false, false, true,  false,    false,  false);
+	check([10, 9, 8, 7],        false, false, true,  false, false, false,    false,  false);
+	check([127, 1, 2, 3],       false, true,  false, false, false, false,    false,  false);
+	check([172, 31, 254, 253],  false, false, true,  false, false, false,    false,  false);
+	check([169, 254, 253, 242], false, false, false, true,  false, false,    false,  false);
+	check([192, 0, 2, 183],     false, false, false, false, false, false,    false,  true);
+	check([192, 1, 2, 183],     false, false, false, false, true,  false,    false,  false);
+	check([192, 168, 254, 253], false, false, true,  false, false, false,    false,  false);
+	check([198, 51, 100, 0],    false, false, false, false, false, false,    false,  true);
+	check([203, 0, 113, 0],     false, false, false, false, false, false,    false,  true);
+	check([203, 2, 113, 0],     false, false, false, false, true,  false,    false,  false);
+	check([224, 0, 0, 0],       false, false, false, false, true,  true,     false,  false);
+	check([239, 255, 255, 255], false, false, false, false, true,  true,     false,  false);
+	check([255, 255, 255, 255], false, false, false, false, false, false,    true,   false);
 }
 
 #[test]
@@ -516,10 +516,10 @@ fn ipv4_special_purpose() {
 
 #[test]
 fn ipv4_benchmarking() {
-	assert!(!Ipv4Addr::new(198, 17, 255, 255).is_benchmarking());
-	assert!(Ipv4Addr::new(198, 18, 0, 0).is_benchmarking());
-	assert!(Ipv4Addr::new(198, 19, 255, 255).is_benchmarking());
-	assert!(!Ipv4Addr::new(198, 20, 0, 0).is_benchmarking());
+	assert!(!SocketAddrExt::is_benchmarking(&Ipv4Addr::new(198, 17, 255, 255)));
+	assert!(SocketAddrExt::is_benchmarking(&Ipv4Addr::new(198, 18, 0, 0)));
+	assert!(SocketAddrExt::is_benchmarking(&Ipv4Addr::new(198, 19, 255, 255)));
+	assert!(!SocketAddrExt::is_benchmarking(&Ipv4Addr::new(198, 20, 0, 0)));
 }
 
 #[test]

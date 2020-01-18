@@ -33,19 +33,19 @@ pub struct KeyAccessJob {
 
 impl KeyAccessJob {
 	pub fn new_on_slave(id: SessionId, acl_storage: Arc<dyn AclStorage>) -> Self {
-		KeyAccessJob {
-			id: id,
+		Self {
+			id,
 			has_key_share: true,
-			acl_storage: acl_storage,
+			acl_storage,
 			requester: None,
 		}
 	}
 
 	pub fn new_on_master(id: SessionId, acl_storage: Arc<dyn AclStorage>, requester: Requester) -> Self {
-		KeyAccessJob {
-			id: id,
+		Self {
+			id,
 			has_key_share: true,
-			acl_storage: acl_storage,
+			acl_storage,
 			requester: Some(requester),
 		}
 	}

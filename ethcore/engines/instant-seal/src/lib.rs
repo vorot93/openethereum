@@ -14,6 +14,54 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
+
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use common_types::{
@@ -26,7 +74,7 @@ use common_types::{
 	errors::EthcoreError as Error,
 };
 use engine::Engine;
-use ethjson;
+
 use machine::{
 	ExecutedBlock,
 	Machine
@@ -42,7 +90,7 @@ pub struct InstantSealParams {
 
 impl From<ethjson::spec::InstantSealParams> for InstantSealParams {
 	fn from(p: ethjson::spec::InstantSealParams) -> Self {
-		InstantSealParams {
+		Self {
 			millisecond_timestamp: p.millisecond_timestamp,
 		}
 	}
@@ -57,9 +105,9 @@ pub struct InstantSeal {
 }
 
 impl InstantSeal {
-	/// Returns new instance of InstantSeal over the given state machine.
-	pub fn new(params: InstantSealParams, machine: Machine) -> Self {
-		InstantSeal {
+	/// Returns new instance of `InstantSeal` over the given state machine.
+	pub const fn new(params: InstantSealParams, machine: Machine) -> Self {
+		Self {
 			params,
 			machine,
 			last_sealed_block: AtomicU64::new(0),
@@ -135,7 +183,7 @@ mod tests {
 		test_helpers::get_temp_state_db,
 		block::*,
 	};
-	use spec;
+	
 
 	#[test]
 	fn instant_can_seal() {
@@ -144,7 +192,7 @@ mod tests {
 		let db = spec.ensure_db_good(get_temp_state_db(), &Default::default()).unwrap();
 		let genesis_header = spec.genesis_header();
 		let last_hashes = Arc::new(vec![genesis_header.hash()]);
-		let b = OpenBlock::new(engine, Default::default(), false, db, &genesis_header, last_hashes, Address::zero(), (3141562.into(), 31415620.into()), vec![], false).unwrap();
+		let b = OpenBlock::new(engine, Default::default(), false, db, &genesis_header, last_hashes, Address::zero(), (3_141_562.into(), 31_415_620.into()), Vec::new(), false).unwrap();
 		let b = b.close_and_lock().unwrap();
 		if let Seal::Regular(seal) = engine.generate_seal(&b, &genesis_header) {
 			assert!(b.try_seal(engine, seal).is_ok());

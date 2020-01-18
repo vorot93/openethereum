@@ -83,38 +83,38 @@ pub fn test_finalize(res: Result<GasLeft>) -> Result<U256> {
 impl FakeExt {
 	/// New fake externalities
 	pub fn new() -> Self {
-		FakeExt::default()
+		Self::default()
 	}
 
 	/// New fake externalities with byzantium schedule rules
 	pub fn new_byzantium() -> Self {
-		let mut ext = FakeExt::default();
+		let mut ext = Self::default();
 		ext.schedule = Schedule::new_byzantium();
 		ext
 	}
 
 	/// New fake externalities with constantinople schedule rules
 	pub fn new_constantinople() -> Self {
-		let mut ext = FakeExt::default();
+		let mut ext = Self::default();
 		ext.schedule = Schedule::new_constantinople();
 		ext
 	}
 
 	/// New fake externalities with Istanbul schedule rules
 	pub fn new_istanbul() -> Self {
-		let mut ext = FakeExt::default();
+		let mut ext = Self::default();
 		ext.schedule = Schedule::new_istanbul();
 		ext
 	}
 
 	/// Alter fake externalities to allow wasm
 	pub fn with_wasm(mut self) -> Self {
-		self.schedule.wasm = Some(Default::default());
+		self.schedule.wasm = Some(super::WasmCosts::default());
 		self
 	}
 
 	/// Set chain ID
-	pub fn with_chain_id(mut self, chain_id: u64) -> Self {
+	pub const fn with_chain_id(mut self, chain_id: u64) -> Self {
 		self.chain_id = chain_id;
 		self
 	}
@@ -126,7 +126,7 @@ impl Ext for FakeExt {
 	}
 
 	fn storage_at(&self, key: &H256) -> Result<H256> {
-		Ok(self.store.get(key).unwrap_or(&H256::zero()).clone())
+		Ok(self.store.get(key).copied().unwrap_or_else(H256::zero))
 	}
 
 	fn set_storage(&mut self, key: H256, value: H256) -> Result<()> {
@@ -151,7 +151,7 @@ impl Ext for FakeExt {
 	}
 
 	fn blockhash(&mut self, number: &U256) -> H256 {
-		self.blockhashes.get(number).unwrap_or(&H256::zero()).clone()
+		self.blockhashes.get(number).copied().unwrap_or_else(H256::zero)
 	}
 
 	fn create(
@@ -192,11 +192,11 @@ impl Ext for FakeExt {
 			call_type: FakeCallType::Call,
 			create_scheme: None,
 			gas: *gas,
-			sender_address: Some(sender_address.clone()),
-			receive_address: Some(receive_address.clone()),
-			value: value,
+			sender_address: Some(*sender_address),
+			receive_address: Some(*receive_address),
+			value,
 			data: data.to_vec(),
-			code_address: Some(code_address.clone())
+			code_address: Some(*code_address)
 		});
 		// TODO: support traps in testing.
 		Ok(MessageCallResult::Success(*gas, ReturnData::empty()))

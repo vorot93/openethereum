@@ -24,7 +24,7 @@ use types::{Error, ServerKeyId};
 
 use_contract!(acl_storage, "res/acl_storage.json");
 
-const ACL_CHECKER_CONTRACT_REGISTRY_NAME: &'static str = "secretstore_acl_checker";
+const ACL_CHECKER_CONTRACT_REGISTRY_NAME: &str = "secretstore_acl_checker";
 
 /// ACL storage of Secret Store
 pub trait AclStorage: Send + Sync {
@@ -56,7 +56,7 @@ pub struct DummyAclStorage {
 
 impl OnChainAclStorage {
 	pub fn new(trusted_client: Arc<dyn SecretStoreChain>, address_source: ContractAddress) -> Result<Arc<Self>, Error> {
-		let acl_storage = Arc::new(OnChainAclStorage {
+		let acl_storage = Arc::new(Self {
 			contract: Mutex::new(CachedContract::new(trusted_client.clone(), address_source)),
 		});
 		trusted_client.add_listener(acl_storage.clone());
@@ -78,7 +78,7 @@ impl NewBlocksNotify for OnChainAclStorage {
 
 impl CachedContract {
 	pub fn new(client: Arc<dyn SecretStoreChain>, address_source: ContractAddress) -> Self {
-		let mut contract = CachedContract {
+		let mut contract = Self {
 			client,
 			address_source,
 			contract_address: None,
@@ -105,9 +105,9 @@ impl CachedContract {
 			// call contract to check accesss
 			match self.contract_address {
 				Some(contract_address) => {
-					let (encoded, decoder) = acl_storage::functions::check_permissions::call(requester, document.clone());
+					let (encoded, decoder) = acl_storage::functions::check_permissions::call(requester, *document);
 					let d = self.client.call_contract(BlockId::Latest, contract_address, encoded)
-						.map_err(|e| Error::Internal(format!("ACL checker call error: {}", e.to_string())))?;
+						.map_err(|e| Error::Internal(format!("ACL checker call error: {}", e)))?;
 					decoder.decode(&d)
 						.map_err(|e| Error::Internal(format!("ACL checker call error: {}", e.to_string())))
 				},
@@ -134,7 +134,6 @@ impl AclStorage for DummyAclStorage {
 	fn check(&self, requester: Address, document: &ServerKeyId) -> Result<bool, Error> {
 		Ok(self.prohibited.read()
 			.get(&requester)
-			.map(|docs| !docs.contains(document))
-			.unwrap_or(true))
+			.map_or(true, |docs| !docs.contains(document)))
 	}
 }

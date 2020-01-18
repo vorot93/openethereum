@@ -14,6 +14,54 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
+
 pub mod error;
 mod route;
 
@@ -49,15 +97,15 @@ impl IpfsHandler {
 	}
 
 	pub fn new(cors: DomainsValidation<AccessControlAllowOrigin>, hosts: DomainsValidation<Host>, client: Arc<dyn BlockChainClient>) -> Self {
-		IpfsHandler {
+		Self {
 			cors_domains: cors.into(),
 			allowed_hosts: hosts.into(),
 			client,
 		}
 	}
 	pub fn on_request(&self, req: hyper::Request<Body>) -> (Option<HeaderValue>, Out) {
-		match *req.method() {
-			Method::GET | Method::POST => {},
+		match req.method() {
+			&Method::GET | &Method::POST => {},
 			_ => return (None, Out::Bad("Invalid Request")),
 		}
 
@@ -72,7 +120,7 @@ impl IpfsHandler {
 
 		let path = req.uri().path();
 		let query = req.uri().query();
-		return (cors_header.into(), self.route(path, query));
+		(cors_header.into(), self.route(path, query))
 	}
 }
 
@@ -117,9 +165,10 @@ impl hyper::service::Service for IpfsHandler {
 
 /// Add current interface (default: "127.0.0.1:5001") to list of allowed hosts
 fn include_current_interface(mut hosts: Vec<Host>, interface: String, port: u16) -> Vec<Host> {
-	hosts.push(match port {
-		80 => interface,
-		_ => format!("{}:{}", interface, port),
+	hosts.push(if port == 80 {
+		interface
+	} else {
+		format!("{}:{}", interface, port)
 	}.into());
 
 	hosts

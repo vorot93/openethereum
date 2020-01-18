@@ -58,13 +58,13 @@ pub struct ExecutedBlock {
 
 impl ExecutedBlock {
 	/// Create a new block from the given `state`.
-	pub fn new(state: State<StateDB>, last_hashes: Arc<LastHashes>, tracing: bool) -> ExecutedBlock {
-		ExecutedBlock {
-			header: Default::default(),
-			transactions: Default::default(),
-			uncles: Default::default(),
-			receipts: Default::default(),
-			transactions_set: Default::default(),
+	pub fn new(state: State<StateDB>, last_hashes: Arc<LastHashes>, tracing: bool) -> Self {
+		Self {
+			header: Header::default(),
+			transactions: Vec::new(),
+			uncles: Vec::new(),
+			receipts: Vec::new(),
+			transactions_set: HashSet::new(),
 			state,
 			traces: if tracing {
 				Tracing::enabled()
@@ -80,12 +80,12 @@ impl ExecutedBlock {
 		// TODO: memoise.
 		EnvInfo {
 			number: self.header.number(),
-			author: self.header.author().clone(),
+			author: *self.header.author(),
 			timestamp: self.header.timestamp(),
-			difficulty: self.header.difficulty().clone(),
+			difficulty: *self.header.difficulty(),
 			last_hashes: self.last_hashes.clone(),
 			gas_used: self.receipts.last().map_or(U256::zero(), |r| r.gas_used),
-			gas_limit: self.header.gas_limit().clone(),
+			gas_limit: *self.header.gas_limit(),
 		}
 	}
 

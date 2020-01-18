@@ -64,7 +64,7 @@ pub struct Config {
 
 impl Default for Config {
 	fn default() -> Self {
-		Config {
+		Self {
 			max_queue_size: 30000,
 			max_mem_use: 50 * 1024 * 1024,
 			verifier_settings: VerifierSettings::default(),
@@ -84,7 +84,7 @@ pub struct VerifierSettings {
 
 impl Default for VerifierSettings {
 	fn default() -> Self {
-		VerifierSettings {
+		Self {
 			scale_verifiers: false,
 			num_verifiers: num_cpus::get(),
 		}
@@ -118,9 +118,9 @@ pub enum Status {
 impl Into<BlockStatus> for Status {
 	fn into(self) -> BlockStatus {
 		match self {
-			Status::Queued => BlockStatus::Queued,
-			Status::Bad => BlockStatus::Bad,
-			Status::Unknown => BlockStatus::Unknown,
+			Self::Queued => BlockStatus::Queued,
+			Self::Bad => BlockStatus::Bad,
+			Self::Unknown => BlockStatus::Unknown,
 		}
 	}
 }
@@ -164,7 +164,7 @@ impl<C> QueueSignal<C> {
 			return;
 		}
 
-		if self.signalled.compare_and_swap(false, true, AtomicOrdering::Relaxed) == false {
+		if !self.signalled.compare_and_swap(false, true, AtomicOrdering::Relaxed) {
 			let channel = self.message_channel.lock().clone();
 			if let Err(e) = channel.send_sync(ClientIoMessage::BlockVerified) {
 				debug!("Error sending BlockVerified message: {:?}", e);
@@ -178,7 +178,7 @@ impl<C> QueueSignal<C> {
 			return;
 		}
 
-		if self.signalled.compare_and_swap(false, true, AtomicOrdering::Relaxed) == false {
+		if !self.signalled.compare_and_swap(false, true, AtomicOrdering::Relaxed) {
 			let channel = self.message_channel.lock().clone();
 			if let Err(e) = channel.send(ClientIoMessage::BlockVerified) {
 				debug!("Error sending BlockVerified message: {:?}", e);
@@ -256,7 +256,7 @@ impl<K: Kind, C> VerificationQueue<K, C> {
 			let handle = thread::Builder::new()
 				.name(format!("Verifier #{}", i))
 				.spawn(move || {
-					VerificationQueue::verify(
+					Self::verify(
 						verification,
 						engine,
 						wait,
@@ -270,7 +270,7 @@ impl<K: Kind, C> VerificationQueue<K, C> {
 			verifier_handles.push(handle);
 		}
 
-		VerificationQueue {
+		Self {
 			engine,
 			ready_signal,
 			more_to_verify,
@@ -356,8 +356,8 @@ impl<K: Kind, C> VerificationQueue<K, C> {
 			};
 
 			let hash = item.hash();
-			let is_ready = match K::verify(item, &*engine, verification.check_seal) {
-				Ok(verified) => {
+			let is_ready = {
+				if let Ok(verified) = K::verify(item, &*engine, verification.check_seal) {
 					let mut verifying = verification.verifying.lock();
 					let mut idx = None;
 					for (i, e) in verifying.iter_mut().enumerate() {
@@ -374,13 +374,12 @@ impl<K: Kind, C> VerificationQueue<K, C> {
 						// we're next!
 						let mut verified = verification.verified.lock();
 						let mut bad = verification.bad.lock();
-						VerificationQueue::<_, C>::drain_verifying(&mut verifying, &mut verified, &mut bad, &verification.sizes);
+						Self::drain_verifying(&mut verifying, &mut verified, &mut bad, &verification.sizes);
 						true
 					} else {
 						false
 					}
-				},
-				Err(_) => {
+				} else {
 					let mut verifying = verification.verifying.lock();
 					let mut verified = verification.verified.lock();
 					let mut bad = verification.bad.lock();
@@ -389,7 +388,7 @@ impl<K: Kind, C> VerificationQueue<K, C> {
 					verifying.retain(|e| e.hash != hash);
 
 					if verifying.front().map_or(false, |x| x.output.is_some()) {
-						VerificationQueue::<_, C>::drain_verifying(&mut verifying, &mut verified, &mut bad, &verification.sizes);
+						Self::drain_verifying(&mut verifying, &mut verified, &mut bad, &verification.sizes);
 						true
 					} else {
 						false
@@ -496,7 +495,7 @@ impl<K: Kind, C> VerificationQueue<K, C> {
 				self.verification.sizes.unverified.fetch_add(item.malloc_size_of(), AtomicOrdering::SeqCst);
 				{
 					let mut td = self.total_difficulty.write();
-					*td = *td + item.difficulty();
+					*td += item.difficulty();
 				}
 				self.verification.unverified.lock().push_back(item);
 				self.more_to_verify.notify_all();
@@ -540,7 +539,7 @@ impl<K: Kind, C> VerificationQueue<K, C> {
 			bad.insert(hash.clone());
 			if let Some(difficulty) = processing.remove(hash) {
 				let mut td = self.total_difficulty.write();
-				*td = *td - difficulty;
+				*td -= difficulty;
 			}
 		}
 
@@ -552,7 +551,7 @@ impl<K: Kind, C> VerificationQueue<K, C> {
 				bad.insert(output.hash());
 				if let Some(difficulty) = processing.remove(&output.hash()) {
 					let mut td = self.total_difficulty.write();
-					*td = *td - difficulty;
+					*td -= difficulty;
 				}
 			} else {
 				new_verified.push_back(output);
@@ -573,7 +572,7 @@ impl<K: Kind, C> VerificationQueue<K, C> {
 		for hash in hashes {
 			if let Some(difficulty) = processing.remove(hash) {
 				let mut td = self.total_difficulty.write();
-				*td = *td - difficulty;
+				*td -= difficulty;
 			}
 		}
 		processing.is_empty()
@@ -760,7 +759,7 @@ mod tests {
 		view,
 		views::BlockView,
 	};
-	use spec;
+	
 
 	// create a test block queue.
 	// auto_scaling enables verifier adjustment.
@@ -809,13 +808,8 @@ mod tests {
 
 		let duplicate_import = queue.import(new_unverified(get_good_dummy_block()));
 		match duplicate_import {
-			Err(e) => {
-				match e {
-					(EthcoreError::Import(ImportError::AlreadyQueued), _) => {},
-					_ => { panic!("must return AlreadyQueued error"); }
-				}
-			}
-			Ok(_) => { panic!("must produce error"); }
+			Err((EthcoreError::Import(ImportError::AlreadyQueued), _)) => {}
+			other => { panic!("expected AlreadyQueued error, got {:?}", other); }
 		}
 	}
 
@@ -823,14 +817,14 @@ mod tests {
 	fn returns_total_difficulty() {
 		let queue = get_test_queue(false);
 		let block = get_good_dummy_block();
-		let hash = view!(BlockView, &block).header().hash().clone();
+		let hash = view!(BlockView, &block).header().hash();
 		if let Err(e) = queue.import(new_unverified(block)) {
 			panic!("error importing block that is valid by definition({:?})", e);
 		}
 		queue.flush();
-		assert_eq!(queue.total_difficulty(), 131072.into());
+		assert_eq!(queue.total_difficulty(), 131_072.into());
 		queue.drain(10);
-		assert_eq!(queue.total_difficulty(), 131072.into());
+		assert_eq!(queue.total_difficulty(), 131_072.into());
 		queue.mark_as_good(&[ hash ]);
 		assert_eq!(queue.total_difficulty(), 0.into());
 	}
@@ -839,7 +833,7 @@ mod tests {
 	fn returns_ok_for_drained_duplicates() {
 		let queue = get_test_queue(false);
 		let block = get_good_dummy_block();
-		let hash = view!(BlockView, &block).header().hash().clone();
+		let hash = view!(BlockView, &block).header().hash();
 		if let Err(e) = queue.import(new_unverified(block)) {
 			panic!("error importing block that is valid by definition({:?})", e);
 		}

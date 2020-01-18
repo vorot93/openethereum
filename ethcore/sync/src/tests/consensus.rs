@@ -36,7 +36,7 @@ use common_types::{
 
 fn new_tx(secret: &Secret, nonce: U256, chain_id: u64) -> PendingTransaction {
 	let signed = Transaction {
-		nonce: nonce.into(),
+		nonce,
 		gas_price: 0.into(),
 		gas: 21000.into(),
 		action: Action::Call(Address::zero()),

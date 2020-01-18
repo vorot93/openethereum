@@ -24,7 +24,7 @@ use rpc_apis;
 use parity_rpc;
 use path::restrict_permissions_owner;
 
-pub const CODES_FILENAME: &'static str = "authcodes";
+pub const CODES_FILENAME: &str = "authcodes";
 
 pub struct NewToken {
 	pub token: String,
@@ -54,10 +54,7 @@ pub fn execute(ws_conf: rpc::WsConfiguration, logger_config: LogConfig) -> Resul
 
 pub fn generate_token_and_url(ws_conf: &rpc::WsConfiguration, logger_config: &LogConfig) -> Result<NewToken, String> {
 	let code = generate_new_token(&ws_conf.signer_path, logger_config.color).map_err(|err| format!("Error generating token: {:?}", err))?;
-	let colored = |s: String| match logger_config.color {
-		true => format!("{}", White.bold().paint(s)),
-		false => s,
-	};
+	let colored = |s: String| if logger_config.color { White.bold().paint(s).to_string() } else { s };
 
 	Ok(NewToken {
 		token: code.clone(),
@@ -77,9 +74,10 @@ fn generate_new_token(path: &Path, logger_config_color: bool) -> io::Result<Stri
 	codes.clear_garbage();
 	let code = codes.generate_new()?;
 	codes.to_file(&path)?;
-	trace!("New key code created: {}", match logger_config_color {
-		true => format!("{}", White.bold().paint(&code[..])),
-		false => format!("{}", &code[..])
+	trace!("New key code created: {}", if logger_config_color {
+		White.bold().paint(&code[..]).to_string()
+	} else {
+		code[..].to_string()
 	});
 	Ok(code)
 }

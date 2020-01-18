@@ -15,6 +15,53 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 #![recursion_limit="128"]
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
 
 extern crate parity_crypto as crypto;
 extern crate ethcore_io as io;
@@ -32,9 +79,6 @@ extern crate serde_derive;
 #[cfg(test)] #[macro_use]
 extern crate assert_matches;
 extern crate derive_more;
-
-#[macro_use]
-extern crate lazy_static;
 
 pub mod client_version;
 
@@ -134,9 +178,9 @@ impl Decodable for PeerCapabilityInfo {
 		if p.len() != 3 {
 			return Err(DecoderError::Custom("Invalid subprotocol string length. Should be 3"));
 		}
-		let mut p2: ProtocolId = [0u8; 3];
-		p2.clone_from_slice(&p);
-		Ok(PeerCapabilityInfo {
+		let mut p2: ProtocolId = [0_u8; 3];
+		p2.copy_from_slice(&p);
+		Ok(Self {
 			protocol: p2,
 			version: rlp.val_at(1)?
 		})
@@ -158,13 +202,13 @@ pub struct SessionCapabilityInfo {
 }
 
 impl PartialOrd for SessionCapabilityInfo {
-	fn partial_cmp(&self, other: &SessionCapabilityInfo) -> Option<Ordering> {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
 		Some(self.cmp(other))
 	}
 }
 
 impl Ord for SessionCapabilityInfo {
-	fn cmp(&self, b: &SessionCapabilityInfo) -> Ordering {
+	fn cmp(&self, b: &Self) -> Ordering {
 		// By protocol id first
 		if self.protocol != b.protocol {
 			return self.protocol.cmp(&b.protocol);
@@ -226,14 +270,14 @@ pub struct NetworkConfiguration {
 
 impl Default for NetworkConfiguration {
 	fn default() -> Self {
-		NetworkConfiguration::new()
+		Self::new()
 	}
 }
 
 impl NetworkConfiguration {
 	/// Create a new instance of default settings.
 	pub fn new() -> Self {
-		NetworkConfiguration {
+		Self {
 			config_path: None,
 			net_config_path: None,
 			listen_address: None,
@@ -256,15 +300,15 @@ impl NetworkConfiguration {
 	}
 
 	/// Create new default configuration with specified listen port.
-	pub fn new_with_port(port: u16) -> NetworkConfiguration {
-		let mut config = NetworkConfiguration::new();
+	pub fn new_with_port(port: u16) -> Self {
+		let mut config = Self::new();
 		config.listen_address = Some(SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), port)));
 		config
 	}
 
 	/// Create new default configuration for localhost-only connection with random port (usefull for testing)
-	pub fn new_local() -> NetworkConfiguration {
-		let mut config = NetworkConfiguration::new();
+	pub fn new_local() -> Self {
+		let mut config = Self::new();
 		config.listen_address = Some(SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 0)));
 		config.nat_enabled = false;
 		config
@@ -291,7 +335,7 @@ pub trait NetworkContext {
 	/// Check if the session is still active.
 	fn is_expired(&self) -> bool;
 
-	/// Register a new IO timer. 'IoHandler::timeout' will be called with the token.
+	/// Register a new IO timer. `IoHandler::timeout` will be called with the token.
 	fn register_timer(&self, token: TimerToken, delay: Duration) -> Result<(), Error>;
 
 	/// Returns peer identification string
@@ -374,11 +418,11 @@ pub trait NetworkProtocolHandler: Sync + Send {
 	/// Initialize the handler
 	fn initialize(&self, _io: &dyn NetworkContext) {}
 	/// Called when new network packet received.
-	fn read(&self, io: &dyn NetworkContext, peer: &PeerId, packet_id: u8, data: &[u8]);
+	fn read(&self, io: &dyn NetworkContext, peer: PeerId, packet_id: u8, data: &[u8]);
 	/// Called when new peer is connected. Only called when peer supports the same protocol.
-	fn connected(&self, io: &dyn NetworkContext, peer: &PeerId);
+	fn connected(&self, io: &dyn NetworkContext, peer: PeerId);
 	/// Called when a previously connected peer disconnects.
-	fn disconnected(&self, io: &dyn NetworkContext, peer: &PeerId);
+	fn disconnected(&self, io: &dyn NetworkContext, peer: PeerId);
 	/// Timer function called after a timeout created with `NetworkContext::timeout`.
 	fn timeout(&self, _io: &dyn NetworkContext, _timer: TimerToken) {}
 }
@@ -396,8 +440,8 @@ impl NonReservedPeerMode {
 	/// Attempt to parse the peer mode from a string.
 	pub fn parse(s: &str) -> Option<Self> {
 		match s {
-			"accept" => Some(NonReservedPeerMode::Accept),
-			"deny" => Some(NonReservedPeerMode::Deny),
+			"accept" => Some(Self::Accept),
+			"deny" => Some(Self::Deny),
 			_ => None,
 		}
 	}
@@ -412,18 +456,22 @@ pub struct IpFilter {
 
 impl Default for IpFilter {
 	fn default() -> Self {
-		IpFilter {
-			predefined: AllowIP::All,
-			custom_allow: vec![],
-			custom_block: vec![],
-		}
+		Self::new()
 	}
 }
 
 impl IpFilter {
+	pub const fn new() -> Self {
+		Self {
+			predefined: AllowIP::All,
+			custom_allow: Vec::new(),
+			custom_block: Vec::new(),
+		}
+	}
+
 	/// Attempt to parse the peer mode from a string.
-	pub fn parse(s: &str) -> Result<IpFilter, IpNetworkError> {
-		let mut filter = IpFilter::default();
+	pub fn parse(s: &str) -> Result<Self, IpNetworkError> {
+		let mut filter = Self::default();
 		for f in s.split_whitespace() {
 			match f {
 				"all" => filter.predefined = AllowIP::All,
@@ -431,7 +479,7 @@ impl IpFilter {
 				"public" => filter.predefined = AllowIP::Public,
 				"none" => filter.predefined = AllowIP::None,
 				custom => {
-					if custom.starts_with("-") {
+					if custom.starts_with('-') {
 						filter.custom_block.push(IpNetwork::from_str(&custom.to_owned().split_off(1))?)
 					} else {
 						filter.custom_allow.push(IpNetwork::from_str(custom)?)

@@ -31,7 +31,7 @@ use v1::helpers::GenericPollManager;
 use v1::metadata::Metadata;
 use v1::traits::PubSub;
 
-/// Parity PubSub implementation.
+/// Parity `PubSub` implementation.
 pub struct PubSubClient<S: core::Middleware<Metadata>> {
 	poll_manager: Arc<RwLock<GenericPollManager<S>>>,
 	executor: Executor,
@@ -60,7 +60,7 @@ impl<S: core::Middleware<Metadata>> PubSubClient<S> {
 			})
 		);
 
-		PubSubClient {
+		Self {
 			poll_manager,
 			executor,
 		}
@@ -81,21 +81,18 @@ impl<S: core::Middleware<Metadata>> PubSub for PubSubClient<S> {
 	type Metadata = Metadata;
 
 	fn parity_subscribe(&self, mut meta: Metadata, subscriber: Subscriber<core::Value>, method: String, params: Option<core::Params>) {
-		let params = params.unwrap_or_else(|| core::Params::Array(vec![]));
+		let params = params.unwrap_or_else(|| core::Params::Array(Vec::new()));
 		// Make sure to get rid of PubSub session otherwise it will never be dropped.
 		meta.session = None;
 
 		let mut poll_manager = self.poll_manager.write();
 		let (id, receiver) = poll_manager.subscribe(meta, method, params);
-		match subscriber.assign_id(id.clone()) {
-			Ok(sink) => {
-				self.executor.spawn(receiver.forward(sink.sink_map_err(|e| {
-					warn!("Cannot send notification: {:?}", e);
-				})).map(|_| ()));
-			},
-			Err(_) => {
-				poll_manager.unsubscribe(&id);
-			},
+		if let Ok(sink) = subscriber.assign_id(id.clone()) {
+			self.executor.spawn(receiver.forward(sink.sink_map_err(|e| {
+				warn!("Cannot send notification: {:?}", e);
+			})).map(|_| ()));
+		} else {
+			poll_manager.unsubscribe(&id);
 		}
 	}
 

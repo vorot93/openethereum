@@ -39,7 +39,7 @@ pub enum BasicError {
 
 impl From<DecoderError> for BasicError {
 	fn from(err: DecoderError) -> Self {
-		BasicError::Decoder(err)
+		Self::Decoder(err)
 	}
 }
 
@@ -47,16 +47,16 @@ impl fmt::Display for BasicError {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		write!(f, "Header response verification error: ")?;
 
-		match *self {
-			BasicError::WrongSkip(ref exp, ref got)
+		match self {
+			Self::WrongSkip(exp, got)
 				=> write!(f, "wrong skip (expected {}, got {:?})", exp, got),
-			BasicError::WrongStartNumber(ref exp, ref got)
+			Self::WrongStartNumber(exp, got)
 				=> write!(f, "wrong start number (expected {}, got {})", exp, got),
-			BasicError::WrongStartHash(ref exp, ref got)
+			Self::WrongStartHash(exp, got)
 				=> write!(f, "wrong start hash (expected {}, got {})", exp, got),
-			BasicError::TooManyHeaders(ref max, ref got)
+			Self::TooManyHeaders(max, got)
 				=> write!(f, "too many headers (max {}, got {})", max, got),
-			BasicError::Decoder(ref err)
+			Self::Decoder(err)
 				=> write!(f, "{}", err),
 		}
 	}
@@ -72,15 +72,15 @@ pub trait Constraint {
 
 /// Do basic verification of provided headers against a request.
 pub fn verify(headers: &[encoded::Header], request: &HeadersRequest) -> Result<Vec<Header>, BasicError> {
-	let headers: Result<Vec<_>, _> = headers.iter().map(|h| h.decode() ).collect();
+	let headers: Result<Vec<_>, _> = headers.iter().map(encoded::Header::decode).collect();
 	match headers {
 		Ok(headers) => {
 			let reverse = request.reverse;
 
 			Max(request.max as usize).verify(&headers, reverse)?;
-			match request.start {
-				HashOrNumber::Number(ref num) => StartsAtNumber(*num).verify(&headers, reverse)?,
-				HashOrNumber::Hash(ref hash) => StartsAtHash(*hash).verify(&headers, reverse)?,
+			match &request.start {
+				HashOrNumber::Number(num) => StartsAtNumber(*num).verify(&headers, reverse)?,
+				HashOrNumber::Hash(hash) => StartsAtHash(*hash).verify(&headers, reverse)?,
 			}
 
 			SkipsBetween(request.skip).verify(&headers, reverse)?;
@@ -144,9 +144,10 @@ impl Constraint for Max {
 	type Error = BasicError;
 
 	fn verify(&self, headers: &[Header], _reverse: bool) -> Result<(), BasicError> {
-		match headers.len() > self.0 {
-			true => Err(BasicError::TooManyHeaders(self.0, headers.len())),
-			false => Ok(())
+		if headers.len() > self.0 {
+			Err(BasicError::TooManyHeaders(self.0, headers.len()))
+		} else {
+			Ok(())
 		}
 	}
 }

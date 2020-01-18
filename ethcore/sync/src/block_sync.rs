@@ -113,8 +113,8 @@ pub enum BlockDownloaderImportError {
 }
 
 impl From<rlp::DecoderError> for BlockDownloaderImportError {
-	fn from(_: rlp::DecoderError) -> BlockDownloaderImportError {
-		BlockDownloaderImportError::Invalid
+	fn from(_: rlp::DecoderError) -> Self {
+		Self::Invalid
 	}
 }
 
@@ -153,20 +153,20 @@ pub struct BlockDownloader {
 
 impl BlockDownloader {
 	/// Create a new instance of syncing strategy.
-	/// For BlockSet::NewBlocks this won't reorganize to before the last kept state.
+	/// For `BlockSet::NewBlocks` this won't reorganize to before the last kept state.
 	pub fn new(block_set: BlockSet, start_hash: &H256, start_number: BlockNumber) -> Self {
 		let sync_receipts = match block_set {
 			BlockSet::NewBlocks => false,
 			BlockSet::OldBlocks => true
 		};
-		BlockDownloader {
+		Self {
 			block_set,
 			state: State::Idle,
 			highest_block: None,
 			last_imported_block: start_number,
-			last_imported_hash: start_hash.clone(),
+			last_imported_hash: *start_hash,
 			last_round_start: start_number,
-			last_round_start_hash: start_hash.clone(),
+			last_round_start_hash: *start_hash,
 			blocks: BlockCollection::new(sync_receipts),
 			imported_this_round: None,
 			round_parents: VecDeque::new(),
@@ -186,12 +186,12 @@ impl BlockDownloader {
 
 	/// Mark a block as known in the chain
 	pub fn mark_as_known(&mut self, hash: &H256, number: BlockNumber) {
-		if number >= self.last_imported_block + 1 {
+		if number > self.last_imported_block {
 			self.last_imported_block = number;
-			self.last_imported_hash = hash.clone();
+			self.last_imported_hash = *hash;
 			self.imported_this_round = Some(self.imported_this_round.unwrap_or(0) + 1);
 			self.last_round_start = number;
-			self.last_round_start_hash = hash.clone();
+			self.last_round_start_hash = *hash;
 		}
 	}
 
@@ -207,7 +207,7 @@ impl BlockDownloader {
 
 	/// Set starting sync block
 	pub fn set_target(&mut self, hash: &H256) {
-		self.target_hash = Some(hash.clone());
+		self.target_hash = Some(*hash);
 	}
 
 	/// Unmark header as being downloaded.
@@ -232,7 +232,7 @@ impl BlockDownloader {
 	}
 
 	/// Returns best imported block number.
-	pub fn last_imported_block_number(&self) -> BlockNumber {
+	pub const fn last_imported_block_number(&self) -> BlockNumber {
 		self.last_imported_block
 	}
 
@@ -264,7 +264,7 @@ impl BlockDownloader {
 		let mut last_header = None;
 		for i in 0..item_count {
 			let info = SyncHeader::from_rlp(r.at(i)?.as_raw().to_vec())?;
-			let number = BlockNumber::from(info.header.number());
+			let number = info.header.number();
 			let hash = info.header.hash();
 
 			let valid_response = match last_header {
@@ -291,11 +291,12 @@ impl BlockDownloader {
 				continue;
 			}
 
-			match io.chain().block_status(BlockId::Hash(hash.clone())) {
+			match io.chain().block_status(BlockId::Hash(hash)) {
 				BlockStatus::InChain | BlockStatus::Queued => {
-					match self.state {
-						State::Blocks => trace_sync!(self, "Header already in chain {} ({})", number, hash),
-						_ => trace_sync!(self, "Header already in chain {} ({}), state = {:?}", number, hash, self.state),
+					if let State::Blocks = self.state {
+						trace_sync!(self, "Header already in chain {} ({})", number, hash);
+					} else {
+						trace_sync!(self, "Header already in chain {} ({}), state = {:?}", number, hash, self.state);
 					}
 					headers.push(info);
 					hashes.push(hash);
@@ -435,7 +436,7 @@ impl BlockDownloader {
 				// search parent in last round known parents first
 				if let Some(&(_, p)) = self.round_parents.iter().find(|&&(h, _)| h == start_hash) {
 					self.last_imported_block = start - 1;
-					self.last_imported_hash = p.clone();
+					self.last_imported_hash = p;
 					trace_sync!(self, "Searching common header from the last round {} ({})", self.last_imported_block, self.last_imported_hash);
 				} else {
 					let best = io.chain().chain_info().best_block_number;
@@ -446,16 +447,13 @@ impl BlockDownloader {
 					} else {
 						let n = start - cmp::min(self.retract_step, start);
 						self.retract_step *= 2;
-						match io.chain().block_hash(BlockId::Number(n)) {
-							Some(h) => {
-								self.last_imported_block = n;
-								self.last_imported_hash = h;
-								trace_sync!(self, "Searching common header in the blockchain {} ({})", start, self.last_imported_hash);
-							}
-							None => {
-								debug_sync!(self, "Could not revert to previous block, last: {} ({})", start, self.last_imported_hash);
-								self.reset();
-							}
+						if let Some(h) = io.chain().block_hash(BlockId::Number(n)) {
+							self.last_imported_block = n;
+							self.last_imported_hash = h;
+							trace_sync!(self, "Searching common header in the blockchain {} ({})", start, self.last_imported_hash);
+						} else {
+							debug_sync!(self, "Could not revert to previous block, last: {} ({})", start, self.last_imported_hash);
+							self.reset();
 						}
 					}
 				}
@@ -485,7 +483,7 @@ impl BlockDownloader {
 					// Request MAX_HEADERS_TO_REQUEST - 2 headers apart so that
 					// MAX_HEADERS_TO_REQUEST would include headers for neighbouring subchains
 					return Some(BlockRequest::Headers {
-						start: self.last_imported_hash.clone(),
+						start: self.last_imported_hash,
 						count: SUBCHAIN_SIZE,
 						skip: (MAX_HEADERS_TO_REQUEST - 2) as u64,
 					});
@@ -532,7 +530,7 @@ impl BlockDownloader {
 	}
 
 	/// Checks if there are blocks fully downloaded that can be imported into the blockchain and does the import.
-	/// Returns DownloadAction::Reset if it is imported all the the blocks it can and all downloading peers should be reset
+	/// Returns `DownloadAction::Reset` if it is imported all the the blocks it can and all downloading peers should be reset
 	pub fn collect_blocks(&mut self, io: &mut dyn SyncIo, allow_out_of_order: bool) -> DownloadAction {
 		let mut download_action = DownloadAction::None;
 		let mut imported = HashSet::new();
@@ -566,7 +564,7 @@ impl BlockDownloader {
 					} else {
 						"not canonical"
 					};
-					trace_sync!(self, "Block #{} is already in chain {:?} – {}", number, h, is_canonical);
+					trace_sync!(self, "Block #{} is already in chain {:?} - {}", number, h, is_canonical);
 					self.block_imported(&h, number, &parent);
 				},
 				Err(EthcoreError::Import(ImportError::AlreadyQueued)) => {
@@ -616,8 +614,8 @@ impl BlockDownloader {
 
 	fn block_imported(&mut self, hash: &H256, number: BlockNumber, parent: &H256) {
 		self.last_imported_block = number;
-		self.last_imported_hash = hash.clone();
-		self.round_parents.push_back((hash.clone(), parent.clone()));
+		self.last_imported_hash = *hash;
+		self.round_parents.push_back((*hash, *parent));
 		if self.round_parents.len() > MAX_ROUND_PARENTS {
 			self.round_parents.pop_front();
 		}
@@ -628,9 +626,8 @@ impl BlockDownloader {
 fn all_expected<A, B, F>(values: &[A], expected_values: &[B], is_expected: F) -> bool
 	where F: Fn(&A, &B) -> bool
 {
-	let mut expected_iter = expected_values.iter();
 	values.iter().all(|val1| {
-		while let Some(val2) = expected_iter.next() {
+		for val2 in expected_values {
 			if is_expected(val1, val2) {
 				return true;
 			}
@@ -699,10 +696,10 @@ mod tests {
 		let mut downloader = BlockDownloader::new(BlockSet::NewBlocks, &genesis_hash, 0);
 		downloader.state = State::ChainHead;
 
-		let mut chain = TestBlockChainClient::new();
+		let chain = TestBlockChainClient::new();
 		let snapshot_service = TestSnapshotService::new();
 		let queue = RwLock::new(VecDeque::new());
-		let mut io = TestIo::new(&mut chain, &snapshot_service, &queue, None, None);
+		let mut io = TestIo::new(&chain, &snapshot_service, &queue, None, None);
 
 		// Valid headers sequence.
 		let valid_headers = [
@@ -749,7 +746,7 @@ mod tests {
 		// Invalid because the packet size is too large.
 		let mut too_many_headers = Vec::with_capacity((SUBCHAIN_SIZE + 1) as usize);
 		too_many_headers.push(spec.genesis_header());
-		for i in 1..(SUBCHAIN_SIZE + 1) {
+		for i in 1..=SUBCHAIN_SIZE {
 			too_many_headers.push(dummy_header((MAX_HEADERS_TO_REQUEST as u64 - 1) * i, H256::random()));
 		}
 		let rlp_data = encode_list(&too_many_headers);
@@ -765,10 +762,10 @@ mod tests {
 	fn import_headers_in_blocks_state() {
 		env_logger::try_init().ok();
 
-		let mut chain = TestBlockChainClient::new();
+		let chain = TestBlockChainClient::new();
 		let snapshot_service = TestSnapshotService::new();
 		let queue = RwLock::new(VecDeque::new());
-		let mut io = TestIo::new(&mut chain, &snapshot_service, &queue, None, None);
+		let mut io = TestIo::new(&chain, &snapshot_service, &queue, None, None);
 
 		let mut headers = Vec::with_capacity(3);
 		let parent_hash = H256::random();
@@ -815,10 +812,10 @@ mod tests {
 	fn import_bodies() {
 		env_logger::try_init().ok();
 
-		let mut chain = TestBlockChainClient::new();
+		let chain = TestBlockChainClient::new();
 		let snapshot_service = TestSnapshotService::new();
 		let queue = RwLock::new(VecDeque::new());
-		let mut io = TestIo::new(&mut chain, &snapshot_service, &queue, None, None);
+		let mut io = TestIo::new(&chain, &snapshot_service, &queue, None, None);
 
 		// Import block headers.
 		let mut headers = Vec::with_capacity(4);
@@ -883,10 +880,10 @@ mod tests {
 	fn import_receipts() {
 		env_logger::try_init().ok();
 
-		let mut chain = TestBlockChainClient::new();
+		let chain = TestBlockChainClient::new();
 		let snapshot_service = TestSnapshotService::new();
 		let queue = RwLock::new(VecDeque::new());
-		let mut io = TestIo::new(&mut chain, &snapshot_service, &queue, None, None);
+		let mut io = TestIo::new(&chain, &snapshot_service, &queue, None, None);
 
 		// Import block headers.
 		let mut headers = Vec::with_capacity(4);
@@ -898,7 +895,7 @@ mod tests {
 			// The RLP-encoded integers are clearly not receipts, but the BlockDownloader treats
 			// all receipts as byte blobs, so it does not matter.
 			let receipts_rlp = if i < 2 {
-				encode_list(&[0u32])
+				encode_list(&[0_u32])
 			} else {
 				encode_list(&[i as u32])
 			};
@@ -948,10 +945,10 @@ mod tests {
 		let mut downloader = BlockDownloader::new(BlockSet::NewBlocks, &genesis_hash, 0);
 		downloader.state = State::ChainHead;
 
-		let mut chain = TestBlockChainClient::new();
+		let chain = TestBlockChainClient::new();
 		let snapshot_service = TestSnapshotService::new();
 		let queue = RwLock::new(VecDeque::new());
-		let mut io = TestIo::new(&mut chain, &snapshot_service, &queue, None, None);
+		let mut io = TestIo::new(&chain, &snapshot_service, &queue, None, None);
 
 		let heads = [
 			spec.genesis_header(),
@@ -988,10 +985,10 @@ mod tests {
 		let mut downloader = BlockDownloader::new(BlockSet::NewBlocks, &genesis_hash, 0);
 		downloader.state = State::ChainHead;
 
-		let mut chain = TestBlockChainClient::new();
+		let chain = TestBlockChainClient::new();
 		let snapshot_service = TestSnapshotService::new();
 		let queue = RwLock::new(VecDeque::new());
-		let mut io = TestIo::new(&mut chain, &snapshot_service, &queue, None, None);
+		let mut io = TestIo::new(&chain, &snapshot_service, &queue, None, None);
 
 		let heads = [
 			spec.genesis_header()

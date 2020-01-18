@@ -39,16 +39,17 @@ pub struct PrivateClient {
 
 impl PrivateClient {
 	/// Creates a new instance.
-	pub fn new(private: Option<Arc<PrivateTransactionManager>>) -> Self {
-		PrivateClient {
+	pub const fn new(private: Option<Arc<PrivateTransactionManager>>) -> Self {
+		Self {
 			private,
 		}
 	}
 
 	fn unwrap_manager(&self) -> Result<&PrivateTransactionManager, Error> {
-		match self.private {
-			Some(ref arc) => Ok(&**arc),
-			None => Err(errors::light_unimplemented(None)),
+		if let Some(arc) = &self.private {
+			Ok(&**arc)
+		} else {
+			Err(errors::light_unimplemented(None))
 		}
 	}
 }

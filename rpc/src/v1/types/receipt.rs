@@ -63,16 +63,16 @@ impl Receipt {
 	}
 
 	fn outcome_to_status_code(outcome: &TransactionOutcome) -> Option<U64> {
-		match *outcome {
+		match outcome {
 			TransactionOutcome::Unknown | TransactionOutcome::StateRoot(_) => None,
-			TransactionOutcome::StatusCode(ref code) => Some((*code as u64).into()),
+			TransactionOutcome::StatusCode(code) => Some((*code as u64).into()),
 		}
 	}
 }
 
 impl From<LocalizedReceipt> for Receipt {
 	fn from(r: LocalizedReceipt) -> Self {
-		Receipt {
+		Self {
 			to: r.to.map(Into::into),
 			from: Some(r.from),
 			transaction_hash: Some(r.transaction_hash),
@@ -92,7 +92,7 @@ impl From<LocalizedReceipt> for Receipt {
 
 impl From<RichReceipt> for Receipt {
 	fn from(r: RichReceipt) -> Self {
-		Receipt {
+		Self {
 			from: Some(r.from),
 			to: r.to.map(Into::into),
 			transaction_hash: Some(r.transaction_hash),
@@ -112,7 +112,7 @@ impl From<RichReceipt> for Receipt {
 
 impl From<EthReceipt> for Receipt {
 	fn from(r: EthReceipt) -> Self {
-		Receipt {
+		Self {
 			from: None,
 			to: None,
 			transaction_hash: None,
@@ -156,7 +156,7 @@ mod tests {
 					"a6697e974e6a320f454390be03f74955e8978f1a6971ea6730542e37b66179bc".parse().unwrap(),
 					"4861736852656700000000000000000000000000000000000000000000000000".parse().unwrap(),
 				],
-				data: vec![].into(),
+				data: Vec::new().into(),
 				block_hash: Some("ed76641c68a1c641aee09a94b3b471f4dc0316efe5ac19cf488e2674cf8d05b5".parse().unwrap()),
 				block_number: Some(0x4510c.into()),
 				transaction_hash: Some(H256::zero()),
@@ -168,7 +168,7 @@ mod tests {
 			}],
 			logs_bloom: Bloom::from_low_u64_be(15),
 			state_root: Some(H256::from_low_u64_be(10)),
-			status_code: Some(1u64.into()),
+			status_code: Some(1_u64.into()),
 		};
 
 		let serialized = serde_json::to_string(&receipt).unwrap();

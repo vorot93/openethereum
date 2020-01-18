@@ -55,11 +55,11 @@ use smallvec::SmallVec;
 /// relevant to any blocks we've got in memory.
 const HISTORY: u64 = 2048;
 
-/// The best block key. Maps to an RLP list: [best_era, last_era]
-const CURRENT_KEY: &[u8] = &*b"best_and_latest";
+/// The best block key. Maps to an RLP list: [`best_era`, `last_era`]
+const CURRENT_KEY: &[u8] = b"best_and_latest";
 
 /// Key storing the last canonical epoch transition.
-const LAST_CANONICAL_TRANSITION: &[u8] = &*b"canonical_transition";
+const LAST_CANONICAL_TRANSITION: &[u8] = b"canonical_transition";
 
 /// Information about a block.
 #[derive(Debug, Clone)]
@@ -80,8 +80,8 @@ struct BestAndLatest {
 }
 
 impl BestAndLatest {
-	fn new(best_num: u64, latest_num: u64) -> Self {
-		BestAndLatest {
+	const fn new(best_num: u64, latest_num: u64) -> Self {
+		Self {
 			best_num,
 			latest_num,
 		}
@@ -139,7 +139,7 @@ impl Decodable for Entry {
 
 		// rely on the invariant that the canonical entry is always first.
 		let canon_hash = candidates[0].hash;
-		Ok(Entry {
+		Ok(Self {
 			candidates,
 			canonical_hash: canon_hash,
 		})
@@ -283,7 +283,7 @@ impl HeaderChain {
 				}
 			};
 
-			HeaderChain {
+			Self {
 				genesis_header: encoded::Header::new(genesis),
 				best_block: RwLock::new(best_block),
 				candidates: RwLock::new(candidates),
@@ -294,7 +294,7 @@ impl HeaderChain {
 			}
 
 		} else {
-			let chain = HeaderChain {
+			let chain = Self {
 				genesis_header: encoded::Header::new(genesis),
 				best_block: RwLock::new(BlockDescriptor {
 					hash: decoded_header.hash(),
@@ -309,7 +309,7 @@ impl HeaderChain {
 			};
 
 			// insert the hardcoded sync into the database.
-			if let (&Some(ref hardcoded_sync), HardcodedSync::Allow) = (&spec.hardcoded_sync, allow_hs) {
+			if let (Some(hardcoded_sync), HardcodedSync::Allow) = (&spec.hardcoded_sync, allow_hs) {
 				let mut batch = db.transaction();
 
 				// insert the hardcoded CHT roots into the database.
@@ -410,9 +410,10 @@ impl HeaderChain {
 		let mut candidates = self.candidates.write();
 
 		// find total difficulty.
-		let total_difficulty = match total_difficulty {
-			Some(td) => td,
-			None => {
+		let total_difficulty = {
+			if let Some(td) = total_difficulty {
+				td
+			} else {
 				let parent_td =
 					if number == 1 {
 						self.genesis_header.difficulty()
@@ -425,7 +426,7 @@ impl HeaderChain {
 					};
 
 				parent_td + *header.difficulty()
-			},
+			}
 		};
 
 		// insert headers and candidates entries and write era to disk.
@@ -862,7 +863,7 @@ impl<'a> Iterator for AncestryIter<'a> {
 
 	fn next(&mut self) -> Option<encoded::Header> {
 		let next = self.next.take();
-		if let Some(p_hash) = next.as_ref().map(|hdr| hdr.parent_hash()) {
+		if let Some(p_hash) = next.as_ref().map(encoded::Header::parent_hash) {
 			self.next = self.chain.block_header(BlockId::Hash(p_hash));
 		}
 
@@ -1048,7 +1049,7 @@ mod tests {
 			}
 		}
 
-		let chain = HeaderChain::new(db.clone(), 0, &spec, cache.clone(),
+		let chain = HeaderChain::new(db.clone(), 0, &spec, cache,
 									HardcodedSync::Allow).unwrap();
 		assert!(chain.block_header(BlockId::Number(10)).is_none());
 		assert!(chain.block_header(BlockId::Number(9000)).is_some());
@@ -1093,7 +1094,7 @@ mod tests {
 				header.set_parent_hash(parent_hash);
 				header.set_number(i);
 				header.set_timestamp(rolling_timestamp);
-				header.set_difficulty(*genesis_header.difficulty() * U256::from(i as u32 * 1000u32));
+				header.set_difficulty(*genesis_header.difficulty() * U256::from(i as u32 * 1000_u32));
 				parent_hash = header.hash();
 
 				let mut tx = db.transaction();
@@ -1108,7 +1109,7 @@ mod tests {
 		}
 
 		// after restoration, non-canonical eras should still be loaded.
-		let chain = HeaderChain::new(db.clone(), 0, &spec, cache.clone(),
+		let chain = HeaderChain::new(db.clone(), 0, &spec, cache,
 									HardcodedSync::Allow).unwrap();
 		assert_eq!(chain.block_header(BlockId::Latest).unwrap().number(), 10);
 		assert!(chain.candidates.read().get(&100).is_some())
@@ -1121,7 +1122,7 @@ mod tests {
 		let db = make_db();
 		let cache = Arc::new(Mutex::new(Cache::new(Default::default(), Duration::from_secs(6 * 3600))));
 
-		let chain = HeaderChain::new(db.clone(), 0, &spec, cache.clone(),
+		let chain = HeaderChain::new(db.clone(), 0, &spec, cache,
 									HardcodedSync::Allow).unwrap();
 
 		assert!(chain.block_header(BlockId::Earliest).is_some());
@@ -1217,7 +1218,7 @@ mod tests {
 			let diff = *genesis_header.difficulty() * i as u32;
 			header.set_difficulty(diff);
 			if i <= h_num {
-				total_difficulty = total_difficulty + diff;
+				total_difficulty += diff;
 			}
 			parent_hash = header.hash();
 

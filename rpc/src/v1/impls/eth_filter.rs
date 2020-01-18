@@ -23,6 +23,7 @@ use client_traits::BlockChainClient;
 use ethcore::miner::{self, MinerService};
 use ethereum_types::{H256, U256};
 use parking_lot::Mutex;
+use std::collections::HashSet;
 use types::{
 	ids::BlockId,
 	filter::Filter as EthcoreFilter
@@ -70,7 +71,7 @@ pub struct EthFilterClient<C, M> {
 impl<C, M> EthFilterClient<C, M> {
 	/// Creates new Eth filter client.
 	pub fn new(client: Arc<C>, miner: Arc<M>, poll_lifetime: u32) -> Self {
-		EthFilterClient {
+		Self {
 			client,
 			miner,
 			polls: Mutex::new(PollManager::new(poll_lifetime)),
@@ -148,7 +149,7 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
 		let id = polls.create_poll(SyncPollFilter::new(PollFilter::Logs {
 			block_number, filter, include_pending,
 			last_block_hash: None,
-			previous_logs: Default::default()
+			previous_logs: HashSet::new()
 		}));
 		Ok(id.into())
 	}
@@ -171,15 +172,15 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
 	}
 
 	fn filter_changes(&self, index: Index) -> BoxFuture<FilterChanges> {
-		let filter = match self.polls().lock().poll_mut(&index.value()) {
+		let filter = match self.polls().lock().poll_mut(index.value()) {
 			Some(filter) => filter.clone(),
 			None => return Box::new(future::err(errors::filter_not_found())),
 		};
 
-		Box::new(filter.modify(|filter| match *filter {
+		Box::new(filter.modify(|filter| match filter {
 			PollFilter::Block {
-				ref mut last_block_number,
-				ref mut recent_reported_hashes,
+				last_block_number,
+				recent_reported_hashes,
 			} => {
 				// Check validity of recently reported blocks -- in case of re-org, rewind block to last valid
 				while let Some((num, hash)) = recent_reported_hashes.front().cloned() {
@@ -204,7 +205,7 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
 
 				Either::A(future::ok(FilterChanges::Hashes(hashes)))
 			},
-			PollFilter::PendingTransaction(ref mut previous_hashes) => {
+			PollFilter::PendingTransaction(previous_hashes) => {
 				// get hashes of pending transactions
 				let current_hashes = self.pending_transaction_hashes();
 
@@ -223,10 +224,10 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
 				Either::A(future::ok(FilterChanges::Hashes(new_hashes)))
 			},
 			PollFilter::Logs {
-				ref mut block_number,
-				ref mut last_block_hash,
-				ref mut previous_logs,
-				ref filter,
+				block_number,
+				last_block_hash,
+				previous_logs,
+				filter,
 				include_pending,
 			} => {
 				// retrive the current block number
@@ -242,7 +243,7 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
 				filter.to_block = BlockId::Latest;
 
 				// retrieve pending logs
-				let pending = if include_pending {
+				let pending = if *include_pending {
 					let pending_logs = self.pending_logs(current_number, &filter);
 
 					// remove logs about which client was already notified about
@@ -282,13 +283,14 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
 		let (filter, include_pending) = {
 			let mut polls = self.polls().lock();
 
-			match polls.poll(&index.value()).and_then(|f| f.modify(|filter| match *filter {
-				PollFilter::Logs { ref filter, include_pending, .. } =>
-					Some((filter.clone(), include_pending)),
+			if let Some((filter, include_pending)) = polls.poll(index.value()).and_then(|f| f.modify(|filter| match filter {
+				PollFilter::Logs { filter, include_pending, .. } =>
+					Some((filter.clone(), *include_pending)),
 				_ => None,
 			})) {
-				Some((filter, include_pending)) => (filter, include_pending),
-				None => return Box::new(future::err(errors::filter_not_found())),
+				(filter, include_pending)
+			} else {
+				return Box::new(future::err(errors::filter_not_found()))
 			}
 		};
 
@@ -310,6 +312,6 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
 	}
 
 	fn uninstall_filter(&self, index: Index) -> Result<bool> {
-		Ok(self.polls().lock().remove_poll(&index.value()))
+		Ok(self.polls().lock().remove_poll(index.value()))
 	}
 }

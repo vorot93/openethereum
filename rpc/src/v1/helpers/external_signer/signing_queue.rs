@@ -228,7 +228,7 @@ mod test {
 			gas_price: 0.into(),
 			gas: 10_000.into(),
 			value: 10_000_000.into(),
-			data: vec![],
+			data: Vec::new(),
 			nonce: None,
 			condition: None,
 		})
@@ -253,7 +253,7 @@ mod test {
 	#[test]
 	fn should_receive_notification() {
 		// given
-		let received = Arc::new(Mutex::new(vec![]));
+		let received = Arc::new(Mutex::new(Vec::new()));
 		let queue = Arc::new(ConfirmationsQueue::default());
 		let request = request();
 

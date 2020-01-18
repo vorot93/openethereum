@@ -29,7 +29,7 @@ use parking_lot::RwLock;
 
 use_contract!(service_transaction, "res/contracts/service_transaction.json");
 
-const SERVICE_TRANSACTION_CONTRACT_REGISTRY_NAME: &'static str = "service_transaction_checker";
+const SERVICE_TRANSACTION_CONTRACT_REGISTRY_NAME: &str = "service_transaction_checker";
 
 /// Service transactions checker.
 #[derive(Default, Clone)]
@@ -91,7 +91,7 @@ impl ServiceTransactionChecker {
 		trace!(target: "txqueue", "Refreshing certified addresses cache");
 		// replace the cache with an empty list,
 		// since it's not recent it won't be used anyway.
-		let cache = mem::replace(&mut *self.certified_addresses_cache.write(), HashMap::default());
+		let cache = std::mem::take(&mut *self.certified_addresses_cache.write());
 
 		if client.registrar_address().is_none() {
 			return Ok(false);

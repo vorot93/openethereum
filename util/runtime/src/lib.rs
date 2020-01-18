@@ -16,6 +16,54 @@
 
 //! Tokio Runtime wrapper.
 
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
+
 pub extern crate futures;
 pub extern crate tokio;
 
@@ -49,7 +97,7 @@ impl Runtime {
 		});
 		let executor = rx.recv().expect("tx is transfered to a newly spawned thread.");
 
-		Runtime {
+		Self {
 			executor: Executor {
 				inner: Mode::Tokio(executor),
 			},
@@ -82,7 +130,7 @@ impl Runtime {
 	///
 	/// Deprecated: Exists only to connect with current JSONRPC implementation.
 	pub fn raw_executor(&self) -> TaskExecutor {
-		if let Mode::Tokio(ref executor) = self.executor.inner {
+		if let Mode::Tokio(executor) = &self.executor.inner {
 			executor.clone()
 		} else {
 			panic!("Runtime is not initialized in Tokio mode.")
@@ -106,7 +154,7 @@ impl fmt::Debug for Mode {
 	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
 		use self::Mode::*;
 
-		match *self {
+		match self {
 			Tokio(_) => write!(fmt, "tokio"),
 			Sync => write!(fmt, "synchronous"),
 			ThreadPerFuture => write!(fmt, "thread per future"),
@@ -142,22 +190,22 @@ impl Executor {
 	/// Executor for existing runtime.
 	///
 	/// Deprecated: Exists only to connect with current JSONRPC implementation.
-	pub fn new(executor: TaskExecutor) -> Self {
-		Executor {
+	pub const fn new(executor: TaskExecutor) -> Self {
+		Self {
 			inner: Mode::Tokio(executor),
 		}
 	}
 
 	/// Synchronous executor, used mostly for tests.
-	pub fn new_sync() -> Self {
-		Executor {
+	pub const fn new_sync() -> Self {
+		Self {
 			inner: Mode::Sync,
 		}
 	}
 
 	/// Spawns a new thread for each future (use only for tests).
-	pub fn new_thread_per_future() -> Self {
-		Executor {
+	pub const fn new_thread_per_future() -> Self {
+		Self {
 			inner: Mode::ThreadPerFuture,
 		}
 	}
@@ -167,8 +215,8 @@ impl Executor {
 		R: IntoFuture<Item=(), Error=()> + Send + 'static,
 		R::Future: Send + 'static,
 	{
-		match self.inner {
-			Mode::Tokio(ref executor) => executor.spawn(r.into_future()),
+		match &self.inner {
+			Mode::Tokio(executor) => executor.spawn(r.into_future()),
 			Mode::Sync => {
 				let _= r.into_future().wait();
 			},
@@ -186,8 +234,8 @@ impl Executor {
 		R: IntoFuture<Item=(), Error=()> + Send + 'static,
 		R::Future: Send + 'static,
 	{
-		match self.inner {
-			Mode::Tokio(ref executor) => executor.spawn(future::lazy(f)),
+		match &self.inner {
+			Mode::Tokio(executor) => executor.spawn(future::lazy(f)),
 			Mode::Sync => {
 				let _ = future::lazy(f).wait();
 			},
@@ -206,8 +254,8 @@ impl Executor {
 		R: IntoFuture<Item=(), Error=()> + Send + 'static,
 		R::Future: Send + 'static,
 	{
-		match self.inner {
-			Mode::Tokio(ref executor) => {
+		match &self.inner {
+			Mode::Tokio(executor) => {
 				executor.spawn(timeout(f, duration, on_timeout))
 			},
 			Mode::Sync => {
@@ -224,8 +272,8 @@ impl Executor {
 
 impl<F: Future<Item = (), Error = ()> + Send + 'static> future::Executor<F> for Executor {
 	fn execute(&self, future: F) -> Result<(), future::ExecuteError<F>> {
-		match self.inner {
-			Mode::Tokio(ref executor) => executor.execute(future),
+		match &self.inner {
+			Mode::Tokio(executor) => executor.execute(future),
 			Mode::Sync => {
 				let _= future.wait();
 				Ok(())

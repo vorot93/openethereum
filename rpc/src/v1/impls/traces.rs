@@ -52,7 +52,7 @@ pub struct TracesClient<C> {
 impl<C> TracesClient<C> {
 	/// Creates new Traces client.
 	pub fn new(client: &Arc<C>) -> Self {
-		TracesClient {
+		Self {
 			client: client.clone(),
 		}
 	}

@@ -47,7 +47,7 @@ fn encode_single(request: Request) -> NetworkRequests {
 // helper for making a packet out of `Requests`.
 fn make_packet(req_id: usize, requests: &NetworkRequests) -> Vec<u8> {
 	let mut stream = RlpStream::new_list(2);
-	stream.append(&req_id).append_list(&requests.requests());
+	stream.append(&req_id).append_list(requests.requests());
 	stream.out()
 }
 
@@ -66,19 +66,19 @@ enum Expect {
 
 impl IoContext for Expect {
 	fn send(&self, peer: PeerId, packet_id: u8, packet_body: Vec<u8>) {
-		assert_eq!(self, &Expect::Send(peer, packet_id, packet_body));
+		assert_eq!(self, &Self::Send(peer, packet_id, packet_body));
 	}
 
 	fn respond(&self, packet_id: u8, packet_body: Vec<u8>) {
-		assert_eq!(self, &Expect::Respond(packet_id, packet_body));
+		assert_eq!(self, &Self::Respond(packet_id, packet_body));
 	}
 
 	fn disconnect_peer(&self, peer: PeerId) {
-		assert_eq!(self, &Expect::Punish(peer));
+		assert_eq!(self, &Self::Punish(peer));
 	}
 
 	fn disable_peer(&self, peer: PeerId) {
-		assert_eq!(self, &Expect::Punish(peer));
+		assert_eq!(self, &Self::Punish(peer));
 	}
 
 	fn protocol_version(&self, _peer: PeerId) -> Option<u8> {
@@ -208,14 +208,14 @@ fn setup(capabilities: Capabilities) -> (Arc<TestProviderInner>, LightProtocol) 
 	let proto = LightProtocol::new(Arc::new(TestProvider(provider.clone())), Params {
 		network_id: 2,
 		config: Default::default(),
-		capabilities: capabilities,
+		capabilities,
 		sample_store: None,
 	});
 
 	(provider, proto)
 }
 
-fn status(chain_info: BlockChainInfo) -> Status {
+const fn status(chain_info: BlockChainInfo) -> Status {
 	Status {
 		protocol_version: 1,
 		network_id: 2,
@@ -330,7 +330,7 @@ fn get_block_headers() {
 
 	let req_id = 111;
 
-	let requests = encode_single(request.clone());
+	let requests = encode_single(request);
 	let request_body = make_packet(req_id, &requests);
 
 	let response = {
@@ -380,7 +380,7 @@ fn get_block_bodies() {
 			hash: hash.into(),
 		})).unwrap();
 		bodies.push(Response::Body(provider.client.block_body(CompleteBodyRequest {
-			hash: hash,
+			hash,
 		}).unwrap()));
 	}
 	let req_id = 111;
@@ -432,7 +432,7 @@ fn get_block_receipts() {
 	for hash in block_hashes.iter().cloned() {
 		builder.push(Request::Receipts(IncompleteReceiptsRequest { hash: hash.into() })).unwrap();
 		receipts.push(Response::Receipts(provider.client.block_receipts(CompleteReceiptsRequest {
-			hash: hash
+			hash
 		}).unwrap()));
 	}
 
@@ -472,8 +472,8 @@ fn get_state_proofs() {
 	}
 
 	let req_id = 112;
-	let key1: H256 = BigEndianHash::from_uint(&U256::from(11223344));
-	let key2: H256 = BigEndianHash::from_uint(&U256::from(99988887));
+	let key1: H256 = BigEndianHash::from_uint(&U256::from(11_223_344));
+	let key2: H256 = BigEndianHash::from_uint(&U256::from(99_988_887));
 
 	let mut builder = Builder::default();
 	builder.push(Request::Account(IncompleteAccountRequest {
@@ -529,15 +529,15 @@ fn get_contract_code() {
 	}
 
 	let req_id = 112;
-	let key1: H256 = BigEndianHash::from_uint(&U256::from(11223344));
-	let key2: H256 = BigEndianHash::from_uint(&U256::from(99988887));
+	let key1: H256 = BigEndianHash::from_uint(&U256::from(11_223_344));
+	let key2: H256 = BigEndianHash::from_uint(&U256::from(99_988_887));
 
 	let request = Request::Code(IncompleteCodeRequest {
 		block_hash: key1.into(),
 		code_hash: key2.into(),
 	});
 
-	let requests = encode_single(request.clone());
+	let requests = encode_single(request);
 	let request_body = make_packet(req_id, &requests);
 	let response = {
 		let response = vec![Response::Code(CodeResponse {
@@ -576,7 +576,7 @@ fn epoch_signal() {
 		block_hash: H256([1; 32]).into(),
 	});
 
-	let requests = encode_single(request.clone());
+	let requests = encode_single(request);
 	let request_body = make_packet(req_id, &requests);
 
 	let response = {
@@ -645,11 +645,11 @@ fn proof_of_execution() {
 	proto.handle_packet(&expected, 1, packet::REQUEST, &request_body);
 
 	// next: way too much requested gas.
-	if let Request::Execution(ref mut req) = request {
+	if let Request::Execution(req) = &mut request {
 		req.gas = 100_000_000.into();
 	}
 	let req_id = 113;
-	let requests = encode_single(request.clone());
+	let requests = encode_single(request);
 	let request_body = make_packet(req_id, &requests);
 
 	let expected = Expect::Punish(1);
@@ -670,7 +670,7 @@ fn id_guard() {
 	let req_id_2 = ReqId(1111);
 
 	let req = encode_single(Request::Headers(IncompleteHeadersRequest {
-		start: HashOrNumber::Number(5u64).into(),
+		start: HashOrNumber::Number(5_u64).into(),
 		max: 100,
 		skip: 0,
 		reverse: false,
@@ -690,7 +690,7 @@ fn id_guard() {
 		remote_flow: Some((flow_params.create_credits(), (&*flow_params).clone())),
 		sent_head: provider.client.chain_info().best_block_hash,
 		last_update: Instant::now(),
-		pending_requests: pending_requests,
+		pending_requests,
 		failed_requests: Vec::new(),
 		propagated_transactions: Default::default(),
 		skip_update: false,
@@ -732,7 +732,7 @@ fn id_guard() {
 	}
 
 	let peers = proto.peers.read();
-	if let Some(ref peer_info) = peers.get(&peer_id) {
+	if let Some(peer_info) = peers.get(&peer_id) {
 		let peer_info = peer_info.lock();
 		assert!(peer_info.pending_requests.collect_ids::<Vec<_>>().is_empty());
 		assert_eq!(peer_info.failed_requests, &[req_id_1]);
@@ -755,13 +755,13 @@ fn get_transaction_index() {
 	}
 
 	let req_id = 112;
-	let key1: H256 = BigEndianHash::from_uint(&U256::from(11223344));
+	let key1: H256 = BigEndianHash::from_uint(&U256::from(11_223_344));
 
 	let request = Request::TransactionIndex(IncompleteTransactionIndexRequest {
 		hash: key1.into(),
 	});
 
-	let requests = encode_single(request.clone());
+	let requests = encode_single(request);
 	let request_body = make_packet(req_id, &requests);
 	let response = {
 		let response = vec![Response::TransactionIndex(TransactionIndexResponse {
@@ -797,14 +797,14 @@ fn sync_statistics() {
 
 	const N: f64 = 50.0;
 
-	for i in 1..(N as usize + 1) {
+	for i in 1..=N as usize {
 		stats.add_peer_count(i);
 	}
 
 	// Compute the average for the sum 1..N
 	assert_eq!(stats.avg_peer_count(), N * (N + 1.0) / 2.0 / N);
 
-	for _ in 1..(MOVING_SAMPLE_SIZE + 1) {
+	for _ in 1..=MOVING_SAMPLE_SIZE {
 		stats.add_peer_count(40);
 	}
 

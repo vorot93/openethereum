@@ -31,9 +31,9 @@ pub struct NetClient<S: ?Sized> {
 }
 
 impl<S: ?Sized> NetClient<S> where S: SyncProvider {
-	/// Creates new NetClient.
+	/// Creates new `NetClient`.
 	pub fn new(sync: &Arc<S>) -> Self {
-		NetClient {
+		Self {
 			sync: sync.clone(),
 			network_id: sync.status().network_id,
 		}

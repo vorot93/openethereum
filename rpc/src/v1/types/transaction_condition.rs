@@ -31,8 +31,8 @@ pub enum TransactionCondition {
 impl Into<transaction::Condition> for TransactionCondition {
 	fn into(self) -> transaction::Condition {
 		match self {
-			TransactionCondition::Number(n) => transaction::Condition::Number(n),
-			TransactionCondition::Timestamp(n) => transaction::Condition::Timestamp(n),
+			Self::Number(n) => transaction::Condition::Number(n),
+			Self::Timestamp(n) => transaction::Condition::Timestamp(n),
 		}
 	}
 }
@@ -40,8 +40,8 @@ impl Into<transaction::Condition> for TransactionCondition {
 impl From<transaction::Condition> for TransactionCondition {
 	fn from(condition: transaction::Condition) -> Self {
 		match condition {
-			transaction::Condition::Number(n) => TransactionCondition::Number(n),
-			transaction::Condition::Timestamp(n) => TransactionCondition::Timestamp(n),
+			transaction::Condition::Number(n) => Self::Number(n),
+			transaction::Condition::Timestamp(n) => Self::Timestamp(n),
 		}
 	}
 }

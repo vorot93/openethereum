@@ -72,9 +72,9 @@ impl RpcHandler {
 		auth_code: String,
 		complete: Complete<Result<Rpc, RpcError>>
 	) -> Self {
-		RpcHandler {
+		Self {
 			out: Some(out),
-			auth_code: auth_code,
+			auth_code,
 			pending: Pending::new(),
 			complete: Some(complete),
 		}
@@ -99,38 +99,35 @@ impl Handler for RpcHandler {
 		}
 	}
 	fn on_error(&mut self, err: WsError) {
-		match self.complete.take() {
-			Some(c) => match c.send(Err(RpcError::WsError(err))) {
-				Ok(_) => {},
-				Err(_) => warn!(target: "rpc-client", "Unable to notify about error."),
-			},
-			None => warn!(target: "rpc-client", "unexpected error: {}", err),
+		if let Some(c) = self.complete.take() {
+			if c.send(Err(RpcError::WsError(err))).is_err() {
+				warn!(target: "rpc-client", "Unable to notify about error.");
+			}
+		} else {
+			warn!(target: "rpc-client", "unexpected error: {}", err);
 		}
 	}
 	fn on_open(&mut self, _: Handshake) -> WsResult<()> {
-		match (self.complete.take(), self.out.take()) {
-			(Some(c), Some(out)) => {
+		if let (Some(c), Some(out)) = (self.complete.take(), self.out.take()) {
 				let res = c.send(Ok(Rpc {
-					out: out,
+					out,
 					counter: AtomicUsize::new(0),
 					pending: self.pending.clone(),
 				}));
-				if let Err(_) = res {
+				if res.is_err() {
 					warn!(target: "rpc-client", "Unable to open a connection.")
 				}
 				Ok(())
-			},
-			_ => {
-				let msg = format!("on_open called twice");
+		} else {
+				let msg = "on_open called twice".to_string();
 				Err(WsError::new(WsErrorKind::Internal, msg))
-			}
 		}
 	}
 	fn on_message(&mut self, msg: Message) -> WsResult<()> {
 		let ret: Result<JsonValue, JsonRpcError>;
 		let response_id;
 		let string = &msg.to_string();
-		match json::from_str::<Output>(&string) {
+		match json::from_str::<Output>(string) {
 			Ok(Output::Success(Success { result, id: Id::Num(id), .. })) =>
 			{
 				ret = Ok(result);
@@ -159,15 +156,16 @@ impl Handler for RpcHandler {
 			}
 		}
 
-		match self.pending.remove(response_id) {
-			Some(c) => if let Err(_) = c.send(ret.map_err(|err| RpcError::JsonRpc(err))) {
-				warn!(target: "rpc-client", "Unable to send response.")
-			},
-			None => warn!(
+		if let Some(c) = self.pending.remove(response_id) {
+			if c.send(ret.map_err(RpcError::JsonRpc)).is_err() {
+				warn!(target: "rpc-client", "Unable to send response.");
+			}
+		} else {
+			warn!(
 				target: "rpc-client",
 				"warning: unexpected id: {}",
 				response_id
-			),
+			);
 		}
 		Ok(())
 	}
@@ -175,13 +173,11 @@ impl Handler for RpcHandler {
 
 /// Keeping track of issued requests to be matched up with responses
 #[derive(Clone)]
-struct Pending(
-	Arc<Mutex<BTreeMap<usize, Complete<Result<JsonValue, RpcError>>>>>
-);
+struct Pending(Arc<Mutex<BTreeMap<usize, Complete<Result<JsonValue, RpcError>>>>>);
 
 impl Pending {
 	fn new() -> Self {
-		Pending(Arc::new(Mutex::new(BTreeMap::new())))
+		Self(Arc::new(Mutex::new(BTreeMap::new())))
 	}
 	fn insert(&mut self, k: usize, v: Complete<Result<JsonValue, RpcError>>) {
 		self.0.lock().insert(k, v);
@@ -216,10 +212,9 @@ pub struct Rpc {
 }
 
 impl Rpc {
-	/// Blocking, returns a new initialized connection or RpcError
+	/// Blocking, returns a new initialized connection or `RpcError`
 	pub fn new(url: &str, authpath: &PathBuf) -> Result<Self, RpcError> {
-		let rpc = Self::connect(url, authpath).map(|rpc| rpc).wait()?;
-		rpc
+		Self::connect(url, authpath).map(|rpc| rpc).wait()?
 	}
 
 	/// Non-blocking, returns a future
@@ -228,7 +223,7 @@ impl Rpc {
 	) -> BoxFuture<Result<Self, RpcError>, Canceled> {
 		let (c, p) = oneshot::<Result<Self, RpcError>>();
 		match get_authcode(authpath) {
-			Err(e) => return Box::new(done(Ok(Err(e)))),
+			Err(e) => Box::new(done(Ok(Err(e)))),
 			Ok(code) => {
 				let url = String::from(url);
 				// The ws::connect takes a FnMut closure, which means c cannot
@@ -243,17 +238,15 @@ impl Rpc {
 							.expect("connection closure called only once");
 						RpcHandler::new(out, code.clone(), c)
 					});
-					match conn {
-						Err(err) => {
-							// since ws::connect is only called once, it cannot
-							// both fail and succeed.
-							let c = once.take()
-								.expect("connection closure called only once");
-							let _ = c.send(Err(RpcError::WsError(err)));
-						},
-						// c will complete on the `on_open` event in the Handler
-						_ => ()
+					if let Err(err) = conn {
+						// since ws::connect is only called once, it cannot
+						// both fail and succeed.
+						let c = once.take()
+							.expect("connection closure called only once");
+						let _ = c.send(Err(RpcError::WsError(err)));
 					}
+
+					// c will complete on the `on_open` event in the Handler
 				});
 				Box::new(p)
 			}
@@ -307,41 +300,41 @@ pub enum RpcError {
 
 impl Debug for RpcError {
 	fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
-		match *self {
-			RpcError::WrongVersion(ref s)
+		match self {
+			Self::WrongVersion(s)
 				=> write!(f, "Expected version 2.0, got {}", s),
-			RpcError::ParseError(ref err)
+			Self::ParseError(err)
 				=> write!(f, "ParseError: {}", err),
-			RpcError::MalformedResponse(ref s)
+			Self::MalformedResponse(s)
 				=> write!(f, "Malformed response: {}", s),
-			RpcError::JsonRpc(ref json)
+			Self::JsonRpc(json)
 				=> write!(f, "JsonRpc error: {:?}", json),
-			RpcError::WsError(ref s)
+			Self::WsError(s)
 				=> write!(f, "Websocket error: {}", s),
-			RpcError::Canceled(ref s)
+			Self::Canceled(s)
 				=> write!(f, "Futures error: {:?}", s),
-			RpcError::UnexpectedId
+			Self::UnexpectedId
 				=> write!(f, "Unexpected response id"),
-			RpcError::NoAuthCode
+			Self::NoAuthCode
 				=> write!(f, "No authcodes available"),
 		}
 	}
 }
 
 impl From<JsonError> for RpcError {
-	fn from(err: JsonError) -> RpcError {
-		RpcError::ParseError(err)
+	fn from(err: JsonError) -> Self {
+		Self::ParseError(err)
 	}
 }
 
 impl From<WsError> for RpcError {
-	fn from(err: WsError) -> RpcError {
-		RpcError::WsError(err)
+	fn from(err: WsError) -> Self {
+		Self::WsError(err)
 	}
 }
 
 impl From<Canceled> for RpcError {
-	fn from(err: Canceled) -> RpcError {
-		RpcError::Canceled(err)
+	fn from(err: Canceled) -> Self {
+		Self::Canceled(err)
 	}
 }

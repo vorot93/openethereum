@@ -66,13 +66,13 @@ fn should_subscribe_to_new_heads() {
 	assert_eq!(io.handle_request_sync(request, metadata.clone()), Some(response.to_owned()));
 
 	// Check notifications
-	handler.new_blocks(NewBlocks::new(vec![], vec![], ChainRoute::new(vec![(h1, ChainRouteType::Enacted)]), vec![], vec![], DURATION_ZERO, true));
+	handler.new_blocks(NewBlocks::new(Vec::new(), Vec::new(), ChainRoute::new(vec![(h1, ChainRouteType::Enacted)]), Vec::new(), Vec::new(), DURATION_ZERO, true));
 	let (res, receiver) = receiver.into_future().wait().unwrap();
 	let response = r#"{"jsonrpc":"2.0","method":"eth_subscription","params":{"result":{"author":"0x0000000000000000000000000000000000000000","difficulty":"0x1","extraData":"0x","gasLimit":"0xf4240","gasUsed":"0x0","hash":"0x3457d2fa2e3dd33c78ac681cf542e429becf718859053448748383af67e23218","logsBloom":"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","miner":"0x0000000000000000000000000000000000000000","number":"0x1","parentHash":"0x0cd786a2425d16f152c658316c423e6ce1181e15c3295826d7c9904cba9ce303","receiptsRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","sealFields":[],"sha3Uncles":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","size":"0x1c9","stateRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","timestamp":"0x0","transactionsRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"},"subscription":"0x43ca64edf03768e1"}}"#;
 	assert_eq!(res, Some(response.into()));
 
 	// Notify about two blocks
-	handler.new_blocks(NewBlocks::new(vec![], vec![], ChainRoute::new(vec![(h2, ChainRouteType::Enacted), (h3, ChainRouteType::Enacted)]), vec![], vec![], DURATION_ZERO, true));
+	handler.new_blocks(NewBlocks::new(Vec::new(), Vec::new(), ChainRoute::new(vec![(h2, ChainRouteType::Enacted), (h3, ChainRouteType::Enacted)]), Vec::new(), Vec::new(), DURATION_ZERO, true));
 
 	// Receive both
 	let (res, receiver) = receiver.into_future().wait().unwrap();
@@ -106,7 +106,7 @@ fn should_subscribe_to_logs() {
 			entry: LogEntry {
 				address: Address::from_low_u64_be(5),
 				topics: vec![H256::from_low_u64_be(1), H256::from_low_u64_be(2), H256::from_low_u64_be(0), H256::from_low_u64_be(0)],
-				data: vec![],
+				data: Vec::new(),
 			},
 			block_hash: h1,
 			block_number: block.header().number(),
@@ -136,20 +136,20 @@ fn should_subscribe_to_logs() {
 	assert_eq!(io.handle_request_sync(request, metadata.clone()), Some(response.to_owned()));
 
 	// Check notifications (enacted)
-	handler.new_blocks(NewBlocks::new(vec![], vec![], ChainRoute::new(vec![(h1, ChainRouteType::Enacted)]), vec![], vec![], DURATION_ZERO, false));
+	handler.new_blocks(NewBlocks::new(Vec::new(), Vec::new(), ChainRoute::new(vec![(h1, ChainRouteType::Enacted)]), Vec::new(), Vec::new(), DURATION_ZERO, false));
 	let (res, receiver) = receiver.into_future().wait().unwrap();
 	let response = r#"{"jsonrpc":"2.0","method":"eth_subscription","params":{"result":{"address":"0x0000000000000000000000000000000000000005","blockHash":"0x3457d2fa2e3dd33c78ac681cf542e429becf718859053448748383af67e23218","blockNumber":"0x1","data":"0x","logIndex":"0x0","removed":false,"topics":["0x0000000000000000000000000000000000000000000000000000000000000001","0x0000000000000000000000000000000000000000000000000000000000000002","0x0000000000000000000000000000000000000000000000000000000000000000","0x0000000000000000000000000000000000000000000000000000000000000000"],"transactionHash":""#.to_owned()
 		+ &format!("0x{:x}", tx_hash)
 		+ r#"","transactionIndex":"0x0","transactionLogIndex":"0x0","type":"mined"},"subscription":"0x43ca64edf03768e1"}}"#;
-	assert_eq!(res, Some(response.into()));
+	assert_eq!(res, Some(response));
 
 	// Check notifications (retracted)
-	handler.new_blocks(NewBlocks::new(vec![], vec![], ChainRoute::new(vec![(h1, ChainRouteType::Retracted)]), vec![], vec![], DURATION_ZERO, false));
+	handler.new_blocks(NewBlocks::new(Vec::new(), Vec::new(), ChainRoute::new(vec![(h1, ChainRouteType::Retracted)]), Vec::new(), Vec::new(), DURATION_ZERO, false));
 	let (res, receiver) = receiver.into_future().wait().unwrap();
 	let response = r#"{"jsonrpc":"2.0","method":"eth_subscription","params":{"result":{"address":"0x0000000000000000000000000000000000000005","blockHash":"0x3457d2fa2e3dd33c78ac681cf542e429becf718859053448748383af67e23218","blockNumber":"0x1","data":"0x","logIndex":"0x0","removed":true,"topics":["0x0000000000000000000000000000000000000000000000000000000000000001","0x0000000000000000000000000000000000000000000000000000000000000002","0x0000000000000000000000000000000000000000000000000000000000000000","0x0000000000000000000000000000000000000000000000000000000000000000"],"transactionHash":""#.to_owned()
 		+ &format!("0x{:x}", tx_hash)
 		+ r#"","transactionIndex":"0x0","transactionLogIndex":"0x0","type":"removed"},"subscription":"0x43ca64edf03768e1"}}"#;
-	assert_eq!(res, Some(response.into()));
+	assert_eq!(res, Some(response));
 
 	// And unsubscribe
 	let request = r#"{"jsonrpc": "2.0", "method": "eth_unsubscribe", "params": ["0x43ca64edf03768e1"], "id": 1}"#;
@@ -226,5 +226,5 @@ fn eth_subscribe_syncing() {
 
 	let response = r#"{"jsonrpc":"2.0","result":"0x43ca64edf03768e1","id":1}"#;
 	let request = r#"{"jsonrpc": "2.0", "method": "eth_subscribe", "params": ["syncing"], "id": 1}"#;
-	assert_eq!(io.handle_request_sync(request, metadata.clone()), Some(response.to_owned()));
+	assert_eq!(io.handle_request_sync(request, metadata), Some(response.to_owned()));
 }

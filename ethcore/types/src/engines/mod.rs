@@ -39,7 +39,7 @@ pub enum OptimizeFor {
 
 impl Default for OptimizeFor {
 	fn default() -> Self {
-		OptimizeFor::Cpu
+		Self::Cpu
 	}
 }
 
@@ -66,7 +66,7 @@ impl EthashSeal {
 
 		let mix_hash = Rlp::new(seal[0].as_ref()).as_val::<H256>()?;
 		let nonce = Rlp::new(seal[1].as_ref()).as_val::<H64>()?;
-		Ok(EthashSeal { mix_hash, nonce })
+		Ok(Self { mix_hash, nonce })
 	}
 }
 
@@ -95,8 +95,8 @@ pub enum SealingState {
 pub const MAX_UNCLE_AGE: u64 = 6;
 
 /// Default EIP-210 contract code.
-/// As defined in https://github.com/ethereum/EIPs/pull/210
-pub const DEFAULT_BLOCKHASH_CONTRACT: &'static [u8] = &[
+/// As defined in <https://github.com/ethereum/EIPs/pull/210>
+pub const DEFAULT_BLOCKHASH_CONTRACT: &[u8] = &[
 	0x73, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
 	0xff, 0xff, 0xff, 0xff, 0xfe, 0x33, 0x14, 0x15, 0x61, 0x00, 0x6a, 0x57, 0x60, 0x01, 0x43, 0x03,
 	0x60, 0x00, 0x35, 0x61, 0x01, 0x00, 0x82, 0x07, 0x55, 0x61, 0x01, 0x00, 0x81, 0x07, 0x15, 0x15,
@@ -142,7 +142,7 @@ pub struct EthashExtensions {
 
 impl From<ethjson::spec::EthashParams> for EthashExtensions {
 	fn from(p: ::ethjson::spec::EthashParams) -> Self {
-		EthashExtensions {
+		Self {
 			homestead_transition: p.homestead_transition.map_or(0, Into::into),
 			dao_hardfork_transition: p.dao_hardfork_transition.map_or(u64::max_value(), Into::into),
 			dao_hardfork_beneficiary: p.dao_hardfork_beneficiary.map_or_else(Address::zero, Into::into),

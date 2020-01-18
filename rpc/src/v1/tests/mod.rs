@@ -36,7 +36,7 @@ macro_rules! extract_chain {
 	}};
 
 	($file:expr) => {{
-		extract_chain!(iter $file).filter(|&(_, ref t)| t.network == ForkSpec::Frontier).next().unwrap().1
+		extract_chain!(iter $file).filter(|(_, t)| t.network == ForkSpec::Frontier).next().unwrap().1
 	}};
 }
 
@@ -44,7 +44,7 @@ macro_rules! register_test {
 	($name:ident, $cb:expr, $file:expr) => {
 		#[test]
 		fn $name() {
-			for (name, chain) in extract_chain!(iter $file).filter(|&(_, ref t)| t.network == ForkSpec::Frontier) {
+			for (name, chain) in extract_chain!(iter $file).filter(|(_, t)| t.network == ForkSpec::Frontier) {
 				$cb(name, chain);
 			}
 		}

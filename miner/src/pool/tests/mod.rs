@@ -160,7 +160,7 @@ fn should_handle_same_transaction_imported_twice_with_different_state_nonces() {
 	let res = txq.import(client.clone(), vec![tx].local());
 	assert_eq!(res, vec![Ok(())]);
 	// next_nonce === None -> transaction is in future
-	assert_eq!(txq.next_nonce(client.clone(), &tx2.sender()), None);
+	assert_eq!(txq.next_nonce(client, &tx2.sender()), None);
 
 	// now import second transaction to current
 	let res = txq.import(TestClient::new(), vec![tx2.local()]);
@@ -188,7 +188,7 @@ fn should_move_all_transactions_from_future() {
 	assert_eq!(txq.next_nonce(client.clone(), &tx2.sender()), None);
 
 	// now import second transaction to current
-	let res = txq.import(client.clone(), vec![tx2.local()]);
+	let res = txq.import(client, vec![tx2.local()]);
 
 	// then
 	assert_eq!(res, vec![Ok(())]);
@@ -588,7 +588,7 @@ fn should_not_replace_same_transaction_if_the_fee_is_less_than_minimal_bump() {
 	assert_eq!(res, vec![Err(transaction::Error::TooCheapToReplace { prev: None, new: None }), Ok(())]);
 	assert_eq!(txq.status().status.transaction_count, 2);
 	assert_eq!(txq.pending(client.clone(), PendingSettings::all_prioritized(0, 0))[0].signed().gas_price, U256::from(20));
-	assert_eq!(txq.pending(client.clone(), PendingSettings::all_prioritized(0, 0))[1].signed().gas_price, U256::from(2));
+	assert_eq!(txq.pending(client, PendingSettings::all_prioritized(0, 0))[1].signed().gas_price, U256::from(2));
 }
 
 #[test]
@@ -646,7 +646,7 @@ fn should_return_true_if_there_is_local_transaction_pending() {
 	let client = TestClient::new().with_local(&tx1.sender());
 
 	// when
-	let res = txq.import(client.clone(), vec![tx1.unverified(), tx2.local()]);
+	let res = txq.import(client, vec![tx1.unverified(), tx2.local()]);
 	assert_eq!(res, vec![Ok(()), Ok(())]);
 
 	// then
@@ -980,7 +980,7 @@ fn should_avoid_reverifying_recently_rejected_transactions() {
 	let res = txq.import(client.clone(), vec![tx1.clone()]);
 	assert_eq!(res, vec![Err(transaction::Error::InsufficientBalance {
 		balance: 0xf67c.into(),
-		cost: 0xc8458e4.into(),
+		cost: 0x0c84_58e4.into(),
 	})]);
 	assert_eq!(txq.status().status.transaction_count, 0);
 	assert!(client.was_verification_triggered());
@@ -990,7 +990,7 @@ fn should_avoid_reverifying_recently_rejected_transactions() {
 	let res = txq.import(client.clone(), vec![tx1]);
 	assert_eq!(res, vec![Err(transaction::Error::InsufficientBalance {
 		balance: 0xf67c.into(),
-		cost: 0xc8458e4.into(),
+		cost: 0x0c84_58e4.into(),
 	})]);
 	assert!(!client.was_verification_triggered());
 

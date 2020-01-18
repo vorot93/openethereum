@@ -54,7 +54,7 @@ pub struct NonceCache {
 impl NonceCache {
 	/// Create new cache with a limit of `limit` entries.
 	pub fn new(limit: usize) -> Self {
-		NonceCache {
+		Self {
 			nonces: Arc::new(RwLock::new(HashMap::with_capacity(limit / 2))),
 			limit,
 		}
@@ -87,9 +87,9 @@ impl<'a, C: 'a> Clone for PoolClient<'a, C> {
 			chain: self.chain,
 			cached_nonces: self.cached_nonces.clone(),
 			engine: self.engine,
-			accounts: self.accounts.clone(),
+			accounts: self.accounts,
 			best_block_header: self.best_block_header.clone(),
-			service_transaction_checker: self.service_transaction_checker.clone(),
+			service_transaction_checker: self.service_transaction_checker,
 		}
 	}
 }
@@ -167,7 +167,7 @@ impl<'a, C: 'a> pool::client::Client for PoolClient<'a, C> where
 	fn transaction_type(&self, tx: &SignedTransaction) -> pool::client::TransactionType {
 		match self.service_transaction_checker {
 			None => pool::client::TransactionType::Regular,
-			Some(ref checker) => match checker.check(self.chain, &tx) {
+			Some(checker) => match checker.check(self.chain, tx) {
 				Ok(true) => pool::client::TransactionType::Service,
 				Ok(false) => pool::client::TransactionType::Regular,
 				Err(e) => {
@@ -215,7 +215,7 @@ impl<'a, C: 'a> fmt::Debug for CachedNonceClient<'a, C> {
 }
 
 impl<'a, C: 'a> CachedNonceClient<'a, C> {
-	pub fn new(client: &'a C, cache: &'a NonceCache) -> Self {
+	pub const fn new(client: &'a C, cache: &'a NonceCache) -> Self {
 		CachedNonceClient {
 			client,
 			cache,

@@ -73,7 +73,7 @@ where
 {
 	fn clone(&self) -> Self {
 		// each instance should have its own poll manager.
-		EthClient {
+		Self {
 			sync: self.sync.clone(),
 			client: self.client.clone(),
 			on_demand: self.on_demand.clone(),
@@ -83,7 +83,7 @@ where
 			polls: Mutex::new(PollManager::new(self.poll_lifetime)),
 			poll_lifetime: self.poll_lifetime,
 			gas_price_percentile: self.gas_price_percentile,
-			deprecation_notice: Default::default(),
+			deprecation_notice: DeprecationNotice::default(),
 		}
 	}
 }
@@ -106,7 +106,7 @@ where
 		gas_price_percentile: usize,
 		poll_lifetime: u32
 	) -> Self {
-		EthClient {
+		Self {
 			sync,
 			client,
 			on_demand,
@@ -116,7 +116,7 @@ where
 			polls: Mutex::new(PollManager::new(poll_lifetime)),
 			poll_lifetime,
 			gas_price_percentile,
-			deprecation_notice: Default::default(),
+			deprecation_notice: DeprecationNotice::default(),
 		}
 	}
 
@@ -161,9 +161,10 @@ where
 					total_difficulty: score.map(Into::into),
 					seal_fields: header.seal().iter().cloned().map(Into::into).collect(),
 					uncles: block.uncle_hashes().into_iter().map(Into::into).collect(),
-					transactions: match include_txs {
-						true => BlockTransactions::Full(block.view().localized_transactions().into_iter().map(Transaction::from_localized).collect()),
-						_ => BlockTransactions::Hashes(block.transaction_hashes().into_iter().map(Into::into).collect()),
+					transactions: if include_txs {
+						BlockTransactions::Full(block.view().localized_transactions().into_iter().map(Transaction::from_localized).collect())
+					} else {
+						BlockTransactions::Hashes(block.transaction_hashes().into_iter().map(Into::into).collect())
 					},
 					extra_data: Bytes::new(header.extra_data().clone()),
 				},
@@ -174,45 +175,43 @@ where
 		// get the block itself.
 		Box::new(self.fetcher().block(id).and_then(move |block| {
 			// then fetch the total difficulty (this is much easier after getting the block).
-			match client.score(id) {
-				Some(score) => Either::A(future::ok(fill_rich(block, Some(score)))),
-				None => {
-					// make a CHT request to fetch the chain score.
-					let req = cht::block_to_cht_number(block.number())
-						.and_then(|num| client.cht_root(num as usize))
-						.and_then(|root| request::HeaderProof::new(block.number(), root));
+			if let Some(score) = client.score(id) {
+				Either::A(future::ok(fill_rich(block, Some(score))))
+			} else {
+				// make a CHT request to fetch the chain score.
+				let req = cht::block_to_cht_number(block.number())
+					.and_then(|num| client.cht_root(num as usize))
+					.and_then(|root| request::HeaderProof::new(block.number(), root));
 
-					let req = match req {
-						Some(req) => req,
-						None => {
-							// somehow the genesis block slipped past other checks.
-							// return it now.
-							let score = client.block_header(BlockId::Number(0))
-								.expect("genesis always stored; qed")
-								.difficulty();
+				let req = if let Some(req) = req {
+					req
+				} else {
+					// somehow the genesis block slipped past other checks.
+					// return it now.
+					let score = client.block_header(BlockId::Number(0))
+						.expect("genesis always stored; qed")
+						.difficulty();
 
-							return Either::A(future::ok(fill_rich(block, Some(score))))
-						}
-					};
+					return Either::A(future::ok(fill_rich(block, Some(score))))
+				};
 
-					// three possible outcomes:
-					//   - network is down.
-					//   - we get a score, but our hash is non-canonical.
-					//   - we get a score, and our hash is canonical.
-					let maybe_fut = sync.with_context(move |ctx| on_demand.request(ctx, req).expect(NO_INVALID_BACK_REFS));
-					match maybe_fut {
-						Some(fut) => Either::B(fut
-							.map(move |(hash, score)| {
-								let score = if hash == block.hash() {
-									Some(score)
-								} else {
-									None
-								};
+				// three possible outcomes:
+				//   - network is down.
+				//   - we get a score, but our hash is non-canonical.
+				//   - we get a score, and our hash is canonical.
+				let maybe_fut = sync.with_context(move |ctx| on_demand.request(ctx, req).expect(NO_INVALID_BACK_REFS));
+				match maybe_fut {
+					Some(fut) => Either::B(fut
+						.map(move |(hash, score)| {
+							let score = if hash == block.hash() {
+								Some(score)
+							} else {
+								None
+							};
 
-								fill_rich(block, score)
-							}).map_err(errors::on_demand_error)),
-						None => Either::A(future::err(errors::network_disabled())),
-					}
+							fill_rich(block, score)
+						}).map_err(errors::on_demand_error)),
+					None => Either::A(future::err(errors::network_disabled())),
 				}
 			}
 		}))
@@ -235,8 +234,7 @@ where
 		if self.sync.is_major_importing() {
 			let chain_info = self.client.chain_info();
 			let current_block = U256::from(chain_info.best_block_number);
-			let highest_block = self.sync.highest_block().map(U256::from)
-				.unwrap_or_else(|| current_block);
+			let highest_block = self.sync.highest_block().map_or_else(|| current_block, U256::from);
 
 			Ok(RpcSyncStatus::Info(RpcSyncInfo {
 				starting_block: U256::from(self.sync.start_block()),
@@ -267,7 +265,7 @@ where
 	}
 
 	fn hashrate(&self) -> Result<U256> {
-		Ok(Default::default())
+		Ok(U256::zero())
 	}
 
 	fn gas_price(&self) -> BoxFuture<U256> {
@@ -309,6 +307,7 @@ where
 			.map(|acc| acc.map_or(0.into(), |a| a.nonce)))
 	}
 
+	#[allow(clippy::option_map_unwrap_or_else)]
 	fn block_transaction_count_by_hash(&self, hash: H256) -> BoxFuture<Option<U256>> {
 		let (sync, on_demand) = (self.sync.clone(), self.on_demand.clone());
 
@@ -325,6 +324,7 @@ where
 		}))
 	}
 
+	#[allow(clippy::option_map_unwrap_or_else)]
 	fn block_transaction_count_by_number(&self, num: BlockNumber) -> BoxFuture<Option<U256>> {
 		let (sync, on_demand) = (self.sync.clone(), self.on_demand.clone());
 
@@ -348,6 +348,8 @@ where
 			if hdr.uncles_hash() == KECCAK_EMPTY_LIST_RLP {
 				Either::A(future::ok(Some(U256::from(0))))
 			} else {
+				// TODO: async/await
+				#[allow(clippy::option_map_unwrap_or_else)]
 				sync.with_context(|ctx| on_demand.request(ctx, request::Body(hdr.into())))
 					.map(|x| x.expect(NO_INVALID_BACK_REFS))
 					.map(|x| x.map(|b| Some(U256::from(b.uncles_count()))))
@@ -364,6 +366,8 @@ where
 			if hdr.uncles_hash() == KECCAK_EMPTY_LIST_RLP {
 				Either::B(future::ok(Some(U256::from(0))))
 			} else {
+				// TODO: async/await
+				#[allow(clippy::option_map_unwrap_or_else)]
 				sync.with_context(|ctx| on_demand.request(ctx, request::Body(hdr.into())))
 					.map(|x| x.expect(NO_INVALID_BACK_REFS))
 					.map(|x| x.map(|b| Some(U256::from(b.uncles_count()))))
@@ -568,7 +572,7 @@ where
 	}
 
 	fn removed_logs(&self, _block_hash: ::ethereum_types::H256, _filter: &EthcoreFilter) -> (Vec<Log>, u64) {
-		(Default::default(), 0)
+		(Vec::new(), 0)
 	}
 }
 
@@ -599,8 +603,8 @@ fn extract_uncle_at_index<T: LightChainClient>(block: encoded::Block, index: Ind
 				receipts_root: *uncle.receipts_root(),
 				extra_data: uncle.extra_data().clone().into(),
 				seal_fields: uncle.seal().iter().cloned().map(Into::into).collect(),
-				uncles: vec![],
-				transactions: BlockTransactions::Hashes(vec![]),
+				uncles: Vec::new(),
+				transactions: BlockTransactions::Hashes(Vec::new()),
 			},
 			extra_info,
 		})

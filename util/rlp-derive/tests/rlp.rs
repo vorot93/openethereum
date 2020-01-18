@@ -14,6 +14,54 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
+
 extern crate rlp;
 #[macro_use]
 extern crate rlp_derive;
@@ -21,39 +69,39 @@ extern crate rlp_derive;
 use rlp::{encode, decode};
 
 #[derive(Debug, PartialEq, RlpEncodable, RlpDecodable)]
-struct Foo {
+struct Item {
 	a: String,
 }
 
 #[derive(Debug, PartialEq, RlpEncodableWrapper, RlpDecodableWrapper)]
-struct FooWrapper {
+struct ItemWrapper {
 	a: String,
 }
 
 #[test]
-fn test_encode_foo() {
-	let foo = Foo {
+fn test_encode_item() {
+	let item = Item {
 		a: "cat".into(),
 	};
 
 	let expected = vec![0xc4, 0x83, b'c', b'a', b't'];
-	let out = encode(&foo);
+	let out = encode(&item);
 	assert_eq!(out, expected);
 
 	let decoded = decode(&expected).expect("decode failure");
-	assert_eq!(foo, decoded);
+	assert_eq!(item, decoded);
 }
 
 #[test]
-fn test_encode_foo_wrapper() {
-	let foo = FooWrapper {
+fn test_encode_item_wrapper() {
+	let item = ItemWrapper {
 		a: "cat".into(),
 	};
 
 	let expected = vec![0x83, b'c', b'a', b't'];
-	let out = encode(&foo);
+	let out = encode(&item);
 	assert_eq!(out, expected);
 
 	let decoded = decode(&expected).expect("decode failure");
-	assert_eq!(foo, decoded);
+	assert_eq!(item, decoded);
 }

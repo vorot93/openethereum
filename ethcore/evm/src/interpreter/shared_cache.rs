@@ -26,7 +26,7 @@ use super::super::instructions::{self, Instruction};
 const DEFAULT_CACHE_SIZE: usize = 4 * 1024 * 1024;
 
 /// Stub for a sharing `BitSet` data in cache (reference counted)
-/// and implementing MallocSizeOf on it.
+/// and implementing `MallocSizeOf` on it.
 struct Bits(Arc<BitSet>);
 
 impl MallocSizeOf for Bits {
@@ -45,14 +45,14 @@ impl SharedCache {
 	/// Create a jump destinations cache with a maximum size in bytes
 	/// to cache.
 	pub fn new(max_size: usize) -> Self {
-		SharedCache {
+		Self {
 			jump_destinations: Mutex::new(MemoryLruCache::new(max_size)),
 		}
 	}
 
 	/// Get jump destinations bitmap for a contract.
 	pub fn jump_destinations(&self, code_hash: &Option<H256>, code: &[u8]) -> Arc<BitSet> {
-		if let Some(ref code_hash) = code_hash {
+		if let Some(code_hash) = code_hash {
 			if code_hash == &KECCAK_EMPTY {
 				return Self::find_jump_destinations(code);
 			}
@@ -64,7 +64,7 @@ impl SharedCache {
 
 		let d = Self::find_jump_destinations(code);
 
-		if let Some(ref code_hash) = code_hash {
+		if let Some(code_hash) = code_hash {
 			self.jump_destinations.lock().insert(*code_hash, Bits(d.clone()));
 		}
 
@@ -95,7 +95,7 @@ impl SharedCache {
 
 impl Default for SharedCache {
 	fn default() -> Self {
-		SharedCache::new(DEFAULT_CACHE_SIZE)
+		Self::new(DEFAULT_CACHE_SIZE)
 	}
 }
 

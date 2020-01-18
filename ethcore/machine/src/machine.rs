@@ -50,7 +50,7 @@ use crate::{
 	tx_filter::TransactionFilter,
 };
 
-/// Parity tries to round block.gas_limit to multiple of this constant
+/// Parity tries to round `block.gas_limit` to multiple of this constant
 pub const PARITY_GAS_LIMIT_DETERMINANT: U256 = U256([37, 0, 0, 0]);
 
 /// Special rules to be applied to the schedule.
@@ -67,9 +67,9 @@ pub struct Machine {
 
 impl Machine {
 	/// Regular ethereum machine.
-	pub fn regular(params: CommonParams, builtins: BTreeMap<Address, Builtin>) -> Machine {
+	pub fn regular(params: CommonParams, builtins: BTreeMap<Address, Builtin>) -> Self {
 		let tx_filter = TransactionFilter::from_params(&params).map(Arc::new);
-		Machine {
+		Self {
 			params,
 			builtins: Arc::new(builtins),
 			tx_filter,
@@ -80,8 +80,8 @@ impl Machine {
 
 	/// Ethereum machine with ethash extensions.
 	// TODO: either unify or specify to mainnet specifically and include other specific-chain HFs?
-	pub fn with_ethash_extensions(params: CommonParams, builtins: BTreeMap<Address, Builtin>, extensions: EthashExtensions) -> Machine {
-		let mut machine = Machine::regular(params, builtins);
+	pub fn with_ethash_extensions(params: CommonParams, builtins: BTreeMap<Address, Builtin>, extensions: EthashExtensions) -> Self {
+		let mut machine = Self::regular(params, builtins);
 		machine.ethash_extensions = Some(extensions);
 		machine
 	}
@@ -129,7 +129,7 @@ impl Machine {
 		)
 	}
 
-	/// Same as execute_as_system, but execute code directly. If contract address is None, use the null sender
+	/// Same as `execute_as_system`, but execute code directly. If contract address is None, use the null sender
 	/// address. If code is None, then this function has no effect. The call is executed without finalization, and does
 	/// not form a transaction.
 	pub fn execute_code_as_system(
@@ -200,7 +200,7 @@ impl Machine {
 	pub fn on_new_block(&self, block: &mut ExecutedBlock) -> Result<(), Error> {
 		self.push_last_hash(block)?;
 
-		if let Some(ref ethash_params) = self.ethash_extensions {
+		if let Some(ethash_params) = &self.ethash_extensions {
 			if block.header.number() == ethash_params.dao_hardfork_transition {
 				let state = block.state_mut();
 				for child in &ethash_params.dao_hardfork_accounts {
@@ -219,10 +219,10 @@ impl Machine {
 	/// The gas floor target must not be lower than the engine's minimum gas limit.
 	pub fn populate_from_parent(&self, header: &mut Header, parent: &Header, gas_floor_target: U256, gas_ceil_target: U256) {
 		header.set_difficulty(parent.difficulty().clone());
-		let gas_limit = parent.gas_limit().clone();
+		let gas_limit = *parent.gas_limit();
 		assert!(!gas_limit.is_zero(), "Gas limit should be > 0");
 
-		if let Some(ref ethash_params) = self.ethash_extensions {
+		if let Some(ethash_params) = &self.ethash_extensions {
 			let gas_limit = {
 				let bound_divisor = self.params().gas_limit_bound_divisor;
 				let lower_limit = gas_limit - gas_limit / bound_divisor + 1;
@@ -237,7 +237,7 @@ impl Machine {
 					let total_lower_limit = cmp::max(lower_limit, gas_floor_target);
 					let total_upper_limit = cmp::min(upper_limit, gas_ceil_target);
 					let gas_limit = cmp::max(gas_floor_target, cmp::min(total_upper_limit,
-						lower_limit + (header.gas_used().clone() * 6u32 / 5) / bound_divisor));
+						lower_limit + (header.gas_used() * 6_u32 / 5) / bound_divisor));
 					round_block_gas_limit(gas_limit, total_lower_limit, total_upper_limit)
 				};
 				// ensure that we are not violating protocol limits
@@ -265,24 +265,23 @@ impl Machine {
 	}
 
 	/// Get the general parameters of the chain.
-	pub fn params(&self) -> &CommonParams {
+	pub const fn params(&self) -> &CommonParams {
 		&self.params
 	}
 
 	/// Get the EVM schedule for the given block number.
 	pub fn schedule(&self, block_number: BlockNumber) -> Schedule {
-		let mut schedule = match self.ethash_extensions {
-			None => self.params.schedule(block_number),
-			Some(ref ext) => {
-				if block_number < ext.homestead_transition {
-					Schedule::new_frontier()
-				} else {
-					self.params.schedule(block_number)
-				}
+		let mut schedule = if let Some(ext) = &self.ethash_extensions {
+			if block_number < ext.homestead_transition {
+				Schedule::new_frontier()
+			} else {
+				self.params.schedule(block_number)
 			}
+		} else {
+			self.params.schedule(block_number)
 		};
 
-		if let Some(ref rules) = self.schedule_rules {
+		if let Some(rules) = &self.schedule_rules {
 			(rules)(&mut schedule, block_number)
 		}
 
@@ -305,7 +304,7 @@ impl Machine {
 	}
 
 	/// Some intrinsic operation parameters; by default they take their value from the `spec()`'s `engine_params`.
-	pub fn maximum_extra_data_size(&self) -> usize { self.params().maximum_extra_data_size }
+	pub const fn maximum_extra_data_size(&self) -> usize { self.params().maximum_extra_data_size }
 
 	/// The nonce with which accounts begin at given block.
 	pub fn account_start_nonce(&self, block: u64) -> U256 {
@@ -331,8 +330,8 @@ impl Machine {
 
 	/// Does basic verification of the transaction.
 	pub fn verify_transaction_basic(&self, t: &UnverifiedTransaction, header: &Header) -> Result<(), transaction::Error> {
-		let check_low_s = match self.ethash_extensions {
-			Some(ref ext) => header.number() >= ext.homestead_transition,
+		let check_low_s = match &self.ethash_extensions {
+			Some(ext) => header.number() >= ext.homestead_transition,
 			None => true,
 		};
 
@@ -355,9 +354,9 @@ impl Machine {
 		parent: &Header,
 		client: &C
 	) -> Result<(), transaction::Error> {
-		if let Some(ref filter) = self.tx_filter.as_ref() {
+		if let Some(filter) = self.tx_filter.as_ref() {
 			if !filter.transaction_allowed(&parent.hash(), parent.number() + 1, t, client) {
-				return Err(transaction::Error::NotAllowed.into())
+				return Err(transaction::Error::NotAllowed)
 			}
 		}
 
@@ -366,7 +365,7 @@ impl Machine {
 
 	/// Performs pre-validation of RLP decoded transaction before other processing
 	pub fn decode_transaction(&self, transaction: &[u8]) -> Result<UnverifiedTransaction, transaction::Error> {
-		let rlp = Rlp::new(&transaction);
+		let rlp = Rlp::new(transaction);
 		if rlp.as_raw().len() > self.params().max_transaction_size {
 			debug!("Rejected oversized transaction of {} bytes", rlp.as_raw().len());
 			return Err(transaction::Error::TooBig)
@@ -408,11 +407,11 @@ mod tests {
 	use std::str::FromStr;
 	use common_types::header::Header;
 	use super::*;
-	use spec;
+	
 
 	fn get_default_ethash_extensions() -> EthashExtensions {
 		EthashExtensions {
-			homestead_transition: 1150000,
+			homestead_transition: 1_150_000,
 			dao_hardfork_transition: u64::max_value(),
 			dao_hardfork_beneficiary: Address::from_str("0000000000000000000000000000000000000001").unwrap(),
 			dao_hardfork_accounts: Vec::new(),

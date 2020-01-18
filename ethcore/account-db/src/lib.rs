@@ -15,6 +15,55 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 //! DB backend wrapper for Account trie
+
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
+
 use ethereum_types::H256;
 use keccak_hash::{KECCAK_NULL_RLP, keccak};
 use hash_db::{HashDB, AsHashDB, Prefix};
@@ -26,7 +75,7 @@ use rlp::NULL_RLP;
 // leaves the first 96 bits untouched in order to support partial key lookup.
 #[inline]
 fn combine_key<'a>(address_hash: &'a H256, key: &'a H256) -> H256 {
-	let mut dst = key.clone();
+	let mut dst = *key;
 	{
 		let last_src: &[u8] = address_hash.as_bytes();
 		let last_dst: &mut [u8] = dst.as_bytes_mut();
@@ -48,24 +97,24 @@ pub enum Factory {
 }
 
 impl Default for Factory {
-	fn default() -> Self { Factory::Mangled }
+	fn default() -> Self { Self::Mangled }
 }
 
 impl Factory {
 	/// Create a read-only accountdb.
 	/// This will panic when write operations are called.
 	pub fn readonly<'db>(&self, db: &'db dyn HashDB<KeccakHasher, DBValue>, address_hash: H256) -> Box<dyn HashDB<KeccakHasher, DBValue> + 'db> {
-		match *self {
-			Factory::Mangled => Box::new(AccountDB::from_hash(db, address_hash)),
-			Factory::Plain => Box::new(Wrapping(db)),
+		match self {
+			Self::Mangled => Box::new(AccountDB::from_hash(db, address_hash)),
+			Self::Plain => Box::new(Wrapping(db)),
 		}
 	}
 
 	/// Create a new mutable hashdb.
 	pub fn create<'db>(&self, db: &'db mut dyn HashDB<KeccakHasher, DBValue>, address_hash: H256) -> Box<dyn HashDB<KeccakHasher, DBValue> + 'db> {
-		match *self {
-			Factory::Mangled => Box::new(AccountDBMut::from_hash(db, address_hash)),
-			Factory::Plain => Box::new(WrappingMut(db)),
+		match self {
+			Self::Mangled => Box::new(AccountDBMut::from_hash(db, address_hash)),
+			Self::Plain => Box::new(WrappingMut(db)),
 		}
 	}
 }
@@ -79,9 +128,9 @@ pub struct AccountDB<'db> {
 }
 
 impl<'db> AccountDB<'db> {
-	/// Create a new AccountDB from an address' hash.
+	/// Create a new `AccountDB` from an address' hash.
 	pub fn from_hash(db: &'db dyn HashDB<KeccakHasher, DBValue>, address_hash: H256) -> Self {
-		AccountDB { db, address_hash }
+		Self { db, address_hash }
 	}
 }
 
@@ -132,7 +181,7 @@ impl<'db> AccountDBMut<'db> {
 
 	/// Create an `AccountDB` from an `AccountDBMut` (used in tests).
 	pub fn immutable(&'db self) -> AccountDB<'db> {
-		AccountDB { db: self.db, address_hash: self.address_hash.clone() }
+		AccountDB { db: self.db, address_hash: self.address_hash }
 	}
 }
 
@@ -152,8 +201,8 @@ impl<'db> HashDB<KeccakHasher, DBValue> for AccountDBMut<'db>{
 	}
 
 	fn insert(&mut self, prefix: Prefix, value: &[u8]) -> H256 {
-		if value == &NULL_RLP {
-			return KECCAK_NULL_RLP.clone();
+		if value == NULL_RLP {
+			return KECCAK_NULL_RLP;
 		}
 		let k = keccak(value);
 		let ak = combine_key(&self.address_hash, &k);
@@ -240,8 +289,8 @@ impl<'db> HashDB<KeccakHasher, DBValue> for WrappingMut<'db>{
 	}
 
 	fn insert(&mut self, prefix: Prefix, value: &[u8]) -> H256 {
-		if value == &NULL_RLP {
-			return KECCAK_NULL_RLP.clone();
+		if value == NULL_RLP {
+			return KECCAK_NULL_RLP;
 		}
 		self.0.insert(prefix, value)
 	}
@@ -254,7 +303,7 @@ impl<'db> HashDB<KeccakHasher, DBValue> for WrappingMut<'db>{
 	}
 
 	fn remove(&mut self, key: &H256, prefix: Prefix) {
-		if key == &KECCAK_NULL_RLP {
+		if *key == KECCAK_NULL_RLP {
 			return;
 		}
 		self.0.remove(key, prefix)

@@ -161,13 +161,13 @@ impl EthTester {
 		handler.extend_with(eth_client.to_delegate());
 		handler.extend_with(eth_sign.to_delegate());
 
-		EthTester {
+		Self {
 			_miner: miner_service,
 			_runtime: runtime,
 			_snapshot: snapshot_service,
 			accounts: account_provider,
-			client: client,
-			handler: handler,
+			client,
+			handler,
 		}
 	}
 }
@@ -217,7 +217,7 @@ fn eth_get_proof() {
 	}"#;
 
 	let res_latest = r#","address":"0xaaaf5374fce5edbc8e2a8697c15331677e6ebaaa","balance":"0x9","codeHash":"0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470","nonce":"0x0","storageHash":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","storageProof":[]},"id":1}"#.to_owned();
-	assert!(tester.handler.handle_request_sync(req_latest).unwrap().to_string().ends_with(res_latest.as_str()));
+	assert!(tester.handler.handle_request_sync(req_latest).unwrap().ends_with(res_latest.as_str()));
 	// non-existant account
 	let req_new_acc = r#"{
 		"jsonrpc": "2.0",
@@ -227,7 +227,7 @@ fn eth_get_proof() {
 	}"#;
 
 	let res_new_acc = r#","address":"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","balance":"0x0","codeHash":"0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470","nonce":"0x0","storageHash":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","storageProof":[]},"id":3}"#.to_owned();
-	assert!(tester.handler.handle_request_sync(req_new_acc).unwrap().to_string().ends_with(res_new_acc.as_str()));
+	assert!(tester.handler.handle_request_sync(req_new_acc).unwrap().ends_with(res_new_acc.as_str()));
 }
 
 #[test]
@@ -268,7 +268,7 @@ fn eth_get_block_by_hash() {
 }
 
 // a frontier-like test with an expanded gas limit and balance on known account.
-const TRANSACTION_COUNT_SPEC: &'static [u8] = br#"{
+const TRANSACTION_COUNT_SPEC: &[u8] = br#"{
 	"name": "Frontier (Test)",
 	"engine": {
 		"Ethash": {
@@ -316,7 +316,7 @@ const TRANSACTION_COUNT_SPEC: &'static [u8] = br#"{
 }
 "#;
 
-const POSITIVE_NONCE_SPEC: &'static [u8] = br#"{
+const POSITIVE_NONCE_SPEC: &[u8] = br#"{
 	"name": "Frontier (Test)",
 	"engine": {
 		"Ethash": {

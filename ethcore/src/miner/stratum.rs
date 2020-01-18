@@ -91,10 +91,10 @@ impl SubmitPayload {
 			}
 		};
 
-		Ok(SubmitPayload {
-			nonce: nonce,
-			pow_hash: pow_hash,
-			mix_hash: mix_hash,
+		Ok(Self {
+			nonce,
+			pow_hash,
+			mix_hash,
 		})
 	}
 }
@@ -163,11 +163,11 @@ impl JobDispatcher for StratumJobDispatcher {
 
 impl StratumJobDispatcher {
 	/// New stratum job dispatcher given the miner and client
-	fn new(miner: Weak<Miner>, client: Weak<Client>) -> StratumJobDispatcher {
-		StratumJobDispatcher {
+	fn new(miner: Weak<Miner>, client: Weak<Client>) -> Self {
+		Self {
 			seed_compute: Mutex::new(SeedHashCompute::default()),
-			client: client,
-			miner: miner,
+			client,
+			miner,
 		}
 	}
 
@@ -211,11 +211,11 @@ pub enum Error {
 }
 
 impl From<StratumServiceError> for Error {
-	fn from(service_err: StratumServiceError) -> Error { Error::Service(service_err) }
+	fn from(service_err: StratumServiceError) -> Self { Self::Service(service_err) }
 }
 
 impl From<AddrParseError> for Error {
-	fn from(err: AddrParseError) -> Error { Error::Address(err) }
+	fn from(err: AddrParseError) -> Self { Self::Address(err) }
 }
 
 #[cfg(feature = "work-notify")]
@@ -232,7 +232,7 @@ impl NotifyWork for Stratum {
 impl Stratum {
 
 	/// New stratum job dispatcher, given the miner, client and dedicated stratum service
-	pub fn start(options: &Options, miner: Weak<Miner>, client: Weak<Client>) -> Result<Stratum, Error> {
+	pub fn start(options: &Options, miner: Weak<Miner>, client: Weak<Client>) -> Result<Self, Error> {
 		use std::net::IpAddr;
 
 		let dispatcher = Arc::new(StratumJobDispatcher::new(miner, client));
@@ -240,16 +240,16 @@ impl Stratum {
 		let service = StratumService::start(
 			&SocketAddr::new(options.listen_addr.parse::<IpAddr>()?, options.port),
 			dispatcher.clone(),
-			options.secret.clone(),
+			options.secret,
 		)?;
 
-		Ok(Stratum { dispatcher, service })
+		Ok(Self { dispatcher, service })
 	}
 
 	/// Start STRATUM job dispatcher and register it in the miner
 	#[cfg(feature = "work-notify")]
 	pub fn register(cfg: &Options, miner: Arc<Miner>, client: Weak<Client>) -> Result<(), Error> {
-		let stratum = Stratum::start(cfg, Arc::downgrade(&miner.clone()), client)?;
+		let stratum = Self::start(cfg, Arc::downgrade(&miner.clone()), client)?;
 		miner.add_work_listener(Box::new(stratum) as Box<dyn NotifyWork>);
 		Ok(())
 	}

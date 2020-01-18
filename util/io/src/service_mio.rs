@@ -89,14 +89,11 @@ pub struct IoContext<Message> where Message: Send + Sync + 'static {
 
 impl<Message> IoContext<Message> where Message: Send + Sync + 'static {
 	/// Create a new IO access point. Takes references to all the data that can be updated within the IO handler.
-	pub fn new(channel: IoChannel<Message>, handler: HandlerId) -> IoContext<Message> {
-		IoContext {
-			handler: handler,
-			channel: channel,
-		}
+	pub fn new(channel: IoChannel<Message>, handler: HandlerId) -> Self {
+		Self { handler, channel }
 	}
 
-	/// Register a new recurring IO timer. 'IoHandler::timeout' will be called with the token.
+	/// Register a new recurring IO timer. `IoHandler::timeout` will be called with the token.
 	pub fn register_timer(&self, token: TimerToken, delay: Duration) -> Result<(), IoError> {
 		self.channel.send_io(IoMessage::AddTimer {
 			token,
@@ -107,7 +104,7 @@ impl<Message> IoContext<Message> where Message: Send + Sync + 'static {
 		Ok(())
 	}
 
-	/// Register a new IO timer once. 'IoHandler::timeout' will be called with the token.
+	/// Register a new IO timer once. `IoHandler::timeout` will be called with the token.
 	pub fn register_timer_once(&self, token: TimerToken, delay: Duration) -> Result<(), IoError> {
 		self.channel.send_io(IoMessage::AddTimer {
 			token,
@@ -121,7 +118,7 @@ impl<Message> IoContext<Message> where Message: Send + Sync + 'static {
 	/// Delete a timer.
 	pub fn clear_timer(&self, token: TimerToken) -> Result<(), IoError> {
 		self.channel.send_io(IoMessage::RemoveTimer {
-			token: token,
+			token,
 			handler_id: self.handler,
 		})?;
 		Ok(())
@@ -130,7 +127,7 @@ impl<Message> IoContext<Message> where Message: Send + Sync + 'static {
 	/// Register a new IO stream.
 	pub fn register_stream(&self, token: StreamToken) -> Result<(), IoError> {
 		self.channel.send_io(IoMessage::RegisterStream {
-			token: token,
+			token,
 			handler_id: self.handler,
 		})?;
 		Ok(())
@@ -139,7 +136,7 @@ impl<Message> IoContext<Message> where Message: Send + Sync + 'static {
 	/// Deregister an IO stream.
 	pub fn deregister_stream(&self, token: StreamToken) -> Result<(), IoError> {
 		self.channel.send_io(IoMessage::DeregisterStream {
-			token: token,
+			token,
 			handler_id: self.handler,
 		})?;
 		Ok(())
@@ -148,7 +145,7 @@ impl<Message> IoContext<Message> where Message: Send + Sync + 'static {
 	/// Reregister an IO stream.
 	pub fn update_registration(&self, token: StreamToken) -> Result<(), IoError> {
 		self.channel.send_io(IoMessage::UpdateStreamRegistration {
-			token: token,
+			token,
 			handler_id: self.handler,
 		})?;
 		Ok(())
@@ -196,7 +193,7 @@ pub struct IoManager<Message> where Message: Send + Sync {
 impl<Message> IoManager<Message> where Message: Send + Sync + 'static {
 	/// Creates a new instance and registers it with the event loop.
 	pub fn start(
-		event_loop: &mut EventLoop<IoManager<Message>>,
+		event_loop: &mut EventLoop<Self>,
 		handlers: Arc<RwLock<Slab<Arc<dyn IoHandler<Message>>>>>
 	) -> Result<(), IoError> {
 		let (worker, stealer) = deque::fifo();
@@ -213,12 +210,12 @@ impl<Message> IoManager<Message> where Message: Send + Sync + 'static {
 			)
 		).collect();
 
-		let mut io = IoManager {
+		let mut io = Self {
 			timers: Arc::new(RwLock::new(HashMap::new())),
-			handlers: handlers,
+			handlers,
 			worker_channel: worker,
-			workers: workers,
-			work_ready: work_ready,
+			workers,
+			work_ready,
 		};
 		event_loop.run(&mut io)?;
 		Ok(())
@@ -273,7 +270,7 @@ impl<Message> Handler for IoManager<Message> where Message: Send + Sync + 'stati
 			IoMessage::AddTimer { handler_id, token, delay, once } => {
 				let timer_id = token + handler_id * TOKENS_PER_HANDLER;
 				let timeout = event_loop.timeout(Token(timer_id), delay).expect("Error registering user timer");
-				self.timers.write().insert(timer_id, UserTimer { delay: delay, timeout: timeout, once: once });
+				self.timers.write().insert(timer_id, UserTimer { delay, timeout, once });
 			},
 			IoMessage::RemoveTimer { handler_id, token } => {
 				let timer_id = token + handler_id * TOKENS_PER_HANDLER;
@@ -309,7 +306,7 @@ impl<Message> Handler for IoManager<Message> where Message: Send + Sync + 'stati
 						self.worker_channel.push(Work {
 							work_type: WorkType::Message(data.clone()),
 							token: 0,
-							handler: handler,
+							handler,
 							handler_id: id
 						});
 					}
@@ -352,9 +349,9 @@ impl<Message: Send> Clone for Handlers<Message> {
 	fn clone(&self) -> Self {
 		use self::Handlers::*;
 
-		match *self {
-			SharedCollection(ref w) => SharedCollection(w.clone()),
-			Single(ref w) => Single(w.clone()),
+		match self {
+			SharedCollection(w) => SharedCollection(w.clone()),
+			Single(w) => Single(w.clone()),
 		}
 	}
 }
@@ -367,8 +364,8 @@ pub struct IoChannel<Message> where Message: Send {
 }
 
 impl<Message> Clone for IoChannel<Message> where Message: Send + Sync + 'static {
-	fn clone(&self) -> IoChannel<Message> {
-		IoChannel {
+	fn clone(&self) -> Self {
+		Self {
 			channel: self.channel.clone(),
 			handlers: self.handlers.clone(),
 		}
@@ -378,8 +375,8 @@ impl<Message> Clone for IoChannel<Message> where Message: Send + Sync + 'static 
 impl<Message> IoChannel<Message> where Message: Send + Sync + 'static {
 	/// Send a message through the channel
 	pub fn send(&self, message: Message) -> Result<(), IoError> {
-		match self.channel {
-			Some(ref channel) => channel.send(IoMessage::UserMessage(Arc::new(message)))?,
+		match &self.channel {
+			Some(channel) => channel.send(IoMessage::UserMessage(Arc::new(message)))?,
 			None => self.send_sync(message)?
 		}
 		Ok(())
@@ -387,8 +384,8 @@ impl<Message> IoChannel<Message> where Message: Send + Sync + 'static {
 
 	/// Send a message through the channel and handle it synchronously
 	pub fn send_sync(&self, message: Message) -> Result<(), IoError> {
-		match self.handlers {
-			Handlers::SharedCollection(ref handlers) => {
+		match &self.handlers {
+			Handlers::SharedCollection(handlers) => {
 				if let Some(handlers) = handlers.upgrade() {
 					for id in 0 .. MAX_HANDLERS {
 						if let Some(h) = handlers.read().get(id) {
@@ -398,7 +395,7 @@ impl<Message> IoChannel<Message> where Message: Send + Sync + 'static {
 					}
 				}
 			},
-			Handlers::Single(ref handler) => {
+			Handlers::Single(handler) => {
 				if let Some(handler) = handler.upgrade() {
 					handler.message(&IoContext::new(self.clone(), 0), &message);
 				}
@@ -409,28 +406,29 @@ impl<Message> IoChannel<Message> where Message: Send + Sync + 'static {
 
 	/// Send low level io message
 	pub fn send_io(&self, message: IoMessage<Message>) -> Result<(), IoError> {
-		if let Some(ref channel) = self.channel {
+		if let Some(channel) = &self.channel {
 			channel.send(message)?
 		}
 		Ok(())
 	}
 	/// Create a new channel disconnected from an event loop.
-	pub fn disconnected() -> IoChannel<Message> {
-		IoChannel {
+	pub fn disconnected() -> Self {
+		Self {
 			channel: None,
 			handlers: Handlers::SharedCollection(Weak::default()),
 		}
 	}
 
 	/// Create a new synchronous channel to a given handler.
-	pub fn to_handler(handler: Weak<dyn IoHandler<Message>>) -> IoChannel<Message> {
-		IoChannel {
+	#[allow(clippy::wrong_self_convention)]
+	pub fn to_handler(handler: Weak<dyn IoHandler<Message>>) -> Self {
+		Self {
 			channel: None,
 			handlers: Handlers::Single(handler),
 		}
 	}
-	fn new(channel: Sender<IoMessage<Message>>, handlers: Weak<RwLock<Slab<Arc<dyn IoHandler<Message>>>>>) -> IoChannel<Message> {
-		IoChannel {
+	fn new(channel: Sender<IoMessage<Message>>, handlers: Weak<RwLock<Slab<Arc<dyn IoHandler<Message>>>>>) -> Self {
+		Self {
 			channel: Some(channel),
 			handlers: Handlers::SharedCollection(handlers),
 		}
@@ -447,7 +445,7 @@ pub struct IoService<Message> where Message: Send + Sync + 'static {
 
 impl<Message> IoService<Message> where Message: Send + Sync + 'static {
 	/// Starts IO event loop
-	pub fn start() -> Result<IoService<Message>, IoError> {
+	pub fn start() -> Result<Self, IoError> {
 		let mut config = EventLoopBuilder::new();
 		config.messages_per_tick(1024);
 		let mut event_loop = config.build().expect("Error creating event loop");
@@ -457,10 +455,10 @@ impl<Message> IoService<Message> where Message: Send + Sync + 'static {
 		let thread = thread::spawn(move || {
 			IoManager::<Message>::start(&mut event_loop, h).expect("Error starting IO service");
 		});
-		Ok(IoService {
+		Ok(Self {
 			thread: Some(thread),
 			host_channel: Mutex::new(channel),
-			handlers: handlers,
+			handlers,
 		})
 	}
 
@@ -481,7 +479,7 @@ impl<Message> IoService<Message> where Message: Send + Sync + 'static {
 	/// Regiter an IO handler with the event loop.
 	pub fn register_handler(&self, handler: Arc<dyn IoHandler<Message>+Send>) -> Result<(), IoError> {
 		self.host_channel.lock().send(IoMessage::AddHandler {
-			handler: handler,
+			handler,
 		})?;
 		Ok(())
 	}

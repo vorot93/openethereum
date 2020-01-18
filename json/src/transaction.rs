@@ -71,7 +71,7 @@ mod tests {
 		let tx: Transaction = serde_json::from_str(s).expect("JSON string is valid");
 		assert_eq!(tx.data, Bytes::new(Vec::new()));
 		assert_eq!(tx.gas_limit, Uint(U256::from(0xf388)));
-		assert_eq!(tx.gas_price, Uint(U256::from(0x09184e72a000_u64)));
+		assert_eq!(tx.gas_price, Uint(U256::from(0x0918_4e72_a000_u64)));
 		assert_eq!(tx.nonce, Uint(U256::zero()));
 		assert_eq!(tx.to, MaybeEmpty::None);
 		assert_eq!(tx.value, Uint(U256::zero()));

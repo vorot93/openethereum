@@ -134,9 +134,9 @@ pub trait Cluster: Send + Sync {
 	fn is_connected(&self, node: &NodeId) -> bool;
 	/// Get a set of connected nodes.
 	fn nodes(&self) -> BTreeSet<NodeId>;
-	/// Get total count of configured key server nodes (valid at the time of ClusterView creation).
+	/// Get total count of configured key server nodes (valid at the time of `ClusterView` creation).
 	fn configured_nodes_count(&self) -> usize;
-	/// Get total count of connected key server nodes (valid at the time of ClusterView creation).
+	/// Get total count of connected key server nodes (valid at the time of `ClusterView` creation).
 	fn connected_nodes_count(&self) -> usize;
 }
 
@@ -207,12 +207,16 @@ pub fn new_network_cluster(
 		connections: BTreeMap::new(),
 	}));
 
-	let connection_trigger: Box<dyn ConnectionTrigger> = match net_config.auto_migrate_enabled {
-		false => Box::new(SimpleConnectionTrigger::with_config(&config)),
-		true if config.admin_public.is_none() => Box::new(ConnectionTriggerWithMigration::with_config(&config)),
-		true => return Err(Error::Internal(
-			"secret store admininstrator public key is specified with auto-migration enabled".into()
-		)),
+	let connection_trigger: Box<dyn ConnectionTrigger> = {
+		if !net_config.auto_migrate_enabled {
+			Box::new(SimpleConnectionTrigger::with_config(&config))
+		} else if config.admin_public.is_none() {
+			Box::new(ConnectionTriggerWithMigration::with_config(&config))
+		} else {
+			return Err(Error::Internal(
+				"secret store admininstrator public key is specified with auto-migration enabled".into()
+			));
+		}
 	};
 
 	let servers_set_change_creator_connector = connection_trigger.servers_set_change_creator_connector();
@@ -270,11 +274,11 @@ impl<C: ConnectionManager> ClusterCore<C> {
 		servers_set_change_creator_connector: Arc<dyn ServersSetChangeSessionCreatorConnector>,
 		config: ClusterConfiguration,
 	) -> Result<Arc<Self>, Error> {
-		Ok(Arc::new(ClusterCore {
+		Ok(Arc::new(Self {
 			data: Arc::new(ClusterData {
 				self_key_pair: config.self_key_pair.clone(),
 				connections,
-				sessions: sessions.clone(),
+				sessions,
 				config,
 				message_processor,
 				servers_set_change_creator_connector
@@ -317,8 +321,8 @@ impl ClusterView {
 		nodes: BTreeSet<NodeId>,
 		configured_nodes_count: usize
 	) -> Self {
-		ClusterView {
-			configured_nodes_count: configured_nodes_count,
+		Self {
+			configured_nodes_count,
 			connected_nodes: nodes,
 			connections,
 			self_key_pair,
@@ -362,8 +366,8 @@ impl Cluster for ClusterView {
 
 impl<C: ConnectionManager> ClusterClientImpl<C> {
 	pub fn new(data: Arc<ClusterData<C>>) -> Self {
-		ClusterClientImpl {
-			data: data,
+		Self {
+			data,
 		}
 	}
 
@@ -377,7 +381,7 @@ impl<C: ConnectionManager> ClusterClientImpl<C> {
 		let access_key = Random.generate()?.secret().clone();
 		let session_id = SessionIdWithSubSession::new(session_id, access_key);
 		let cluster = create_cluster_view(self.data.self_key_pair.clone(), self.data.connections.provider(), false)?;
-		let session = self.data.sessions.negotiation_sessions.insert(cluster, self.data.self_key_pair.public().clone(), session_id.clone(), None, false, None)?;
+		let session = self.data.sessions.negotiation_sessions.insert(cluster, self.data.self_key_pair.public().clone(), session_id, None, false, None)?;
 		match session.session.initialize(connected_nodes) {
 			Ok(()) => Ok(session),
 			Err(error) => {
@@ -771,14 +775,14 @@ pub mod tests {
 
 	impl DummyCluster {
 		pub fn new(id: NodeId) -> Self {
-			DummyCluster {
-				id: id,
+			Self {
+				id,
 				data: RwLock::new(DummyClusterData::default())
 			}
 		}
 
-		pub fn node(&self) -> NodeId {
-			self.id.clone()
+		pub const fn node(&self) -> NodeId {
+			self.id
 		}
 
 		pub fn add_node(&self, node: NodeId) {
@@ -810,7 +814,7 @@ pub mod tests {
 
 		fn send(&self, to: &NodeId, message: Message) -> Result<(), Error> {
 			debug_assert!(&self.id != to);
-			self.data.write().messages.push_back((to.clone(), message));
+			self.data.write().messages.push_back((*to, message));
 			Ok(())
 		}
 

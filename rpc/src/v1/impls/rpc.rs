@@ -31,7 +31,7 @@ impl RpcClient {
 		// geth 1.3.6 fails upon receiving unknown api
 		let valid_apis = vec!["web3", "eth", "net", "personal", "rpc"];
 
-		RpcClient {
+		Self {
 			modules,
 			valid_apis: valid_apis.into_iter().map(ToOwned::to_owned).collect(),
 		}

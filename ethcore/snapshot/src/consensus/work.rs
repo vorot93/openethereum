@@ -48,7 +48,7 @@ use crate::{
 	verify_old_block
 };
 
-/// Snapshot creation and restoration for PoW chains.
+/// Snapshot creation and restoration for proof-of-work chains.
 /// This includes blocks from the head of the chain as a
 /// loose assurance that the chain is valid.
 #[derive(Clone, Copy, PartialEq)]
@@ -62,8 +62,8 @@ pub struct PowSnapshot {
 
 impl PowSnapshot {
 	/// Create a new instance.
-	pub fn new(blocks: u64, max_restore_blocks: u64) -> PowSnapshot {
-		PowSnapshot { blocks, max_restore_blocks }
+	pub const fn new(blocks: u64, max_restore_blocks: u64) -> Self {
+		Self { blocks, max_restore_blocks }
 	}
 }
 
@@ -218,9 +218,9 @@ pub struct PowRebuilder {
 }
 
 impl PowRebuilder {
-	/// Create a new PowRebuilder.
+	/// Create a new `PowRebuilder`.
 	fn new(chain: BlockChain, db: Arc<dyn KeyValueDB>, manifest: &ManifestData, snapshot_blocks: u64) -> Result<Self, EthcoreError> {
-		Ok(PowRebuilder {
+		Ok(Self {
 			chain,
 			db,
 			rng: OsRng,
@@ -326,7 +326,7 @@ impl Rebuilder for PowRebuilder {
 		self.chain.insert_epoch_transition(&mut batch, 0, EpochTransition {
 			block_number: 0,
 			block_hash: genesis_hash,
-			proof: vec![],
+			proof: Vec::new(),
 		});
 
 		self.db.write_buffered(batch);

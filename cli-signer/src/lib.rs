@@ -14,6 +14,54 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
+
 extern crate ethereum_types;
 extern crate futures;
 extern crate rpassword;
@@ -37,23 +85,22 @@ fn sign_interactive(
 ) {
 	print!("\n{}\nSign this transaction? (y)es/(N)o/(r)eject: ", request);
 	let _ = stdout().flush();
-	match BufReader::new(stdin()).lines().next() {
-		Some(Ok(line)) => {
-			match line.to_lowercase().chars().nth(0) {
-				Some('y') => {
-					match sign_transaction(signer, request.id, password) {
-						Ok(s) | Err(s) => println!("{}", s),
-					}
+	if let Some(Ok(line)) = BufReader::new(stdin()).lines().next() {
+		match line.to_lowercase().chars().next() {
+			Some('y') => {
+				match sign_transaction(signer, request.id, password) {
+					Ok(s) | Err(s) => println!("{}", s),
 				}
-				Some('r') => {
-					match reject_transaction(signer, request.id) {
-						Ok(s) | Err(s) => println!("{}", s),
-					}
-				}
-				_ => ()
 			}
+			Some('r') => {
+				match reject_transaction(signer, request.id) {
+					Ok(s) | Err(s) => println!("{}", s),
+				}
+			}
+			_ => ()
 		}
-		_ => println!("Could not read from stdin")
+	} else {
+		println!("Could not read from stdin");
 	}
 }
 
@@ -63,7 +110,7 @@ fn sign_transactions(
 ) -> Result<String, String> {
 	signer.requests_to_confirm().map(|reqs| {
 		match reqs {
-			Ok(ref reqs) if reqs.is_empty() => {
+			Ok(reqs) if reqs.is_empty() => {
 				Ok("No transactions in signing queue".to_owned())
 			}
 			Ok(reqs) => {
@@ -84,10 +131,10 @@ fn sign_transactions(
 fn list_transactions(signer: &mut SignerRpc) -> Result<String, String> {
 	signer.requests_to_confirm().map(|reqs| {
 		match reqs {
-			Ok(ref reqs) if reqs.is_empty() => {
+			Ok(reqs) if reqs.is_empty() => {
 				Ok("No transactions in signing queue".to_owned())
 			}
-			Ok(ref reqs) => {
+			Ok(reqs) => {
 				Ok(format!("Transaction queue:\n{}", reqs
 						   .iter()
 						   .map(|r| format!("{}", r))
@@ -122,7 +169,7 @@ fn reject_transaction(
 	signer.reject_request(id).map(|res| {
 		match res {
 			Ok(true) => Ok(format!("Rejected transaction id {:#x}", id)),
-			Ok(false) => Err(format!("No such request")),
+			Ok(false) => Err("No such request".into()),
 			Err(e) => Err(format!("{:?}", e)),
 		}
 	}).map_err(|err| {
@@ -145,7 +192,7 @@ pub fn signer_list(
 pub fn signer_reject(
 	id: Option<usize>, signerport: u16, authfile: PathBuf
 ) -> Result<String, String> {
-	let id = id.ok_or(format!("id required for signer reject"))?;
+	let id = id.ok_or_else(|| "id required for signer reject".to_string())?;
 	let addr = &format!("ws://127.0.0.1:{}", signerport);
 	let mut signer = SignerRpc::new(addr, &authfile).map_err(|err| {
 		format!("{:?}", err)
@@ -166,7 +213,7 @@ pub fn signer_sign(
 				Ok(fd) => {
 					match BufReader::new(fd).lines().next() {
 						Some(Ok(line)) => password = line,
-						_ => return Err(format!("No password in file"))
+						_ => return Err("No password in file".into())
 					}
 				},
 				Err(e) =>

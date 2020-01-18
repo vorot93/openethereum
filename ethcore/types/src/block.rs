@@ -59,7 +59,7 @@ impl Decodable for Block {
 		if rlp.item_count()? != 3 {
 			return Err(DecoderError::RlpIncorrectListLen);
 		}
-		Ok(Block {
+		Ok(Self {
 			header: rlp.val_at(0)?,
 			transactions: rlp.list_at(1)?,
 			uncles: rlp.list_at(2)?,

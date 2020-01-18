@@ -35,7 +35,7 @@ use crate::{
 	flat::{FlatTrace, FlatBlockTraces, FlatTransactionTraces},
 };
 
-const TRACE_DB_VER: &'static [u8] = b"1.0";
+const TRACE_DB_VER: &[u8] = b"1.0";
 
 #[derive(Debug, Copy, Clone)]
 enum TraceDBIndex {
@@ -57,7 +57,7 @@ impl Key<FlatBlockTraces> for H256 {
 	}
 }
 
-/// `DatabaseExtras` provides an interface to query extra data which is not stored in TraceDB,
+/// `DatabaseExtras` provides an interface to query extra data which is not stored in `TraceDB`,
 /// but necessary to work correctly.
 pub trait DatabaseExtras {
 	/// Returns hash of given block number.
@@ -114,7 +114,7 @@ impl<T> TraceDB<T> where T: DatabaseExtras {
 		batch.put(db::COL_TRACE, b"version", TRACE_DB_VER);
 		db.key_value().write(batch).expect("failed to update version");
 
-		TraceDB {
+		Self {
 			traces: RwLock::new(HashMap::new()),
 			cache_manager: RwLock::new(CacheManager::new(config.pref_cache_size, config.max_cache_size, 10 * 1024)),
 			db,
@@ -187,7 +187,7 @@ impl<T> TraceDB<T> where T: DatabaseExtras {
 		tx_number: usize
 	) -> Vec<LocalizedTrace> {
 		let (trace_tx_number, trace_tx_hash) = match self.extras.transaction_hash(block_number, tx_number) {
-			Some(hash) => (Some(tx_number), Some(hash.clone())),
+			Some(hash) => (Some(tx_number), Some(hash)),
 			//None means trace without transaction (reward)
 			None => (None, None),
 		};
@@ -195,8 +195,8 @@ impl<T> TraceDB<T> where T: DatabaseExtras {
 		let flat_traces: Vec<FlatTrace> = traces.into();
 		flat_traces.into_iter()
 			.filter_map(|trace| {
-				match filter.matches(&trace) {
-					true => Some(LocalizedTrace {
+				if filter.matches(&trace) {
+					Some(LocalizedTrace {
 						action: trace.action,
 						result: trace.result,
 						subtraces: trace.subtraces,
@@ -205,8 +205,9 @@ impl<T> TraceDB<T> where T: DatabaseExtras {
 						transaction_hash: trace_tx_hash,
 						block_number,
 						block_hash,
-					}),
-					false => None
+					})
+				} else {
+					None
 				}
 			})
 			.collect()
@@ -305,7 +306,7 @@ impl<T> TraceDatabase for TraceDB<T> where T: DatabaseExtras {
 						subtraces: trace.subtraces,
 						trace_address: trace.trace_address.into_iter().collect(),
 						transaction_number: Some(tx_position),
-						transaction_hash: Some(tx_hash.clone()),
+						transaction_hash: Some(tx_hash),
 						block_number,
 						block_hash,
 					})
@@ -323,7 +324,7 @@ impl<T> TraceDatabase for TraceDB<T> where T: DatabaseExtras {
 						.enumerate()
 						.flat_map(|(tx_position, traces)| {
 							let (trace_tx_number, trace_tx_hash) = match self.extras.transaction_hash(block_number, tx_position) {
-								Some(hash) => (Some(tx_position), Some(hash.clone())),
+								Some(hash) => (Some(tx_position), Some(hash)),
 								//None means trace without transaction (reward)
 								None => (None, None),
 							};
@@ -408,7 +409,7 @@ mod tests {
 
 	impl Default for Extras {
 		fn default() -> Self {
-			Extras {
+			Self {
 				block_hashes: HashMap::new(),
 				transaction_hashes: HashMap::new(),
 			}
@@ -435,7 +436,7 @@ mod tests {
 		config.enabled = false;
 
 		{
-			let tracedb = TraceDB::new(config.clone(), db.clone(), Arc::new(NoopExtras));
+			let tracedb = TraceDB::new(config, db.clone(), Arc::new(NoopExtras));
 			assert_eq!(tracedb.tracing_enabled(), false);
 		}
 	}
@@ -449,7 +450,7 @@ mod tests {
 		config.enabled = true;
 
 		{
-			let tracedb = TraceDB::new(config.clone(), db.clone(), Arc::new(NoopExtras));
+			let tracedb = TraceDB::new(config, db.clone(), Arc::new(NoopExtras));
 			assert_eq!(tracedb.tracing_enabled(), true);
 		}
 	}
@@ -469,7 +470,7 @@ mod tests {
 				}),
 				result: Res::FailedCall(TraceError::OutOfGas),
 			}])]),
-			block_hash: block_hash.clone(),
+			block_hash,
 			block_number,
 			enacted: vec![block_hash],
 			retracted: 0,
@@ -491,9 +492,9 @@ mod tests {
 				}),
 				result: Res::FailedCall(TraceError::OutOfGas),
 			}])]),
-			block_hash: block_hash.clone(),
+			block_hash,
 			block_number,
-			enacted: vec![],
+			enacted: Vec::new(),
 			retracted: 0,
 		}
 	}
@@ -509,7 +510,7 @@ mod tests {
 				call_type: CallType::Call,
 			}),
 			result: Res::FailedCall(TraceError::OutOfGas),
-			trace_address: vec![],
+			trace_address: Vec::new(),
 			subtraces: 0,
 			transaction_number: Some(0),
 			transaction_hash: Some(tx_hash),
@@ -529,15 +530,15 @@ mod tests {
 		let tx_1 = H256::from_low_u64_be(0xaf);
 
 		let mut extras = Extras::default();
-		extras.block_hashes.insert(0, block_0.clone());
-		extras.block_hashes.insert(1, block_1.clone());
-		extras.transaction_hashes.insert(0, vec![tx_0.clone()]);
-		extras.transaction_hashes.insert(1, vec![tx_1.clone()]);
+		extras.block_hashes.insert(0, block_0);
+		extras.block_hashes.insert(1, block_1);
+		extras.transaction_hashes.insert(0, vec![tx_0]);
+		extras.transaction_hashes.insert(1, vec![tx_1]);
 
 		let tracedb = TraceDB::new(config, db.clone(), Arc::new(extras));
 
 		// import block 0
-		let request = create_noncanon_import_request(0, block_0.clone());
+		let request = create_noncanon_import_request(0, block_0);
 		let mut batch = DBTransaction::new();
 		tracedb.import(&mut batch, request);
 		db.key_value().write(batch).unwrap();
@@ -558,15 +559,15 @@ mod tests {
 		let mut extras = Extras::default();
 		extras.block_hashes.insert(0, H256::zero());
 
-		extras.block_hashes.insert(1, block_1.clone());
-		extras.block_hashes.insert(2, block_2.clone());
-		extras.transaction_hashes.insert(1, vec![tx_1.clone()]);
-		extras.transaction_hashes.insert(2, vec![tx_2.clone()]);
+		extras.block_hashes.insert(1, block_1);
+		extras.block_hashes.insert(2, block_2);
+		extras.transaction_hashes.insert(1, vec![tx_1]);
+		extras.transaction_hashes.insert(2, vec![tx_2]);
 
 		let tracedb = TraceDB::new(config, db.clone(), Arc::new(extras));
 
 		// import block 1
-		let request = create_simple_import_request(1, block_1.clone());
+		let request = create_simple_import_request(1, block_1);
 		let mut batch = DBTransaction::new();
 		tracedb.import(&mut batch, request);
 		db.key_value().write(batch).unwrap();
@@ -574,15 +575,15 @@ mod tests {
 		let filter = Filter {
 			range: (1..1),
 			from_address: AddressesFilter::from(vec![Address::from_low_u64_be(1)]),
-			to_address: AddressesFilter::from(vec![]),
+			to_address: AddressesFilter::from(Vec::new()),
 		};
 
 		let traces = tracedb.filter(&filter);
 		assert_eq!(traces.len(), 1);
-		assert_eq!(traces[0], create_simple_localized_trace(1, block_1.clone(), tx_1.clone()));
+		assert_eq!(traces[0], create_simple_localized_trace(1, block_1, tx_1));
 
 		// import block 2
-		let request = create_simple_import_request(2, block_2.clone());
+		let request = create_simple_import_request(2, block_2);
 		let mut batch = DBTransaction::new();
 		tracedb.import(&mut batch, request);
 		db.key_value().write(batch).unwrap();
@@ -590,38 +591,38 @@ mod tests {
 		let filter = Filter {
 			range: (1..2),
 			from_address: AddressesFilter::from(vec![Address::from_low_u64_be(1)]),
-			to_address: AddressesFilter::from(vec![]),
+			to_address: AddressesFilter::from(Vec::new()),
 		};
 
 		let traces = tracedb.filter(&filter);
 		assert_eq!(traces.len(), 2);
-		assert_eq!(traces[0], create_simple_localized_trace(1, block_1.clone(), tx_1.clone()));
-		assert_eq!(traces[1], create_simple_localized_trace(2, block_2.clone(), tx_2.clone()));
+		assert_eq!(traces[0], create_simple_localized_trace(1, block_1, tx_1));
+		assert_eq!(traces[1], create_simple_localized_trace(2, block_2, tx_2));
 
 		assert!(tracedb.block_traces(0).is_some(), "Genesis trace should be always present.");
 
 		let traces = tracedb.block_traces(1).unwrap();
 		assert_eq!(traces.len(), 1);
-		assert_eq!(traces[0], create_simple_localized_trace(1, block_1.clone(), tx_1.clone()));
+		assert_eq!(traces[0], create_simple_localized_trace(1, block_1, tx_1));
 
 		let traces = tracedb.block_traces(2).unwrap();
 		assert_eq!(traces.len(), 1);
-		assert_eq!(traces[0], create_simple_localized_trace(2, block_2.clone(), tx_2.clone()));
+		assert_eq!(traces[0], create_simple_localized_trace(2, block_2, tx_2));
 
 		assert_eq!(None, tracedb.block_traces(3));
 
 		let traces = tracedb.transaction_traces(1, 0).unwrap();
 		assert_eq!(traces.len(), 1);
-		assert_eq!(traces[0], create_simple_localized_trace(1, block_1.clone(), tx_1.clone()));
+		assert_eq!(traces[0], create_simple_localized_trace(1, block_1, tx_1));
 
 		let traces = tracedb.transaction_traces(2, 0).unwrap();
 		assert_eq!(traces.len(), 1);
-		assert_eq!(traces[0], create_simple_localized_trace(2, block_2.clone(), tx_2.clone()));
+		assert_eq!(traces[0], create_simple_localized_trace(2, block_2, tx_2));
 
 		assert_eq!(None, tracedb.transaction_traces(2, 1));
 
-		assert_eq!(tracedb.trace(1, 0, vec![]).unwrap(), create_simple_localized_trace(1, block_1.clone(), tx_1.clone()));
-		assert_eq!(tracedb.trace(2, 0, vec![]).unwrap(), create_simple_localized_trace(2, block_2.clone(), tx_2.clone()));
+		assert_eq!(tracedb.trace(1, 0, Vec::new()).unwrap(), create_simple_localized_trace(1, block_1, tx_1));
+		assert_eq!(tracedb.trace(2, 0, Vec::new()).unwrap(), create_simple_localized_trace(2, block_2, tx_2));
 	}
 
 	#[test]
@@ -633,9 +634,9 @@ mod tests {
 		let tx_0 = H256::from_low_u64_be(0xff);
 
 		extras.block_hashes.insert(0, H256::zero());
-		extras.transaction_hashes.insert(0, vec![]);
+		extras.transaction_hashes.insert(0, Vec::new());
 		extras.block_hashes.insert(1, block_0.clone());
-		extras.transaction_hashes.insert(1, vec![tx_0.clone()]);
+		extras.transaction_hashes.insert(1, vec![tx_0]);
 
 		// set tracing on
 		config.enabled = true;
@@ -644,14 +645,14 @@ mod tests {
 			let tracedb = TraceDB::new(config.clone(), db.clone(), Arc::new(extras.clone()));
 
 			// import block 1
-			let request = create_simple_import_request(1, block_0.clone());
+			let request = create_simple_import_request(1, block_0);
 			let mut batch = DBTransaction::new();
 			tracedb.import(&mut batch, request);
 			db.key_value().write(batch).unwrap();
 		}
 
 		{
-			let tracedb = TraceDB::new(config.clone(), db.clone(), Arc::new(extras));
+			let tracedb = TraceDB::new(config, db.clone(), Arc::new(extras));
 			let traces = tracedb.transaction_traces(1, 0);
 			assert_eq!(traces.unwrap(), vec![create_simple_localized_trace(1, block_0, tx_0)]);
 		}
@@ -665,12 +666,12 @@ mod tests {
 		let block_0 = H256::from_low_u64_be(0xa1);
 
 		extras.block_hashes.insert(0, block_0.clone());
-		extras.transaction_hashes.insert(0, vec![]);
+		extras.transaction_hashes.insert(0, Vec::new());
 
 		// set tracing on
 		config.enabled = true;
 
-		let tracedb = TraceDB::new(config.clone(), db.clone(), Arc::new(extras.clone()));
+		let tracedb = TraceDB::new(config, db.clone(), Arc::new(extras));
 		let traces = tracedb.block_traces(0).unwrap();
 
 		assert_eq!(traces.len(), 0);

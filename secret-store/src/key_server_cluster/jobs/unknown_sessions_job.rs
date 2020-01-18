@@ -29,16 +29,16 @@ pub struct UnknownSessionsJob {
 
 impl UnknownSessionsJob {
 	pub fn new_on_slave(key_storage: Arc<dyn KeyStorage>) -> Self {
-		UnknownSessionsJob {
+		Self {
 			target_node_id: None,
-			key_storage: key_storage,
+			key_storage,
 		}
 	}
 
 	pub fn new_on_master(key_storage: Arc<dyn KeyStorage>, self_node_id: NodeId) -> Self {
-		UnknownSessionsJob {
+		Self {
 			target_node_id: Some(self_node_id),
-			key_storage: key_storage,
+			key_storage,
 		}
 	}
 }
@@ -54,8 +54,13 @@ impl JobExecutor for UnknownSessionsJob {
 
 	fn process_partial_request(&mut self, partial_request: NodeId) -> Result<JobPartialRequestAction<BTreeSet<SessionId>>, Error> {
 		Ok(JobPartialRequestAction::Respond(self.key_storage.iter()
-			.filter(|&(_, ref key_share)| !key_share.versions.last().map(|v| v.id_numbers.contains_key(&partial_request)).unwrap_or(true))
-			.map(|(id, _)| id.clone())
+			.filter_map(|(id, key_share)| {
+				if !key_share.versions.last().map_or(true, |v| v.id_numbers.contains_key(&partial_request)) {
+					Some(id)
+				} else {
+					None
+				}
+			})
 			.collect()))
 	}
 

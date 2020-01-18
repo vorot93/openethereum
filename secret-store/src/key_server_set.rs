@@ -27,9 +27,9 @@ use blockchain::{SecretStoreChain, NewBlocksNotify, SigningKeyPair, ContractAddr
 
 use_contract!(key_server, "res/key_server_set.json");
 
-/// Name of KeyServerSet contract in registry.
-const KEY_SERVER_SET_CONTRACT_REGISTRY_NAME: &'static str = "secretstore_server_set";
-/// Number of blocks (since latest new_set change) required before actually starting migration.
+/// Name of `KeyServerSet` contract in registry.
+const KEY_SERVER_SET_CONTRACT_REGISTRY_NAME: &str = "secretstore_server_set";
+/// Number of blocks (since latest `new_set` change) required before actually starting migration.
 const MIGRATION_CONFIRMATIONS_REQUIRED: u64 = 5;
 /// Number of blocks before the same-migration transaction (be it start or confirmation) will be retried.
 const TRANSACTION_RETRY_INTERVAL_BLOCKS: u64 = 30;
@@ -77,7 +77,7 @@ pub struct OnChainKeyServerSet {
 }
 
 #[derive(Default, Debug, Clone, PartialEq)]
-/// Non-finalized new_set.
+/// Non-finalized `new_set`.
 struct FutureNewSet {
 	/// New servers set.
 	pub new_set: BTreeMap<NodeId, SocketAddr>,
@@ -118,7 +118,7 @@ struct CachedContract {
 
 impl OnChainKeyServerSet {
 	pub fn new(trusted_client: Arc<dyn SecretStoreChain>, contract_address_source: Option<ContractAddress>, self_key_pair: Arc<dyn SigningKeyPair>, auto_migrate_enabled: bool, key_servers: BTreeMap<Public, NodeAddress>) -> Result<Arc<Self>, Error> {
-		let key_server_set = Arc::new(OnChainKeyServerSet {
+		let key_server_set = Arc::new(Self {
 			contract: Mutex::new(CachedContract::new(trusted_client.clone(), contract_address_source, self_key_pair, auto_migrate_enabled, key_servers)?),
 		});
 		trusted_client.add_listener(key_server_set.clone());
@@ -217,22 +217,25 @@ impl <F: Fn(Vec<u8>) -> Result<Vec<u8>, String>> KeyServerSubset<F> for NewKeySe
 
 impl CachedContract {
 	pub fn new(client: Arc<dyn SecretStoreChain>, contract_address_source: Option<ContractAddress>, self_key_pair: Arc<dyn SigningKeyPair>, auto_migrate_enabled: bool, key_servers: BTreeMap<Public, NodeAddress>) -> Result<Self, Error> {
-		let server_set = match contract_address_source.is_none() {
-			true => key_servers.into_iter()
-				.map(|(p, addr)| {
-					let addr = format!("{}:{}", addr.address, addr.port).parse()
-						.map_err(|err| Error::Internal(format!("error parsing node address: {}", err)))?;
-					Ok((p, addr))
-				})
-				.collect::<Result<BTreeMap<_, _>, Error>>()?,
-			false => Default::default(),
+		let server_set = {
+			if contract_address_source.is_none() {
+				key_servers.into_iter()
+					.map(|(p, addr)| {
+						let addr = format!("{}:{}", addr.address, addr.port).parse()
+							.map_err(|err| Error::Internal(format!("error parsing node address: {}", err)))?;
+						Ok((p, addr))
+					})
+					.collect::<Result<BTreeMap<_, _>, Error>>()?
+			} else {
+					Default::default()
+			}
 		};
 
-		let mut contract =  CachedContract {
-			client: client,
-			contract_address_source: contract_address_source,
+		let mut contract =  Self {
+			client,
+			contract_address_source,
 			contract_address: None,
-			auto_migrate_enabled: auto_migrate_enabled,
+			auto_migrate_enabled,
 			future_new_set: None,
 			confirm_migration_tx: None,
 			start_migration_tx: None,
@@ -241,7 +244,7 @@ impl CachedContract {
 				new_set: server_set,
 				..Default::default()
 			},
-			self_key_pair: self_key_pair,
+			self_key_pair,
 		};
 		contract.update_contract_address();
 
@@ -249,7 +252,7 @@ impl CachedContract {
 	}
 
 	pub fn update_contract_address(&mut self) {
-		if let Some(ref contract_address_source) = self.contract_address_source {
+		if let Some(contract_address_source) = &self.contract_address_source {
 			let contract_address = self.client.read_contract_address(
 				KEY_SERVER_SET_CONTRACT_REGISTRY_NAME,
 				contract_address_source
@@ -330,9 +333,10 @@ impl CachedContract {
 	}
 
 	fn read_from_registry(&mut self) {
-		let contract_address = match self.contract_address {
-			Some(contract_address) => contract_address,
-			None => {
+		let contract_address = {
+			if let Some(contract_address) = self.contract_address {
+				contract_address
+			} else {
 				// no contract installed => empty snapshot
 				// WARNING: after restart current_set will be reset to the set from configuration file
 				// even though we have reset to empty set here. We are not considering this as an issue
@@ -340,7 +344,7 @@ impl CachedContract {
 				self.snapshot = Default::default();
 				self.future_new_set = None;
 				return;
-			},
+			}
 		};
 
 		let do_call = |data| self.client.call_contract(BlockId::Latest, contract_address, data);
@@ -348,48 +352,51 @@ impl CachedContract {
 		let current_set = Self::read_key_server_set(CurrentKeyServerSubset, &do_call);
 
 		// read migration-related data if auto migration is enabled
-		let (new_set, migration) = match self.auto_migrate_enabled {
-			true => {
+		let (new_set, migration) = {
+			if self.auto_migrate_enabled {
 				let new_set = Self::read_key_server_set(NewKeyServerSubset, &do_call);
 				let migration_set = Self::read_key_server_set(MigrationKeyServerSubset, &do_call);
 
-				let migration_id = match migration_set.is_empty() {
-					false => {
+				let migration_id = {
+					if !migration_set.is_empty() {
 						let (encoded, decoder) = key_server::functions::get_migration_id::call();
 						do_call(encoded)
-							.map_err(|e| e.to_string())
+							.map_err(|e| e)
 							.and_then(|data| decoder.decode(&data).map_err(|e| e.to_string()))
 							.map_err(|err| { trace!(target: "secretstore", "Error {} reading migration id from contract", err); err })
 							.ok()
-					},
-					true => None,
+					} else {
+						None
+					}
 				};
 
-				let migration_master = match migration_set.is_empty() {
-					false => {
+				let migration_master = {
+					if !migration_set.is_empty() {
 						let (encoded, decoder) = key_server::functions::get_migration_master::call();
 						do_call(encoded)
-							.map_err(|e| e.to_string())
+							.map_err(|e| e)
 							.and_then(|data| decoder.decode(&data).map_err(|e| e.to_string()))
 							.map_err(|err| { trace!(target: "secretstore", "Error {} reading migration master from contract", err); err })
 							.ok()
 							.and_then(|address| current_set.keys().chain(migration_set.keys())
 								.find(|public| public_to_address(public) == address)
 								.cloned())
-					},
-					true => None,
+					} else {
+						None
+					}
 				};
 
-				let is_migration_confirmed = match migration_set.is_empty() {
-					false if current_set.contains_key(self.self_key_pair.public()) || migration_set.contains_key(self.self_key_pair.public()) => {
+				let is_migration_confirmed = {
+					if !migration_set.is_empty() && (current_set.contains_key(self.self_key_pair.public()) || migration_set.contains_key(self.self_key_pair.public())) {
 						let (encoded, decoder) = key_server::functions::is_migration_confirmed::call(self.self_key_pair.address());
 						do_call(encoded)
-							.map_err(|e| e.to_string())
+							.map_err(|e| e)
 							.and_then(|data| decoder.decode(&data).map_err(|e| e.to_string()))
 							.map_err(|err| { trace!(target: "secretstore", "Error {} reading migration confirmation from contract", err); err })
 							.ok()
-					},
-					_ => None,
+					} else {
+						None
+					}
 				};
 
 				let migration = match (migration_set.is_empty(), migration_id, migration_master, is_migration_confirmed) {
@@ -404,14 +411,15 @@ impl CachedContract {
 				};
 
 				(new_set, migration)
+			} else {
+				(current_set.clone(), None)
 			}
-			false => (current_set.clone(), None),
 		};
 
 		let mut new_snapshot = KeyServerSetSnapshot {
-			current_set: current_set,
-			new_set: new_set,
-			migration: migration,
+			current_set,
+			new_set,
+			migration,
 		};
 
 		// we might want to adjust new_set if auto migration is enabled
@@ -496,14 +504,17 @@ fn update_future_set(future_new_set: &mut Option<FutureNewSet>, new_snapshot: &m
 	::std::mem::swap(&mut new_set, &mut new_snapshot.new_set);
 
 	// if nothing has changed in future_new_set, then we want to preserve previous block hash
-	let block = match Some(&new_set) == future_new_set.as_ref().map(|f| &f.new_set) {
-		true => future_new_set.as_ref().map(|f| &f.block).cloned().unwrap_or_else(|| block),
-		false => block,
+	let block = {
+		if future_new_set.as_ref().map(|f| &f.new_set) == Some(&new_set) {
+			future_new_set.as_ref().map(|f| &f.block).cloned().unwrap_or_else(|| block)
+		} else {
+			block
+		}
 	};
 
 	*future_new_set = Some(FutureNewSet {
-		new_set: new_set,
-		block: block,
+		new_set,
+		block,
 	});
 }
 
@@ -512,7 +523,7 @@ fn update_number_of_confirmations<F1: Fn() -> H256, F2: Fn(H256) -> Option<u64>>
 		// no future new set is scheduled => do nothing,
 		None => return,
 		// else we should calculate number of confirmations for future new set
-		Some(future_new_set) => match confirmations(future_new_set.block.clone()) {
+		Some(future_new_set) => match confirmations(future_new_set.block) {
 			// we have enough confirmations => should move new_set from future to snapshot
 			Some(confirmations) if confirmations >= MIGRATION_CONFIRMATIONS_REQUIRED => (),
 			// not enough confirmations => do nothing
@@ -552,7 +563,7 @@ fn update_last_transaction_block(client: &dyn SecretStoreChain, migration_id: &H
 	}
 
 	*previous_transaction = Some(PreviousMigrationTransaction {
-		migration_id: migration_id.clone(),
+		migration_id: *migration_id,
 		block: last_block,
 	});
 
@@ -586,9 +597,9 @@ pub mod tests {
 
 	impl MapKeyServerSet {
 		pub fn new(is_isolated: bool, nodes: BTreeMap<Public, SocketAddr>) -> Self {
-			MapKeyServerSet {
-				is_isolated: is_isolated,
-				nodes: nodes,
+			Self {
+				is_isolated,
+				nodes,
 			}
 		}
 	}

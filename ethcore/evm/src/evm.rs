@@ -114,7 +114,7 @@ impl CostType for U256 {
 		let overflow = (parts[4] | parts[5] | parts[6] | parts[7]) > 0;
 		let U512(parts) = x >> shr;
 		(
-			U256([parts[0], parts[1], parts[2], parts[3]]),
+			Self([parts[0], parts[1], parts[2], parts[3]]),
 			overflow
 		)
 	}
@@ -126,7 +126,7 @@ impl CostType for usize {
 	}
 
 	fn from_u256(val: U256) -> Result<Self> {
-		let res = val.low_u64() as usize;
+		let res = val.low_u64() as Self;
 
 		// validate if value fits into usize
 		if U256::from(res) != val {
@@ -153,7 +153,7 @@ impl CostType for usize {
 		let U128(parts) = c;
 		let overflow = o | (parts[1] > 0);
 		let U128(parts) = c >> shr;
-		let result = parts[0] as usize;
+		let result = parts[0] as Self;
 		let overflow = overflow | (parts[0] > result as u64);
 		(result, overflow)
 	}
@@ -167,7 +167,7 @@ mod tests {
 	#[test]
 	fn should_calculate_overflow_mul_shr_without_overflow() {
 		// given
-		let num = 1048576;
+		let num = 1_048_576;
 
 		// when
 		let (res1, o1) = U256::from(num).overflow_mul_shr(U256::from(num), 20);

@@ -50,15 +50,15 @@ const MAX_ACTIVE_KEY_SESSIONS: usize = 64;
 /// Brief overview:
 /// 1) consensus establishing
 /// 2) master node requests all other nodes for sessions he is not participating (aka unknown sessions)
-/// 3) every slave node responds with sessions id => we are able to collect Map<SessionId, Set> of unknown sessions on master
+/// 3) every slave node responds with sessions id => we are able to collect `Map<SessionId, Set>` of unknown sessions on master
 /// 4) for every known session (i.e. session that master participates in):
 /// 4.1) share change plan is created = nodes to add shares for, nodes to move shares from/to, nodes to remove shares from
-/// 4.2) share change session is started. Share change session = sequential execution of ShareAdd, then ShareMove && then ShareRemove sessions (order matters here) for single key
+/// 4.2) share change session is started. Share change session = sequential execution of `ShareAdd`, then `ShareMove` && then `ShareRemove` sessions (order matters here) for single key
 /// 5) for every unknown session:
-/// 5.1) sub_master is selected from sessions participants
-/// 5.2) share change session is delegated from master to this sub_master
-/// 5.3) share change session is executed by this sub_master
-/// 5.4) share change confirm is sent from sub_master to master
+/// 5.1) `sub_master` is selected from sessions participants
+/// 5.2) share change session is delegated from master to this `sub_master`
+/// 5.3) share change session is executed by this `sub_master`
+/// 5.4) share change confirm is sent from `sub_master` to master
 /// 6) upon completing all known share change sessions && receiving confirmations for all unknown share change sessions, session completion signal is sent to all slave nodes && session is completed
 pub struct SessionImpl {
 	/// Session core.
@@ -131,7 +131,7 @@ struct SessionInitializationData {
 	pub confirmations: BTreeSet<NodeId>,
 }
 
-/// SessionImpl creation parameters
+/// `SessionImpl` creation parameters
 pub struct SessionParams {
 	/// Session meta (artificial).
 	pub meta: ShareChangeSessionMeta,
@@ -185,7 +185,7 @@ impl SessionImpl {
 	/// Create new servers set change session.
 	pub fn new(params: SessionParams) -> Result<(Self, Oneshot<Result<(), Error>>), Error> {
 		let (completed, oneshot) = CompletionSignal::new();
-		Ok((SessionImpl {
+		Ok((Self {
 			core: SessionCore {
 				meta: params.meta,
 				cluster: params.cluster,
@@ -211,7 +211,7 @@ impl SessionImpl {
 	}
 
 	/// Get session id.
-	pub fn id(&self) -> &SessionId {
+	pub const fn id(&self) -> &SessionId {
 		&self.core.meta.id
 	}
 
@@ -236,15 +236,15 @@ impl SessionImpl {
 
 		let mut consensus_session = ConsensusSession::new(ConsensusSessionParams {
 			meta: self.core.meta.clone().into_consensus_meta(self.core.all_nodes_set.len())?,
-			consensus_executor: ServersSetChangeAccessJob::new_on_master(self.core.admin_public.clone(),
+			consensus_executor: ServersSetChangeAccessJob::new_on_master(self.core.admin_public,
 				self.core.all_nodes_set.clone(),
 				new_nodes_set.clone(),
 				all_set_signature,
 				new_set_signature),
 			consensus_transport: ServersSetChangeConsensusTransport {
-				id: self.core.meta.id.clone(),
+				id: self.core.meta.id,
 				nonce: self.core.nonce,
-				migration_id: self.core.migration_id.clone(),
+				migration_id: self.core.migration_id,
 				cluster: self.core.cluster.clone(),
 			},
 		})?;
@@ -270,29 +270,29 @@ impl SessionImpl {
 		}
 
 		match message {
-			&ServersSetChangeMessage::ServersSetChangeConsensusMessage(ref message) =>
+			ServersSetChangeMessage::ServersSetChangeConsensusMessage(message) =>
 				self.on_consensus_message(sender, message),
-			&ServersSetChangeMessage::UnknownSessionsRequest(ref message) =>
+			ServersSetChangeMessage::UnknownSessionsRequest(message) =>
 				self.on_unknown_sessions_requested(sender, message),
-			&ServersSetChangeMessage::UnknownSessions(ref message) =>
+			ServersSetChangeMessage::UnknownSessions(message) =>
 				self.on_unknown_sessions(sender, message),
-			&ServersSetChangeMessage::ShareChangeKeyVersionNegotiation(ref message) =>
+			ServersSetChangeMessage::ShareChangeKeyVersionNegotiation(message) =>
 				self.on_key_version_negotiation(sender, message),
-			&ServersSetChangeMessage::InitializeShareChangeSession(ref message) =>
+			ServersSetChangeMessage::InitializeShareChangeSession(message) =>
 				self.on_initialize_share_change_session(sender, message),
-			&ServersSetChangeMessage::ConfirmShareChangeSessionInitialization(ref message) =>
+			ServersSetChangeMessage::ConfirmShareChangeSessionInitialization(message) =>
 				self.on_share_change_session_confirmation(sender, message),
-			&ServersSetChangeMessage::ServersSetChangeDelegate(ref message) =>
+			ServersSetChangeMessage::ServersSetChangeDelegate(message) =>
 				self.on_sessions_delegation(sender, message),
-			&ServersSetChangeMessage::ServersSetChangeDelegateResponse(ref message) =>
+			ServersSetChangeMessage::ServersSetChangeDelegateResponse(message) =>
 				self.on_delegated_session_completed(sender, message),
-			&ServersSetChangeMessage::ServersSetChangeShareAddMessage(ref message) =>
+			ServersSetChangeMessage::ServersSetChangeShareAddMessage(message) =>
 				self.on_share_add_message(sender, message),
-			&ServersSetChangeMessage::ServersSetChangeError(ref message) => {
+			ServersSetChangeMessage::ServersSetChangeError(message) => {
 				self.on_session_error(sender, message.error.clone());
 				Ok(())
 			},
-			&ServersSetChangeMessage::ServersSetChangeCompleted(ref message) =>
+			ServersSetChangeMessage::ServersSetChangeCompleted(message) =>
 				self.on_session_completed(sender, message),
 		}
 	}
@@ -308,23 +308,20 @@ impl SessionImpl {
 		}
 
 		// start slave consensus session if needed
-		if self.core.meta.self_node_id != self.core.meta.master_node_id {
-			if data.consensus_session.is_none() {
-				match &message.message {
-					&ConsensusMessageWithServersSet::InitializeConsensusSession(_) => {
-						data.consensus_session = Some(ConsensusSession::new(ConsensusSessionParams {
-							meta: self.core.meta.clone().into_consensus_meta(self.core.all_nodes_set.len())?,
-							consensus_executor: ServersSetChangeAccessJob::new_on_slave(self.core.admin_public.clone()),
-							consensus_transport: ServersSetChangeConsensusTransport {
-								id: self.core.meta.id.clone(),
-								nonce: self.core.nonce,
-								migration_id: self.core.migration_id.clone(),
-								cluster: self.core.cluster.clone(),
-							},
-						})?);
+		if self.core.meta.self_node_id != self.core.meta.master_node_id && data.consensus_session.is_none() {
+			if let ConsensusMessageWithServersSet::InitializeConsensusSession(_) = &message.message {
+				data.consensus_session = Some(ConsensusSession::new(ConsensusSessionParams {
+					meta: self.core.meta.clone().into_consensus_meta(self.core.all_nodes_set.len())?,
+					consensus_executor: ServersSetChangeAccessJob::new_on_slave(self.core.admin_public),
+					consensus_transport: ServersSetChangeConsensusTransport {
+						id: self.core.meta.id,
+						nonce: self.core.nonce,
+						migration_id: self.core.migration_id,
+						cluster: self.core.cluster.clone(),
 					},
-					_ => return Err(Error::InvalidStateForRequest),
-				}
+				})?);
+			} else {
+				return Err(Error::InvalidStateForRequest)
 			}
 		}
 
@@ -332,9 +329,9 @@ impl SessionImpl {
 		let consensus_session = data.consensus_session.as_mut().ok_or(Error::InvalidMessage)?;
 		let is_establishing_consensus = consensus_session.state() == ConsensusSessionState::EstablishingConsensus;
 		match &message.message {
-			&ConsensusMessageWithServersSet::InitializeConsensusSession(ref message) =>
+			ConsensusMessageWithServersSet::InitializeConsensusSession(message) =>
 				consensus_session.on_consensus_partial_request(sender, ServersSetChangeAccessRequest::from(message))?,
-			&ConsensusMessageWithServersSet::ConfirmConsensusInitialization(ref message) =>
+			ConsensusMessageWithServersSet::ConfirmConsensusInitialization(message) =>
 				consensus_session.on_consensus_partial_response(sender, message.is_confirmed)?,
 		}
 
@@ -344,7 +341,7 @@ impl SessionImpl {
 			return Ok(());
 		}
 
-		let unknown_sessions_job = UnknownSessionsJob::new_on_master(self.core.key_storage.clone(), self.core.meta.self_node_id.clone());
+		let unknown_sessions_job = UnknownSessionsJob::new_on_master(self.core.key_storage.clone(), self.core.meta.self_node_id);
 		consensus_session.disseminate_jobs(unknown_sessions_job, self.unknown_sessions_transport(), false).map(|_| ())
 	}
 
@@ -361,7 +358,7 @@ impl SessionImpl {
 			let unknown_sessions_transport = self.unknown_sessions_transport();
 
 			// and respond with unknown sessions
-			consensus_session.on_job_request(&sender, sender.clone(), unknown_sessions_job, unknown_sessions_transport)?;
+			consensus_session.on_job_request(sender, sender.clone(), unknown_sessions_job, unknown_sessions_transport)?;
 
 			consensus_session.consensus_job().executor()
 				.new_servers_set()
@@ -421,22 +418,22 @@ impl SessionImpl {
 
 		// process message
 		match &message.message {
-			&KeyVersionNegotiationMessage::RequestKeyVersions(ref message) if sender == &self.core.meta.master_node_id => {
+			KeyVersionNegotiationMessage::RequestKeyVersions(message) if sender == &self.core.meta.master_node_id => {
 				let key_id = message.session.clone().into();
 				let key_share = self.core.key_storage.get(&key_id)?;
 				let (negotiation_session, _) = KeyVersionNegotiationSessionImpl::new(KeyVersionNegotiationSessionParams {
 					meta: ShareChangeSessionMeta {
-						id: key_id.clone(),
-						self_node_id: self.core.meta.self_node_id.clone(),
-						master_node_id: sender.clone(),
+						id: key_id,
+						self_node_id: self.core.meta.self_node_id,
+						master_node_id: *sender,
 						configured_nodes_count: self.core.meta.configured_nodes_count,
 						connected_nodes_count: self.core.meta.connected_nodes_count,
 					},
 					sub_session: message.sub_session.clone().into(),
-					key_share: key_share,
+					key_share,
 					result_computer: Arc::new(LargestSupportResultComputer {}),
 					transport: ServersSetChangeKeyVersionNegotiationTransport {
-						id: self.core.meta.id.clone(),
+						id: self.core.meta.id,
 						nonce: self.core.nonce,
 						cluster: self.core.cluster.clone(),
 					},
@@ -446,7 +443,7 @@ impl SessionImpl {
 				debug_assert!(negotiation_session.is_finished());
 				Ok(())
 			},
-			&KeyVersionNegotiationMessage::KeyVersions(ref message) if self.core.meta.self_node_id == self.core.meta.master_node_id => {
+			KeyVersionNegotiationMessage::KeyVersions(message) if self.core.meta.self_node_id == self.core.meta.master_node_id => {
 				let key_id = message.session.clone().into();
 				{
 					let negotiation_session = data.negotiation_sessions.get(&key_id).ok_or(Error::InvalidMessage)?;
@@ -485,53 +482,52 @@ impl SessionImpl {
 
 		// insert new session
 		let key_id = message.key_id.clone().into();
-		match data.active_key_sessions.contains_key(&key_id) {
-			true => return Err(Error::InvalidMessage),
-			false => {
-				let master_plan = ShareChangeSessionPlan {
-					key_version: message.version.clone().into(),
-					version_holders: message.version_holders.iter().cloned().map(Into::into).collect(),
-					consensus_group: message.consensus_group.iter().cloned().map(Into::into).collect(),
-					new_nodes_map: message.new_nodes_map.iter().map(|(k, v)| (k.clone().into(), v.clone().map(Into::into))).collect(),
-				};
+		if data.active_key_sessions.contains_key(&key_id) {
+			return Err(Error::InvalidMessage);
+		} else {
+			let master_plan = ShareChangeSessionPlan {
+				key_version: message.version.clone().into(),
+				version_holders: message.version_holders.iter().cloned().map(Into::into).collect(),
+				consensus_group: message.consensus_group.iter().cloned().map(Into::into).collect(),
+				new_nodes_map: message.new_nodes_map.iter().map(|(k, v)| (k.clone().into(), v.clone().map(Into::into))).collect(),
+			};
 
-				// if master plan is empty, it is cheating
-				if master_plan.is_empty() {
+			// if master plan is empty, it is cheating
+			if master_plan.is_empty() {
+				return Err(Error::InvalidMessage);
+			}
+
+			// on nodes, holding selected key share version, we could check if master node plan is correct
+			let master_node_id = message.master_node_id.clone().into();
+			if let Some(key_share) = self.core.key_storage.get(&key_id)? {
+				let version = message.version.clone().into();
+				let key_share_owners = message.version_holders.iter().cloned().map(Into::into).collect();
+				let new_nodes_set = data.new_nodes_set.as_ref()
+					.expect("new_nodes_set is filled during consensus establishing; change sessions are running after this; qed");
+				let local_plan = prepare_share_change_session_plan(
+					&self.core.all_nodes_set,
+					key_share.threshold,
+					&key_id,
+					version,
+					&master_node_id,
+					&key_share_owners,
+					new_nodes_set)?;
+
+				if local_plan.new_nodes_map.keys().collect::<BTreeSet<_>>() != master_plan.new_nodes_map.keys().collect::<BTreeSet<_>>() {
 					return Err(Error::InvalidMessage);
 				}
+			}
 
-				// on nodes, holding selected key share version, we could check if master node plan is correct
-				let master_node_id = message.master_node_id.clone().into();
-				if let Some(key_share) = self.core.key_storage.get(&key_id)? {
-					let version = message.version.clone().into();
-					let key_share_owners = message.version_holders.iter().cloned().map(Into::into).collect();
-					let new_nodes_set = data.new_nodes_set.as_ref()
-						.expect("new_nodes_set is filled during consensus establishing; change sessions are running after this; qed");
-					let local_plan = prepare_share_change_session_plan(
-						&self.core.all_nodes_set,
-						key_share.threshold,
-						&key_id,
-						version,
-						&master_node_id,
-						&key_share_owners,
-						new_nodes_set)?;
-
-					if local_plan.new_nodes_map.keys().collect::<BTreeSet<_>>() != master_plan.new_nodes_map.keys().collect::<BTreeSet<_>>() {
-						return Err(Error::InvalidMessage);
-					}
-				}
-
-				let session = Self::create_share_change_session(&self.core, key_id, master_node_id, master_plan)?;
-				if !session.is_finished() {
-					data.active_key_sessions.insert(key_id.clone(), session);
-				}
-			},
-		};
+			let session = Self::create_share_change_session(&self.core, key_id, master_node_id, master_plan)?;
+			if !session.is_finished() {
+				data.active_key_sessions.insert(key_id.clone(), session);
+			}
+		}
 
 		// send confirmation
 		self.core.cluster.send(sender, Message::ServersSetChange(ServersSetChangeMessage::ConfirmShareChangeSessionInitialization(ConfirmShareChangeSessionInitialization {
 			session: message.session.clone(),
-			session_nonce: message.session_nonce.clone(),
+			session_nonce: message.session_nonce,
 			key_id: message.key_id.clone(),
 		})))
 	}
@@ -564,7 +560,7 @@ impl SessionImpl {
 				return Ok(());
 			}
 
-			session_init_data.master.clone()
+			session_init_data.master
 		};
 
 		// and start/delegate session if required
@@ -645,7 +641,7 @@ impl SessionImpl {
 
 	/// When share add message is received.
 	pub fn on_share_add_message(&self, sender: &NodeId, message: &ServersSetChangeShareAddMessage) -> Result<(), Error> {
-		self.on_share_change_message(message.message.session_id().clone().into(), |session|
+		self.on_share_change_message(message.message.session_id().clone(), |session|
 			session.on_share_add_message(sender, &message.message))
 	}
 
@@ -660,7 +656,7 @@ impl SessionImpl {
 
 		let mut data = self.data.lock();
 		data.result = Some(Ok(()));
-		if data.active_key_sessions.len() != 0 {
+		if !data.active_key_sessions.is_empty() {
 			return Err(Error::TooEarlyForRequest);
 		}
 
@@ -680,7 +676,7 @@ impl SessionImpl {
 	/// Create unknown sessions transport.
 	fn unknown_sessions_transport(&self) -> UnknownSessionsJobTransport {
 		UnknownSessionsJobTransport {
-			id: self.core.meta.id.clone(),
+			id: self.core.meta.id,
 			nonce: self.core.nonce,
 			cluster: self.core.cluster.clone(),
 		}
@@ -711,12 +707,12 @@ impl SessionImpl {
 	/// Create share change session.
 	fn create_share_change_session(core: &SessionCore, key_id: SessionId, master_node_id: NodeId, session_plan: ShareChangeSessionPlan) -> Result<ShareChangeSession, Error> {
 		ShareChangeSession::new(ShareChangeSessionParams {
-			session_id: core.meta.id.clone(),
+			session_id: core.meta.id,
 			nonce: core.nonce,
 			meta: ShareChangeSessionMeta {
 				id: key_id,
-				self_node_id: core.meta.self_node_id.clone(),
-				master_node_id: master_node_id,
+				self_node_id: core.meta.self_node_id,
+				master_node_id,
 				configured_nodes_count: core.meta.configured_nodes_count,
 				connected_nodes_count: core.meta.connected_nodes_count,
 			},
@@ -745,16 +741,16 @@ impl SessionImpl {
 				let (negotiation_session, _) = KeyVersionNegotiationSessionImpl::new(KeyVersionNegotiationSessionParams {
 					meta: ShareChangeSessionMeta {
 						id: key_id,
-						self_node_id: core.meta.self_node_id.clone(),
-						master_node_id: core.meta.self_node_id.clone(),
+						self_node_id: core.meta.self_node_id,
+						master_node_id: core.meta.self_node_id,
 						configured_nodes_count: core.meta.configured_nodes_count,
 						connected_nodes_count: core.meta.connected_nodes_count,
 					},
 					sub_session: math::generate_random_scalar()?,
-					key_share: key_share,
+					key_share,
 					result_computer: Arc::new(LargestSupportResultComputer {}), // TODO [Opt]: could use modified Fast version
 					transport: ServersSetChangeKeyVersionNegotiationTransport {
-						id: core.meta.id.clone(),
+						id: core.meta.id,
 						nonce: core.nonce,
 						cluster: core.cluster.clone(),
 					},
@@ -770,7 +766,7 @@ impl SessionImpl {
 					continue;
 				}
 
-				number_of_sessions_to_start = number_of_sessions_to_start - 1;
+				number_of_sessions_to_start -= 1;
 			}
 
 			// if iteration is not yet finished => return
@@ -782,9 +778,9 @@ impl SessionImpl {
 		// iteration is finished => complete session
 		if data.state != SessionState::Finished {
 			data.sessions_queue = None;
-			if data.active_key_sessions.len() == 0 &&
-				data.delegated_key_sessions.len() == 0 &&
-				data.negotiation_sessions.len() == 0 {
+			if data.active_key_sessions.is_empty() &&
+				data.delegated_key_sessions.is_empty() &&
+				data.negotiation_sessions.is_empty() {
 				Self::complete_session(core, data)?;
 			}
 		}
@@ -811,7 +807,7 @@ impl SessionImpl {
 		let session_plan = prepare_share_change_session_plan(&core.all_nodes_set,
 			selected_version_threshold,
 			&key_id,
-			selected_version.clone(),
+			selected_version,
 			&selected_master,
 			&old_nodes_set,
 			new_nodes_set)?;
@@ -835,27 +831,27 @@ impl SessionImpl {
 				.collect(),
 		}));
 		for node in &confirmations {
-			core.cluster.send(&node, initialization_message.clone())?;
+			core.cluster.send(node, initialization_message.clone())?;
 		}
 
 		// create session on this node if required
 		if need_create_session {
 			data.active_key_sessions.insert(key_id.clone(), Self::create_share_change_session(core, key_id,
-				selected_master.clone(),
+				selected_master,
 				session_plan)?);
 		}
 
 		// initialize session if required
 		let wait_for_confirmations = !confirmations.is_empty();
-		if !wait_for_confirmations {
+		if wait_for_confirmations {
+			data.sessions_initialization_state.insert(key_id, SessionInitializationData {
+				master: selected_master,
+				confirmations,
+			});
+		} else {
 			data.active_key_sessions.get_mut(&key_id)
 				.expect("!wait_for_confirmations is true only if this is the only session participant; if this is session participant, session is created above; qed")
 				.initialize()?;
-		} else {
-			data.sessions_initialization_state.insert(key_id, SessionInitializationData {
-				master: selected_master,
-				confirmations: confirmations,
-			});
 		}
 
 		Ok(true)
@@ -882,7 +878,7 @@ impl SessionImpl {
 			Self::disseminate_session_initialization_requests(core, data)?;
 		}
 
-		if data.result.is_some() && data.active_key_sessions.len() == 0 {
+		if data.result.is_some() && data.active_key_sessions.is_empty() {
 			data.state = SessionState::Finished;
 			core.completed.send(Ok(()));
 		}
@@ -925,7 +921,7 @@ impl ClusterSession for SessionImpl {
 	}
 
 	fn id(&self) -> SessionId {
-		self.core.meta.id.clone()
+		self.core.meta.id
 	}
 
 	fn is_finished(&self) -> bool {
@@ -948,7 +944,7 @@ impl ClusterSession for SessionImpl {
 			let _ = self.core.cluster.broadcast(Message::ServersSetChange(ServersSetChangeMessage::ServersSetChangeError(ServersSetChangeError {
 				session: self.core.meta.id.clone().into(),
 				session_nonce: self.core.nonce,
-				error: error.clone().into(),
+				error: error.clone(),
 			})));
 		}
 
@@ -963,8 +959,8 @@ impl ClusterSession for SessionImpl {
 	}
 
 	fn on_message(&self, sender: &NodeId, message: &Message) -> Result<(), Error> {
-		match *message {
-			Message::ServersSetChange(ref message) => self.process_message(sender, message),
+		match message {
+			Message::ServersSetChange(message) => self.process_message(sender, message),
 			_ => unreachable!("cluster checks message to be correct before passing; qed"),
 		}
 	}
@@ -1024,7 +1020,7 @@ impl KeyVersionNegotiationTransport for ServersSetChangeKeyVersionNegotiationTra
 		self.cluster.broadcast(Message::ServersSetChange(ServersSetChangeMessage::ShareChangeKeyVersionNegotiation(ShareChangeKeyVersionNegotiation {
 			session: self.id.clone().into(),
 			session_nonce: self.nonce,
-			message: message,
+			message,
 		})))
 	}
 
@@ -1032,16 +1028,17 @@ impl KeyVersionNegotiationTransport for ServersSetChangeKeyVersionNegotiationTra
 		self.cluster.send(node, Message::ServersSetChange(ServersSetChangeMessage::ShareChangeKeyVersionNegotiation(ShareChangeKeyVersionNegotiation {
 			session: self.id.clone().into(),
 			session_nonce: self.nonce,
-			message: message,
+			message,
 		})))
 	}
 }
 
 fn check_nodes_set(all_nodes_set: &BTreeSet<NodeId>, new_nodes_set: &BTreeSet<NodeId>) -> Result<(), Error> {
 	// all_nodes_set is the set of nodes we're currently connected to (and configured for)
-	match new_nodes_set.iter().any(|n| !all_nodes_set.contains(n)) {
-		true => Err(Error::NodeDisconnected),
-		false => Ok(())
+	if new_nodes_set.iter().any(|n| !all_nodes_set.contains(n)) {
+		Err(Error::NodeDisconnected)
+	} else {
+		Ok(())
 	}
 }
 
@@ -1107,12 +1104,12 @@ pub mod tests {
 		) -> SessionImpl {
 			meta.self_node_id = *ml.node_key_pair(idx).public();
 			SessionImpl::new(SessionParams {
-				meta: meta,
-				all_nodes_set: all_nodes_set,
+				meta,
+				all_nodes_set,
 				cluster: ml.cluster(idx).view().unwrap(),
 				key_storage: ml.key_storage(idx).clone(),
 				nonce: 1,
-				admin_public: admin_public,
+				admin_public,
 				migration_id: None,
 			}).unwrap().0
 		}
@@ -1172,7 +1169,7 @@ pub mod tests {
 
 			// generate admin key pair
 			let admin_key_pair = Random.generate().unwrap();
-			let admin_public = admin_key_pair.public().clone();
+			let admin_public = *admin_key_pair.public();
 
 			// all active nodes set
 			let mut all_nodes_set: BTreeSet<_> = ml.nodes().into_iter()
@@ -1218,15 +1215,15 @@ pub mod tests {
 			let all_set_signature = sign(admin_key_pair.secret(), &ordered_nodes_hash(&old_set_to_sign)).unwrap();
 			let new_set_signature = sign(admin_key_pair.secret(), &ordered_nodes_hash(&new_nodes_set)).unwrap();
 
-			MessageLoop {
+			Self {
 				ml,
-				admin_key_pair: admin_key_pair,
+				admin_key_pair,
 				original_key_pair,
 				original_key_version,
-				all_nodes_set: all_nodes_set.clone(),
-				new_nodes_set: new_nodes_set,
-				all_set_signature: all_set_signature,
-				new_set_signature: new_set_signature,
+				all_nodes_set,
+				new_nodes_set,
+				all_set_signature,
+				new_set_signature,
 				sessions,
 				queue: Default::default(),
 			}
@@ -1278,7 +1275,8 @@ pub mod tests {
 							&[share1.unwrap().last_version().unwrap().secret_share.clone(),
 								share2.unwrap().last_version().unwrap().secret_share.clone()],
 							Some(self.original_key_pair.secret()),
-							document_secret_plain.clone());
+							document_secret_plain,
+						);
 
 					assert_eq!(document_secret_plain, document_secret_decrypted_test);
 					assert_eq!(document_secret_plain, document_secret_decrypted);
@@ -1329,7 +1327,7 @@ pub mod tests {
 		// 2) key share is pushed to new node
 		// 3) delegated session is returned back to added node
 		let add = vec![Random.generate().unwrap()];
-		let master = add[0].public().clone();
+		let master = *add[0].public();
 		let ml = MessageLoop::with_gml::<Adapter>(gml, master, Some(add), None, None).run_at(master);
 
 		// try to recover secret for every possible combination of nodes && check that secret is the same
@@ -1413,7 +1411,7 @@ pub mod tests {
 		// and now let's add new node (make sure the session is completed, even though key is still irrecoverable)
 		// isolated here are not actually isolated, but removed on the previous step
 		let add = vec![Random.generate().unwrap()];
-		let master = add[0].public().clone();
+		let master = *add[0].public();
 		let ml = ml.and_then::<Adapter>(master, Some(add.clone()), None, Some(remove)).run_at(master);
 
 		// check that all added nodes do not own key share (there's not enough nodes to run share add session)

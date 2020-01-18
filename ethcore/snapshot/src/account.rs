@@ -17,6 +17,7 @@
 //! Account state encoding and decoding
 
 use std::collections::HashSet;
+use std::hash::BuildHasher;
 
 use account_db::{AccountDB, AccountDBMut};
 use bytes::Bytes;
@@ -57,14 +58,14 @@ enum CodeState {
 impl CodeState {
 	fn from(x: u8) -> Result<Self, Error> {
 		match x {
-			0 => Ok(CodeState::Empty),
-			1 => Ok(CodeState::Inline),
-			2 => Ok(CodeState::Hash),
+			0 => Ok(Self::Empty),
+			1 => Ok(Self::Inline),
+			2 => Ok(Self::Hash),
 			_ => Err(Error::UnrecognizedCodeState(x))
 		}
 	}
 
-	fn raw(self) -> u8 {
+	const fn raw(self) -> u8 {
 		self as u8
 	}
 }
@@ -72,15 +73,15 @@ impl CodeState {
 // walk the account's storage trie, returning a vector of RLP items containing the
 // account address hash, account properties and the storage. Each item contains at most `max_storage_items`
 // storage records split according to snapshot format definition.
-pub fn to_fat_rlps(
+pub fn to_fat_rlps<S>(
 	account_hash: &H256,
 	acc: &BasicAccount,
 	acct_db: &AccountDB,
-	used_code: &mut HashSet<H256>,
+	used_code: &mut HashSet<H256, S>,
 	first_chunk_size: usize,
 	max_chunk_size: usize,
 	p: &RwLock<Progress>,
-) -> Result<Vec<Bytes>, Error> {
+) -> Result<Vec<Bytes>, Error> where S: BuildHasher {
 	let db = &(acct_db as &dyn HashDB<_,_>);
 	let db = TrieDB::new(db, &acc.storage_root)?;
 	let mut chunks = Vec::new();
@@ -91,9 +92,10 @@ pub fn to_fat_rlps(
 	loop {
 		account_stream.append(account_hash);
 		let use_short_version = acc.code_version.is_zero();
-		match use_short_version {
-			true => { account_stream.begin_list(5); },
-			false => { account_stream.begin_list(6); },
+		if use_short_version {
+			account_stream.begin_list(5);
+		} else {
+			account_stream.begin_list(6);
 		}
 
 		account_stream.append(&acc.nonce)
@@ -104,17 +106,12 @@ pub fn to_fat_rlps(
 			account_stream.append(&CodeState::Empty.raw()).append_empty_data();
 		} else if used_code.contains(&acc.code_hash) {
 			account_stream.append(&CodeState::Hash.raw()).append(&acc.code_hash);
+		} else if let Some(c) = acct_db.get(&acc.code_hash, hash_db::EMPTY_PREFIX) {
+			used_code.insert(acc.code_hash.clone());
+			account_stream.append(&CodeState::Inline.raw()).append(&&*c);
 		} else {
-			match acct_db.get(&acc.code_hash, hash_db::EMPTY_PREFIX) {
-				Some(c) => {
-					used_code.insert(acc.code_hash.clone());
-					account_stream.append(&CodeState::Inline.raw()).append(&&*c);
-				}
-				None => {
-					warn!("code lookup failed during snapshot");
-					account_stream.append(&false).append_empty_data();
-				}
-			}
+			warn!("code lookup failed during snapshot");
+			account_stream.append(&false).append_empty_data();
 		}
 
 		if !use_short_version {

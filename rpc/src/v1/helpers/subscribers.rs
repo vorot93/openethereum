@@ -29,7 +29,7 @@ impl str::FromStr for Id {
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		if s.starts_with("0x") {
-			Ok(Id(s[2..].parse().map_err(|e| format!("{}", e))?))
+			Ok(Self(s[2..].parse().map_err(|e| format!("{}", e))?))
 		} else {
 			Err("The id must start with 0x".into())
 		}
@@ -48,6 +48,7 @@ mod random {
 
 	pub type Rng = rand::rngs::OsRng;
 
+	#[allow(clippy::missing_const_for_fn)]
 	pub fn new() -> Rng { OsRng }
 }
 
@@ -56,7 +57,7 @@ mod random {
 	use rand::SeedableRng;
 	use rand_xorshift::XorShiftRng;
 
-	const RNG_SEED: [u8; 16] = [0u8; 16];
+	const RNG_SEED: [u8; 16] = [0_u8; 16];
 
 	pub type Rng = XorShiftRng;
 
@@ -70,7 +71,7 @@ pub struct Subscribers<T> {
 
 impl<T> Default for Subscribers<T> {
 	fn default() -> Self {
-		Subscribers {
+		Self {
 			rand: random::new(),
 			subscriptions: HashMap::new(),
 		}
@@ -95,8 +96,8 @@ impl<T> Subscribers<T> {
 	/// Removes subscription with given id and returns it (if any).
 	pub fn remove(&mut self, id: &SubscriptionId) -> Option<T> {
 		trace!(target: "pubsub", "Removing subscription id={:?}", id);
-		match *id {
-			SubscriptionId::String(ref id) => match id.parse() {
+		match id {
+			SubscriptionId::String(id) => match id.parse() {
 				Ok(id) => self.subscriptions.remove(&id),
 				Err(_) => None,
 			},

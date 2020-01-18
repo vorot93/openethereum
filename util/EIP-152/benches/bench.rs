@@ -14,6 +14,53 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
 
 use criterion::{Criterion, criterion_group, criterion_main, black_box, Throughput, BenchmarkId};
 use std::mem;
@@ -44,28 +91,28 @@ fn detect(state: &mut [u64; 8], message: [u64; 16], count: [u64; 2], f: bool, ro
 pub fn avx_ifunc_benchmark(c: &mut Criterion) {
 	let mut group = c.benchmark_group("avx2_ifunc");
 
-	for rounds in [12, 50, 100].iter() {
+	for rounds in &[12, 50, 100] {
 		group.throughput(Throughput::Elements(*rounds as u64));
 		group.bench_with_input(
 			BenchmarkId::new("rounds", rounds),
 			&rounds,
 			|b, rounds| {
 				let mut state = [
-					0x6a09e667f2bdc948_u64, 0xbb67ae8584caa73b_u64,
-					0x3c6ef372fe94f82b_u64, 0xa54ff53a5f1d36f1_u64,
-					0x510e527fade682d1_u64, 0x9b05688c2b3e6c1f_u64,
-					0x1f83d9abfb41bd6b_u64, 0x5be0cd19137e2179_u64,
+					0x6a09_e667_f2bd_c948_u64, 0xbb67_ae85_84ca_a73b_u64,
+					0x3c6e_f372_fe94_f82b_u64, 0xa54f_f53a_5f1d_36f1_u64,
+					0x510e_527f_ade6_82d1_u64, 0x9b05_688c_2b3e_6c1f_u64,
+					0x1f83_d9ab_fb41_bd6b_u64, 0x5be0_cd19_137e_2179_u64,
 				];
 
 				let message = [
-					0x0000000000636261_u64, 0x0000000000000000_u64,
-					0x0000000000000000_u64, 0x0000000000000000_u64,
-					0x0000000000000000_u64, 0x0000000000000000_u64,
-					0x0000000000000000_u64, 0x0000000000000000_u64,
-					0x0000000000000000_u64, 0x0000000000000000_u64,
-					0x0000000000000000_u64, 0x0000000000000000_u64,
-					0x0000000000000000_u64, 0x0000000000000000_u64,
-					0x0000000000000000_u64, 0x0000000000000000_u64,
+					0x0000_0000_0063_6261_u64, 0x0000_0000_0000_0000_u64,
+					0x0000_0000_0000_0000_u64, 0x0000_0000_0000_0000_u64,
+					0x0000_0000_0000_0000_u64, 0x0000_0000_0000_0000_u64,
+					0x0000_0000_0000_0000_u64, 0x0000_0000_0000_0000_u64,
+					0x0000_0000_0000_0000_u64, 0x0000_0000_0000_0000_u64,
+					0x0000_0000_0000_0000_u64, 0x0000_0000_0000_0000_u64,
+					0x0000_0000_0000_0000_u64, 0x0000_0000_0000_0000_u64,
+					0x0000_0000_0000_0000_u64, 0x0000_0000_0000_0000_u64,
 				];
 				let count = [3, 0];
 				let f = true;
@@ -96,28 +143,28 @@ pub fn avx_ifunc_benchmark(c: &mut Criterion) {
 pub fn avx_benchmark(c: &mut Criterion) {
 	let mut group = c.benchmark_group("avx2");
 
-	for rounds in [12, 50, 100].iter() {
+	for rounds in &[12, 50, 100] {
 		group.throughput(Throughput::Elements(*rounds as u64));
 		group.bench_with_input(
 			BenchmarkId::new("rounds", rounds),
 			&rounds,
 			|b, rounds| {
 				let mut state = [
-					0x6a09e667f2bdc948_u64, 0xbb67ae8584caa73b_u64,
-					0x3c6ef372fe94f82b_u64, 0xa54ff53a5f1d36f1_u64,
-					0x510e527fade682d1_u64, 0x9b05688c2b3e6c1f_u64,
-					0x1f83d9abfb41bd6b_u64, 0x5be0cd19137e2179_u64,
+					0x6a09_e667_f2bd_c948_u64, 0xbb67_ae85_84ca_a73b_u64,
+					0x3c6e_f372_fe94_f82b_u64, 0xa54f_f53a_5f1d_36f1_u64,
+					0x510e_527f_ade6_82d1_u64, 0x9b05_688c_2b3e_6c1f_u64,
+					0x1f83_d9ab_fb41_bd6b_u64, 0x5be0_cd19_137e_2179_u64,
 				];
 
 				let message = [
-					0x0000000000636261_u64, 0x0000000000000000_u64,
-					0x0000000000000000_u64, 0x0000000000000000_u64,
-					0x0000000000000000_u64, 0x0000000000000000_u64,
-					0x0000000000000000_u64, 0x0000000000000000_u64,
-					0x0000000000000000_u64, 0x0000000000000000_u64,
-					0x0000000000000000_u64, 0x0000000000000000_u64,
-					0x0000000000000000_u64, 0x0000000000000000_u64,
-					0x0000000000000000_u64, 0x0000000000000000_u64,
+					0x0000_0000_0063_6261_u64, 0x0000_0000_0000_0000_u64,
+					0x0000_0000_0000_0000_u64, 0x0000_0000_0000_0000_u64,
+					0x0000_0000_0000_0000_u64, 0x0000_0000_0000_0000_u64,
+					0x0000_0000_0000_0000_u64, 0x0000_0000_0000_0000_u64,
+					0x0000_0000_0000_0000_u64, 0x0000_0000_0000_0000_u64,
+					0x0000_0000_0000_0000_u64, 0x0000_0000_0000_0000_u64,
+					0x0000_0000_0000_0000_u64, 0x0000_0000_0000_0000_u64,
+					0x0000_0000_0000_0000_u64, 0x0000_0000_0000_0000_u64,
 				];
 				let count = [3, 0];
 				let f = true;
@@ -145,28 +192,28 @@ pub fn avx_benchmark(c: &mut Criterion) {
 pub fn portable_benchmark(c: &mut Criterion) {
 	let mut group = c.benchmark_group("portable_impl");
 
-	for rounds in [12, 50, 100].iter() {
+	for rounds in &[12, 50, 100] {
 		group.throughput(Throughput::Elements(*rounds as u64));
 		group.bench_with_input(
 			BenchmarkId::new("rounds", rounds),
 			&rounds,
 			|b, rounds| {
 				let mut state = [
-					0x6a09e667f2bdc948_u64, 0xbb67ae8584caa73b_u64,
-					0x3c6ef372fe94f82b_u64, 0xa54ff53a5f1d36f1_u64,
-					0x510e527fade682d1_u64, 0x9b05688c2b3e6c1f_u64,
-					0x1f83d9abfb41bd6b_u64, 0x5be0cd19137e2179_u64,
+					0x6a09_e667_f2bd_c948_u64, 0xbb67_ae85_84ca_a73b_u64,
+					0x3c6e_f372_fe94_f82b_u64, 0xa54f_f53a_5f1d_36f1_u64,
+					0x510e_527f_ade6_82d1_u64, 0x9b05_688c_2b3e_6c1f_u64,
+					0x1f83_d9ab_fb41_bd6b_u64, 0x5be0_cd19_137e_2179_u64,
 				];
 
 				let message = [
-					0x0000000000636261_u64, 0x0000000000000000_u64,
-					0x0000000000000000_u64, 0x0000000000000000_u64,
-					0x0000000000000000_u64, 0x0000000000000000_u64,
-					0x0000000000000000_u64, 0x0000000000000000_u64,
-					0x0000000000000000_u64, 0x0000000000000000_u64,
-					0x0000000000000000_u64, 0x0000000000000000_u64,
-					0x0000000000000000_u64, 0x0000000000000000_u64,
-					0x0000000000000000_u64, 0x0000000000000000_u64,
+					0x0000_0000_0063_6261_u64, 0x0000_0000_0000_0000_u64,
+					0x0000_0000_0000_0000_u64, 0x0000_0000_0000_0000_u64,
+					0x0000_0000_0000_0000_u64, 0x0000_0000_0000_0000_u64,
+					0x0000_0000_0000_0000_u64, 0x0000_0000_0000_0000_u64,
+					0x0000_0000_0000_0000_u64, 0x0000_0000_0000_0000_u64,
+					0x0000_0000_0000_0000_u64, 0x0000_0000_0000_0000_u64,
+					0x0000_0000_0000_0000_u64, 0x0000_0000_0000_0000_u64,
+					0x0000_0000_0000_0000_u64, 0x0000_0000_0000_0000_u64,
 				];
 				let count = [3, 0];
 				let f = true;

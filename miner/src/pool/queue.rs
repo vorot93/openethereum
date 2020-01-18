@@ -91,8 +91,8 @@ struct CachedPending {
 
 impl CachedPending {
 	/// Creates new `CachedPending` without cached set.
-	pub fn none() -> Self {
-		CachedPending {
+	pub const fn none() -> Self {
+		Self {
 			block_number: 0,
 			current_timestamp: 0,
 			has_local_pending: false,
@@ -155,7 +155,7 @@ struct RecentlyRejected {
 
 impl RecentlyRejected {
 	fn new(limit: usize) -> Self {
-		RecentlyRejected {
+		Self {
 			limit,
 			inner: RwLock::new(HashMap::with_capacity(MIN_REJECTED_CACHE_SIZE)),
 		}
@@ -214,8 +214,8 @@ impl TransactionQueue {
 		strategy: PrioritizationStrategy,
 	) -> Self {
 		let max_count = limits.max_count;
-		TransactionQueue {
-			insertion_id: Default::default(),
+		Self {
+			insertion_id: Arc::new(AtomicUsize::default()),
 			pool: RwLock::new(txpool::Pool::new(Default::default(), scoring::NonceAndGasPrice(strategy), limits)),
 			options: RwLock::new(verification_options),
 			cached_pending: RwLock::new(CachedPending::none()),
@@ -270,7 +270,7 @@ impl TransactionQueue {
 			transaction_to_replace,
 		);
 
-		let mut replace = replace::ReplaceByScoreAndReadiness::new(self.pool.read().scoring().clone(), client);
+		let replace = replace::ReplaceByScoreAndReadiness::new(self.pool.read().scoring().clone(), client);
 
 		let results = transactions
 			.into_iter()
@@ -289,7 +289,7 @@ impl TransactionQueue {
 				let imported = verifier
 					.verify_transaction(transaction)
 					.and_then(|verified| {
-						self.pool.write().import(verified, &mut replace).map_err(convert_error)
+						self.pool.write().import(verified, &replace).map_err(convert_error)
 					});
 
 				match imported {
@@ -305,7 +305,7 @@ impl TransactionQueue {
 		// Notify about imported transactions.
 		(self.pool.write().listener_mut().1).0.notify();
 
-		if results.iter().any(|r| r.is_ok()) {
+		if results.iter().any(Result::is_ok) {
 			self.cached_pending.write().clear();
 		}
 
@@ -450,8 +450,7 @@ impl TransactionQueue {
 		let mut removed = 0;
 		let senders: Vec<_> = {
 			let pool = self.pool.read();
-			let senders = pool.senders().cloned().collect();
-			senders
+			pool.senders().cloned().collect()
 		};
 		for chunk in senders.chunks(CULL_SENDERS_CHUNK) {
 			trace_time!("pool::cull::chunk");

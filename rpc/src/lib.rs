@@ -16,25 +16,52 @@
 
 //! Parity Ethereum JSON-RPC Servers (WS, HTTP, IPC).
 
-#![warn(missing_docs, unused_extern_crates)]
-#![cfg_attr(feature = "cargo-clippy", warn(clippy::all, clippy::pedantic))]
-#![cfg_attr(
-	feature = "cargo-clippy",
-	allow(
-		// things are often more readable this way
-		clippy::cast_lossless,
-		clippy::module_name_repetitions,
-		clippy::single_match_else,
-		clippy::type_complexity,
-		clippy::use_self,
-		// not practical
-		clippy::match_bool,
-		clippy::needless_pass_by_value,
-		clippy::similar_names,
-		// don't require markdown syntax for docs
-		clippy::doc_markdown,
-	),
-	warn(clippy::indexing_slicing)
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
 )]
 
 #[macro_use]
@@ -168,6 +195,7 @@ use std::net::SocketAddr;
 pub type HttpServer = http::Server;
 
 /// Start http server asynchronously and returns result with `Server` handle on success or an error.
+#[allow(clippy::too_many_arguments)]
 pub fn start_http<M, S, H, T>(
 	addr: &SocketAddr,
 	cors_domains: http::DomainsValidation<http::AccessControlAllowOrigin>,
@@ -197,6 +225,7 @@ pub fn start_http<M, S, H, T>(
 
 /// Same as `start_http`, but takes an additional `middleware` parameter that is introduced as a
 /// hyper middleware.
+#[allow(clippy::too_many_arguments)]
 pub fn start_http_with_middleware<M, S, H, T, R>(
 	addr: &SocketAddr,
 	cors_domains: http::DomainsValidation<http::AccessControlAllowOrigin>,
@@ -247,6 +276,7 @@ pub fn start_ipc<M, S, H, T>(
 }
 
 /// Start WS server and return `Server` handle.
+#[allow(clippy::too_many_arguments)]
 pub fn start_ws<M, S, H, T, U, V>(
 	addr: &SocketAddr,
 	handler: H,

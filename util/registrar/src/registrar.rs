@@ -22,7 +22,7 @@ use types::ids::BlockId;
 use_contract!(registrar, "res/registrar.json");
 
 // Maps a domain name to an Ethereum address
-const DNS_A_RECORD: &'static str = "A";
+const DNS_A_RECORD: &str = "A";
 
 /// Registrar contract interface
 pub trait RegistrarClient: CallContract + Send + Sync {

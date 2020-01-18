@@ -42,7 +42,7 @@ impl Factory {
 	/// Create new instance of a factory, with a size in bytes
 	/// for caching jump destinations.
 	pub fn new(cache_size: usize) -> Self {
-		Factory {
+		Self {
 			evm_cache: Arc::new(SharedCache::new(cache_size)),
 		}
 	}
@@ -54,8 +54,8 @@ impl Factory {
 
 impl Default for Factory {
 	/// Returns native rust evm factory
-	fn default() -> Factory {
-		Factory {
+	fn default() -> Self {
+		Self {
 			evm_cache: Arc::new(SharedCache::default()),
 		}
 	}

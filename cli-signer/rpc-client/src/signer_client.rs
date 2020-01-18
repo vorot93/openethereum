@@ -29,11 +29,11 @@ pub struct SignerRpc {
 
 impl SignerRpc {
 	pub fn new(url: &str, authfile: &PathBuf) -> Result<Self, RpcError> {
-		Ok(SignerRpc { rpc: Rpc::new(&url, authfile)? })
+		Ok(Self { rpc: Rpc::new(url, authfile)? })
 	}
 
 	pub fn requests_to_confirm(&mut self) -> BoxFuture<Result<Vec<ConfirmationRequest>, RpcError>, Canceled> {
-		self.rpc.request("signer_requestsToConfirm", vec![])
+		self.rpc.request("signer_requestsToConfirm", Vec::new())
 	}
 
 	pub fn confirm_request(
@@ -45,9 +45,9 @@ impl SignerRpc {
 		pwd: &str
 	) -> BoxFuture<Result<U256, RpcError>, Canceled> {
 		self.rpc.request("signer_confirmRequest", vec![
-			Self::to_value(&format!("{:#x}", id)),
-			Self::to_value(&TransactionModification { sender: None, gas_price: new_gas_price, gas: new_gas, condition: new_condition }),
-			Self::to_value(&pwd),
+			Self::convert_to_value(&format!("{:#x}", id)),
+			Self::convert_to_value(&TransactionModification { sender: None, gas_price: new_gas_price, gas: new_gas, condition: new_condition }),
+			Self::convert_to_value(&pwd),
 		])
 	}
 
@@ -57,7 +57,7 @@ impl SignerRpc {
 		])
 	}
 
-	fn to_value<T: serde::Serialize>(v: &T) -> JsonValue {
+	fn convert_to_value<T: serde::Serialize>(v: &T) -> JsonValue {
 		to_value(v).expect("Our types are always serializable; qed")
 	}
 }

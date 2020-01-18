@@ -30,7 +30,7 @@ pub struct Bytes(Vec<u8>);
 impl Bytes {
 	/// Creates bytes struct.
 	pub fn new(v: Vec<u8>) -> Self {
-		Bytes(v)
+		Self(v)
 	}
 }
 
@@ -42,7 +42,7 @@ impl From<Bytes> for Vec<u8> {
 
 impl From<Vec<u8>> for Bytes {
 	fn from(bytes: Vec<u8>) -> Self {
-		Bytes(bytes)
+		Self(bytes)
 	}
 }
 
@@ -59,8 +59,8 @@ impl FromStr for Bytes {
 
 	fn from_str(value: &str) -> Result<Self, Self::Err> {
 		let v = match value.len() {
-			0 => vec![],
-			2 if value.starts_with("0x") => vec![],
+			0 => Vec::new(),
+			2 if value.starts_with("0x") => Vec::new(),
 			_ if value.starts_with("0x") && value.len() % 2 == 1 => {
 				let v = "0".to_owned() + &value[2..];
 				FromHex::from_hex(v.as_str()).unwrap_or_default()
@@ -69,7 +69,7 @@ impl FromStr for Bytes {
 			_ => FromHex::from_hex(value).unwrap_or_default(),
 		};
 
-		Ok(Bytes(v))
+		Ok(Self(v))
 	}
 }
 
@@ -107,8 +107,8 @@ mod test {
 		let s = r#"["", "0x", "0x12", "1234", "0x001"]"#;
 		let deserialized: Vec<Bytes> = serde_json::from_str(s).unwrap();
 		assert_eq!(deserialized, vec![
-			Bytes(vec![]),
-			Bytes(vec![]),
+			Bytes(Vec::new()),
+			Bytes(Vec::new()),
 			Bytes(vec![0x12]),
 			Bytes(vec![0x12, 0x34]),
 			Bytes(vec![0, 1])

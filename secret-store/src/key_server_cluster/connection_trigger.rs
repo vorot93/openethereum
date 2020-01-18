@@ -58,13 +58,13 @@ pub trait ConnectionTrigger: Send + Sync {
 /// Servers set change session creator connector.
 pub trait ServersSetChangeSessionCreatorConnector: Send + Sync {
 	/// Get actual administrator public key. For manual-migration configuration it is the pre-configured
-	/// administrator key. For auto-migration configurations it is the key of actual MigrationSession master node.
+	/// administrator key. For auto-migration configurations it is the key of actual `MigrationSession` master node.
 	fn admin_public(&self, migration_id: Option<&H256>, new_server_set: BTreeSet<NodeId>) -> Result<Public, Error>;
 	/// Set active servers set change session.
 	fn set_key_servers_set_change_session(&self, session: Arc<AdminSession>);
 }
 
-/// Simple connection trigger, which only keeps connections to current_set.
+/// Simple connection trigger, which only keeps connections to `current_set`.
 pub struct SimpleConnectionTrigger {
 	/// Key server set cluster.
 	key_server_set: Arc<dyn KeyServerSet>,
@@ -104,13 +104,13 @@ impl SimpleConnectionTrigger {
 
 	/// Create new simple connection trigger.
 	pub fn new(key_server_set: Arc<dyn KeyServerSet>, self_key_pair: Arc<dyn SigningKeyPair>, admin_public: Option<Public>) -> Self {
-		SimpleConnectionTrigger {
-			key_server_set: key_server_set,
+		Self {
+			key_server_set,
 			connections: TriggerConnections {
-				self_key_pair: self_key_pair,
+				self_key_pair,
 			},
 			connector: Arc::new(SimpleServersSetChangeSessionCreatorConnector {
-				admin_public: admin_public,
+				admin_public,
 			}),
 		}
 	}
@@ -203,11 +203,15 @@ fn adjust_connections(
 
 fn select_nodes_to_disconnect(current_set: &BTreeMap<NodeId, SocketAddr>, new_set: &BTreeMap<NodeId, SocketAddr>) -> Vec<NodeId> {
 	current_set.iter()
-		.filter(|&(node_id, node_addr)| match new_set.get(node_id) {
-			Some(new_node_addr) => node_addr != new_node_addr,
-			None => true,
+		.filter_map(|(node_id, node_addr)| {
+			if let Some(new_node_addr) = new_set.get(node_id) {
+				if node_addr == new_node_addr {
+					return None;
+				}
+			}
+
+			Some(*node_id)
 		})
-		.map(|(node_id, _)| node_id.clone())
 		.collect()
 }
 
@@ -237,46 +241,46 @@ mod tests {
 
 	#[test]
 	fn do_not_disconnect_if_set_is_not_changed() {
-		let node_id = Random.generate().unwrap().public().clone();
+		let node_id = *Random.generate().unwrap().public();
 		assert_eq!(select_nodes_to_disconnect(
 			&vec![(node_id, "127.0.0.1:8081".parse().unwrap())].into_iter().collect(),
 			&vec![(node_id, "127.0.0.1:8081".parse().unwrap())].into_iter().collect()),
-			vec![]);
+			Vec::new());
 	}
 
 	#[test]
 	fn disconnect_if_address_has_changed() {
-		let node_id = Random.generate().unwrap().public().clone();
+		let node_id = *Random.generate().unwrap().public();
 		assert_eq!(select_nodes_to_disconnect(
-			&vec![(node_id.clone(), "127.0.0.1:8081".parse().unwrap())].into_iter().collect(),
-			&vec![(node_id.clone(), "127.0.0.1:8082".parse().unwrap())].into_iter().collect()),
-			vec![node_id.clone()]);
+			&vec![(node_id, "127.0.0.1:8081".parse().unwrap())].into_iter().collect(),
+			&vec![(node_id, "127.0.0.1:8082".parse().unwrap())].into_iter().collect()),
+			vec![node_id]);
 	}
 
 	#[test]
 	fn disconnect_if_node_has_removed() {
-		let node_id = Random.generate().unwrap().public().clone();
+		let node_id = *Random.generate().unwrap().public();
 		assert_eq!(select_nodes_to_disconnect(
-			&vec![(node_id.clone(), "127.0.0.1:8081".parse().unwrap())].into_iter().collect(),
-			&vec![].into_iter().collect()),
-			vec![node_id.clone()]);
+			&vec![(node_id, "127.0.0.1:8081".parse().unwrap())].into_iter().collect(),
+			&Vec::new().into_iter().collect()),
+			vec![node_id]);
 	}
 
 	#[test]
 	fn does_not_disconnect_if_node_has_added() {
-		let node_id = Random.generate().unwrap().public().clone();
+		let node_id = *Random.generate().unwrap().public();
 		assert_eq!(select_nodes_to_disconnect(
-			&vec![(node_id.clone(), "127.0.0.1:8081".parse().unwrap())].into_iter().collect(),
-			&vec![(node_id.clone(), "127.0.0.1:8081".parse().unwrap()),
-				(Random.generate().unwrap().public().clone(), "127.0.0.1:8082".parse().unwrap())]
+			&vec![(node_id, "127.0.0.1:8081".parse().unwrap())].into_iter().collect(),
+			&vec![(node_id, "127.0.0.1:8081".parse().unwrap()),
+				(*Random.generate().unwrap().public(), "127.0.0.1:8082".parse().unwrap())]
 				.into_iter().collect()),
-			vec![]);
+			Vec::new());
 	}
 
 	#[test]
 	fn adjust_connections_disconnects_from_all_nodes_if_not_a_part_of_key_server() {
-		let self_node_id = Random.generate().unwrap().public().clone();
-		let other_node_id = Random.generate().unwrap().public().clone();
+		let self_node_id = *Random.generate().unwrap().public();
+		let other_node_id = *Random.generate().unwrap().public();
 		let mut connection_data = default_connection_data();
 		connection_data.nodes.insert(other_node_id.clone(), "127.0.0.1:8081".parse().unwrap());
 
@@ -288,12 +292,14 @@ mod tests {
 
 	#[test]
 	fn adjust_connections_connects_to_new_nodes() {
-		let self_node_id = Random.generate().unwrap().public().clone();
-		let other_node_id = Random.generate().unwrap().public().clone();
+		let self_node_id = *Random.generate().unwrap().public();
+		let other_node_id = *Random.generate().unwrap().public();
 		let mut connection_data = default_connection_data();
 
-		let required_set = vec![(self_node_id.clone(), "127.0.0.1:8081".parse().unwrap()),
-			(other_node_id.clone(), "127.0.0.1:8082".parse().unwrap())].into_iter().collect();
+		let required_set = vec![
+			(self_node_id, "127.0.0.1:8081".parse().unwrap()),
+			(other_node_id, "127.0.0.1:8082".parse().unwrap()),
+		].into_iter().collect();
 		adjust_connections(&self_node_id, &mut connection_data, &required_set);
 		assert!(connection_data.nodes.contains_key(&other_node_id));
 		assert!(!connection_data.is_isolated);
@@ -301,13 +307,15 @@ mod tests {
 
 	#[test]
 	fn adjust_connections_reconnects_from_changed_nodes() {
-		let self_node_id = Random.generate().unwrap().public().clone();
-		let other_node_id = Random.generate().unwrap().public().clone();
+		let self_node_id = *Random.generate().unwrap().public();
+		let other_node_id = *Random.generate().unwrap().public();
 		let mut connection_data = default_connection_data();
 		connection_data.nodes.insert(other_node_id.clone(), "127.0.0.1:8082".parse().unwrap());
 
-		let required_set = vec![(self_node_id.clone(), "127.0.0.1:8081".parse().unwrap()),
-			(other_node_id.clone(), "127.0.0.1:8083".parse().unwrap())].into_iter().collect();
+		let required_set = vec![
+			(self_node_id, "127.0.0.1:8081".parse().unwrap()),
+			(other_node_id, "127.0.0.1:8083".parse().unwrap()),
+		].into_iter().collect();
 		adjust_connections(&self_node_id, &mut connection_data, &required_set);
 		assert_eq!(connection_data.nodes.get(&other_node_id), Some(&"127.0.0.1:8083".parse().unwrap()));
 		assert!(!connection_data.is_isolated);
@@ -315,12 +323,12 @@ mod tests {
 
 	#[test]
 	fn adjust_connections_disconnects_from_removed_nodes() {
-		let self_node_id = Random.generate().unwrap().public().clone();
-		let other_node_id = Random.generate().unwrap().public().clone();
+		let self_node_id = *Random.generate().unwrap().public();
+		let other_node_id = *Random.generate().unwrap().public();
 		let mut connection_data = default_connection_data();
 		connection_data.nodes.insert(other_node_id.clone(), "127.0.0.1:8082".parse().unwrap());
 
-		let required_set = vec![(self_node_id.clone(), "127.0.0.1:8081".parse().unwrap())].into_iter().collect();
+		let required_set = vec![(self_node_id, "127.0.0.1:8081".parse().unwrap())].into_iter().collect();
 		adjust_connections(&self_node_id, &mut connection_data, &required_set);
 		assert!(connection_data.nodes.is_empty());
 		assert!(!connection_data.is_isolated);
@@ -328,10 +336,10 @@ mod tests {
 
 	#[test]
 	fn adjust_connections_does_not_connects_to_self() {
-		let self_node_id = Random.generate().unwrap().public().clone();
+		let self_node_id = *Random.generate().unwrap().public();
 		let mut connection_data = default_connection_data();
 
-		let required_set = vec![(self_node_id.clone(), "127.0.0.1:8081".parse().unwrap())].into_iter().collect();
+		let required_set = vec![(self_node_id, "127.0.0.1:8081".parse().unwrap())].into_iter().collect();
 		adjust_connections(&self_node_id, &mut connection_data, &required_set);
 		assert!(connection_data.nodes.is_empty());
 		assert!(!connection_data.is_isolated);
@@ -340,18 +348,20 @@ mod tests {
 	#[test]
 	fn maintain_connects_to_current_set_works() {
 		let connections = create_connections();
-		let self_node_id = connections.self_key_pair.public().clone();
-		let current_node_id = Random.generate().unwrap().public().clone();
-		let migration_node_id = Random.generate().unwrap().public().clone();
-		let new_node_id = Random.generate().unwrap().public().clone();
+		let self_node_id = *connections.self_key_pair.public();
+		let current_node_id = *Random.generate().unwrap().public();
+		let migration_node_id = *Random.generate().unwrap().public();
+		let new_node_id = *Random.generate().unwrap().public();
 
 		let mut connections_data = default_connection_data();
 		connections.maintain(ConnectionsAction::ConnectToCurrentSet, &mut connections_data, &KeyServerSetSnapshot {
-			current_set: vec![(self_node_id.clone(), "127.0.0.1:8081".parse().unwrap()),
-				(current_node_id.clone(), "127.0.0.1:8082".parse().unwrap())].into_iter().collect(),
-			new_set: vec![(new_node_id.clone(), "127.0.0.1:8083".parse().unwrap())].into_iter().collect(),
+			current_set: vec![
+				(self_node_id, "127.0.0.1:8081".parse().unwrap()),
+				(current_node_id, "127.0.0.1:8082".parse().unwrap()),
+			].into_iter().collect(),
+			new_set: vec![(new_node_id, "127.0.0.1:8083".parse().unwrap())].into_iter().collect(),
 			migration: Some(KeyServerSetMigration {
-				set: vec![(migration_node_id.clone(), "127.0.0.1:8084".parse().unwrap())].into_iter().collect(),
+				set: vec![(migration_node_id, "127.0.0.1:8084".parse().unwrap())].into_iter().collect(),
 				..Default::default()
 			}),
 		});
@@ -362,18 +372,18 @@ mod tests {
 	#[test]
 	fn maintain_connects_to_migration_set_works() {
 		let connections = create_connections();
-		let self_node_id = connections.self_key_pair.public().clone();
-		let current_node_id = Random.generate().unwrap().public().clone();
-		let migration_node_id = Random.generate().unwrap().public().clone();
-		let new_node_id = Random.generate().unwrap().public().clone();
+		let self_node_id = *connections.self_key_pair.public();
+		let current_node_id = *Random.generate().unwrap().public();
+		let migration_node_id = *Random.generate().unwrap().public();
+		let new_node_id = *Random.generate().unwrap().public();
 
 		let mut connections_data = default_connection_data();
 		connections.maintain(ConnectionsAction::ConnectToMigrationSet, &mut connections_data, &KeyServerSetSnapshot {
-			current_set: vec![(current_node_id.clone(), "127.0.0.1:8082".parse().unwrap())].into_iter().collect(),
-			new_set: vec![(new_node_id.clone(), "127.0.0.1:8083".parse().unwrap())].into_iter().collect(),
+			current_set: vec![(current_node_id, "127.0.0.1:8082".parse().unwrap())].into_iter().collect(),
+			new_set: vec![(new_node_id, "127.0.0.1:8083".parse().unwrap())].into_iter().collect(),
 			migration: Some(KeyServerSetMigration {
-				set: vec![(self_node_id.clone(), "127.0.0.1:8081".parse().unwrap()),
-					(migration_node_id.clone(), "127.0.0.1:8084".parse().unwrap())].into_iter().collect(),
+				set: vec![(self_node_id, "127.0.0.1:8081".parse().unwrap()),
+					(migration_node_id, "127.0.0.1:8084".parse().unwrap())].into_iter().collect(),
 				..Default::default()
 			}),
 		});

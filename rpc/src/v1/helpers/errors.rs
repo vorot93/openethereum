@@ -427,13 +427,13 @@ pub fn private_message_block_id_not_supported() -> Error {
 pub fn transaction_message(error: &TransactionError) -> String {
 	use self::TransactionError::*;
 
-	match *error {
+	match error {
 		AlreadyImported => "Transaction with the same hash was already imported.".into(),
 		Old => "Transaction nonce is too low. Try incrementing the nonce.".into(),
 		TooCheapToReplace { prev, new } => {
 			format!("Transaction gas price {} is too low. There is another transaction with same nonce in the queue{}. Try increasing the gas price or incrementing the nonce.",
-					new.map(|gas| format!("{}wei", gas)).unwrap_or("supplied".into()),
-					prev.map(|gas| format!(" with gas price: {}wei", gas)).unwrap_or("".into())
+					new.map_or_else(|| "supplied".into(), |gas| format!("{}wei", gas)),
+					prev.map_or_else(String::new, |gas| format!(" with gas price: {}wei", gas))
 			)
 		}
 		LimitReached => {
@@ -451,7 +451,7 @@ pub fn transaction_message(error: &TransactionError) -> String {
 		GasLimitExceeded { limit, got } => {
 			format!("Transaction cost exceeds current gas limit. Limit: {}, got: {}. Try decreasing supplied gas.", limit, got)
 		}
-		InvalidSignature(ref sig) => format!("Invalid signature: {}", sig),
+		InvalidSignature(sig) => format!("Invalid signature: {}", sig),
 		InvalidChainId => "Invalid chain id.".into(),
 		InvalidGasLimit(_) => "Supplied gas is beyond limit.".into(),
 		SenderBanned => "Sender is banned in local queue.".into(),
@@ -459,13 +459,13 @@ pub fn transaction_message(error: &TransactionError) -> String {
 		CodeBanned => "Code is banned in local queue.".into(),
 		NotAllowed => "Transaction is not permitted.".into(),
 		TooBig => "Transaction is too big, see chain specification for the limit.".into(),
-		InvalidRlp(ref descr) => format!("Invalid RLP data: {}", descr),
+		InvalidRlp(descr) => format!("Invalid RLP data: {}", descr),
 	}
 }
 
 pub fn transaction<T: Into<EthcoreError>>(error: T) -> Error {
 	let error = error.into();
-	if let EthcoreError::Transaction(ref e) = error {
+	if let EthcoreError::Transaction(e) = &error {
 		Error {
 			code: ErrorCode::ServerError(codes::TRANSACTION_ERROR),
 			message: transaction_message(e),
@@ -482,7 +482,7 @@ pub fn transaction<T: Into<EthcoreError>>(error: T) -> Error {
 
 pub fn decode<T: Into<EthcoreError>>(error: T) -> Error {
 	match error.into() {
-		EthcoreError::Decoder(ref dec_err) => rlp(dec_err.clone()),
+		EthcoreError::Decoder(dec_err) => rlp(dec_err),
 		_ => Error {
 			code: ErrorCode::InternalError,
 			message: "decoding error".into(),
@@ -623,10 +623,10 @@ pub fn require_experimental(allow_experimental_rpcs: bool, eip: &str) -> Result<
 	}
 }
 
-/// returns an error for when require_canonical was specified and
+/// returns an error for when `require_canonical` was specified and
 pub fn invalid_input() -> Error {
 	Error {
-		// UNSUPPORTED_REQUEST shares the same error code for EIP-1898
+		// `UNSUPPORTED_REQUEST` shares the same error code for EIP-1898
 		code: ErrorCode::ServerError(codes::UNSUPPORTED_REQUEST),
 		message: "Invalid input".into(),
 		data: None

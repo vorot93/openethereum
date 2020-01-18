@@ -43,11 +43,11 @@ pub struct Substate {
 impl Substate {
 	/// Creates new substate.
 	pub fn new() -> Self {
-		Substate::default()
+		Self::default()
 	}
 
 	/// Merge secondary substate `s` into self, accruing each element correspondingly.
-	pub fn accrue(&mut self, s: Substate) {
+	pub fn accrue(&mut self, s: Self) {
 		self.suicides.extend(s.suicides);
 		self.touched.extend(s.touched);
 		self.logs.extend(s.logs);
@@ -74,18 +74,18 @@ mod tests {
 		sub_state.contracts_created.push(Address::from_low_u64_be(1));
 		sub_state.logs.push(LogEntry {
 			address: Address::from_low_u64_be(1),
-			topics: vec![],
-			data: vec![]
+			topics: Vec::new(),
+			data: Vec::new()
 		});
 		sub_state.sstore_clears_refund = (15000 * 5).into();
 		sub_state.suicides.insert(Address::from_low_u64_be(10));
 
 		let mut sub_state_2 = Substate::new();
-		sub_state_2.contracts_created.push(Address::from_low_u64_be(2u64));
+		sub_state_2.contracts_created.push(Address::from_low_u64_be(2_u64));
 		sub_state_2.logs.push(LogEntry {
 			address: Address::from_low_u64_be(1),
-			topics: vec![],
-			data: vec![]
+			topics: Vec::new(),
+			data: Vec::new()
 		});
 		sub_state_2.sstore_clears_refund = (15000 * 7).into();
 

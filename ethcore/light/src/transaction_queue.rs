@@ -46,9 +46,9 @@ enum CurrentNonce {
 impl CurrentNonce {
 	// whether this nonce is assumed
 	fn is_assumed(&self) -> bool {
-		match *self {
-			CurrentNonce::Assumed(_) => true,
-			CurrentNonce::Known(_) => false,
+		match self {
+			Self::Assumed(_) => true,
+			Self::Known(_) => false,
 		}
 	}
 
@@ -59,9 +59,8 @@ impl CurrentNonce {
 
 	// the current nonce's value.
 	fn value(&self) -> &U256 {
-		match *self {
-			CurrentNonce::Assumed(ref val) => val,
-			CurrentNonce::Known(ref val) => val,
+		match self {
+			Self::Assumed(val) | Self::Known(val) => val,
 		}
 	}
 }
@@ -75,7 +74,7 @@ struct TransactionInfo {
 
 impl<'a> From<&'a PendingTransaction> for TransactionInfo {
 	fn from(tx: &'a PendingTransaction) -> Self {
-		TransactionInfo {
+		Self {
 			hash: tx.hash(),
 			nonce: tx.nonce,
 			condition: tx.condition.clone(),
@@ -98,8 +97,7 @@ impl AccountTransactions {
 	}
 
 	fn next_nonce(&self) -> U256 {
-		self.current.last().map(|last| last.nonce.saturating_add(1.into()))
-			.unwrap_or_else(|| *self.cur_nonce.value())
+		self.current.last().map_or_else(|| *self.cur_nonce.value(), |last| last.nonce.saturating_add(1.into()))
 	}
 
 	// attempt to move transactions from the future queue into the current queue.
@@ -217,7 +215,7 @@ impl TransactionQueue {
 							let future_nonce = nonce;
 							acct_txs.future.insert(future_nonce, tx_info);
 
-							(ImportDestination::Future, vec![])
+							(ImportDestination::Future, Vec::new())
 						} else {
 							trace!(target: "txqueue", "Queued current transaction for {}, nonce={}", sender, nonce);
 
@@ -264,9 +262,10 @@ impl TransactionQueue {
 					Some(Condition::Timestamp(time)) => time <= best_block_timestamp,
 				}).map(|info| info.hash)
 			})
-			.filter_map(|hash| match self.by_hash.get(&hash) {
-				Some(tx) => Some(tx.clone()),
-				None => {
+			.filter_map(|hash| {
+				if let Some(tx) = self.by_hash.get(&hash) {
+					Some(tx.clone())
+				} else {
 					warn!(target: "txqueue", "Inconsistency detected between `by_hash` and `by_account`: {} not stored.",
 						hash);
 					None
@@ -289,9 +288,10 @@ impl TransactionQueue {
 					Some(Condition::Timestamp(time)) => time <= best_block_timestamp,
 				}).chain(acct_txs.future.values()).map(|info| info.hash)
 			})
-			.filter_map(|hash| match self.by_hash.get(&hash) {
-				Some(tx) => Some(tx.clone()),
-				None => {
+			.filter_map(|hash| {
+				if let Some(tx) = self.by_hash.get(&hash) {
+					Some(tx.clone())
+				} else {
 					warn!(target: "txqueue", "Inconsistency detected between `by_hash` and `by_account`: {} not stored.",
 						hash);
 					None
@@ -307,7 +307,7 @@ impl TransactionQueue {
 
 	/// Cull out all transactions by the given address which are invalidated by the given nonce.
 	pub fn cull(&mut self, address: Address, cur_nonce: U256) {
-		let mut removed_hashes = vec![];
+		let mut removed_hashes = Vec::new();
 		if let Entry::Occupied(mut entry) = self.by_account.entry(address) {
 			{
 				let acct_txs = entry.get_mut();
@@ -355,7 +355,7 @@ impl TransactionQueue {
 
 	/// Get a transaction by hash.
 	pub fn get(&self, hash: &H256) -> Option<&PendingTransaction> {
-		self.by_hash.get(&hash)
+		self.by_hash.get(hash)
 	}
 
 	/// Add a transaction queue listener.
@@ -376,10 +376,7 @@ impl TransactionQueue {
 	fn notify(&mut self, hashes: &[H256], status: TxStatus) {
 		if status == TxStatus::Added {
 			let to_pending_send: Arc<Vec<H256>> = Arc::new(
-				hashes
-					.into_iter()
-					.map(|hash| hash.clone())
-					.collect()
+				hashes.to_vec()
 			);
 			self.pending_listeners.retain(|listener| listener.unbounded_send(to_pending_send.clone()).is_ok());
 
@@ -387,8 +384,8 @@ impl TransactionQueue {
 
 		let to_full_send: Arc<Vec<(H256, TxStatus)>> = Arc::new(
 			hashes
-				.into_iter()
-				.map(|hash| (hash.clone(), status))
+				.iter()
+				.map(|hash| (*hash, status))
 				.collect()
 		);
 
@@ -414,7 +411,7 @@ mod tests {
 
 		txq.cull(sender, 1.into());
 
-		assert_eq!(txq.queued_senders(), vec![]);
+		assert_eq!(txq.queued_senders(), Vec::new());
 		assert!(txq.by_hash.is_empty());
 	}
 

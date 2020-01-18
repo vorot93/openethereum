@@ -212,15 +212,15 @@ pub struct ExecutiveVMTracer {
 impl ExecutiveVMTracer {
 	/// Create a new top-level instance.
 	pub fn toplevel() -> Self {
-		ExecutiveVMTracer {
+		Self {
 			data: VMTrace {
 				parent_step: 0,
-				code: vec![],
-				operations: vec![Default::default()],	// prefill with a single entry so that prepare_subtrace can get the parent_step
-				subs: vec![],
+				code: Vec::new(),
+				operations: vec![VMOperation::default()],	// prefill with a single entry so that prepare_subtrace can get the parent_step
+				subs: Vec::new(),
 			},
 			depth: 0,
-			trace_stack: vec![],
+			trace_stack: Vec::new(),
 		}
 	}
 
@@ -241,9 +241,9 @@ impl VMTracer for ExecutiveVMTracer {
 	fn trace_prepare_execute(&mut self, pc: usize, instruction: u8, gas_cost: U256, mem_written: Option<(usize, usize)>, store_written: Option<(U256, U256)>) {
 		Self::with_trace_in_depth(&mut self.data, self.depth, move |trace| {
 			trace.operations.push(VMOperation {
-				pc: pc,
-				instruction: instruction,
-				gas_cost: gas_cost,
+				pc,
+				instruction,
+				gas_cost,
 				executed: None,
 			});
 		});
@@ -265,7 +265,7 @@ impl VMTracer for ExecutiveVMTracer {
 		let store_diff = store_written;
 		Self::with_trace_in_depth(&mut self.data, self.depth, move |trace| {
 			let ex = VMExecutedOperation {
-				gas_used: gas_used,
+				gas_used,
 				stack_push: stack_push.to_vec(),
 				mem_diff: mem_diff.map(|(s, r)| MemoryDiff { offset: s, data: r.to_vec() }),
 				store_diff: store_diff.map(|(l, v)| StorageDiff { location: l, value: v }),
@@ -280,8 +280,8 @@ impl VMTracer for ExecutiveVMTracer {
 			trace.subs.push(VMTrace {
 				parent_step,
 				code: code.to_vec(),
-				operations: vec![],
-				subs: vec![],
+				operations: Vec::new(),
+				subs: Vec::new(),
 			});
 		});
 		self.depth += 1;
@@ -314,7 +314,7 @@ mod tests {
 		tracer.done_trace_call(U256::zero(), &[]);
 
 		let drained = tracer.drain();
-		assert!(drained[0].trace_address.len() == 0);
+		assert!(drained[0].trace_address.is_empty());
 		assert_eq!(&drained[1].trace_address, &[0]);
 		assert_eq!(&drained[2].trace_address, &[0, 0]);
 		assert_eq!(&drained[3].trace_address, &[0, 1]);

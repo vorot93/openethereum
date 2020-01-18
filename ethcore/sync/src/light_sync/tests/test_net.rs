@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-//! TestNet peer definition.
+//! `TestNet` peer definition.
 
 use std::collections::{HashSet, VecDeque};
 use std::sync::Arc;
@@ -36,7 +36,7 @@ use light::{
 use network::{NodeId, PeerId};
 use parking_lot::{Mutex, RwLock};
 
-const NETWORK_ID: u64 = 0xcafebabe;
+const NETWORK_ID: u64 = 0xcafe_babe;
 
 pub type LightClient = light::client::Client<Unavailable>;
 
@@ -113,8 +113,8 @@ impl Peer {
 		};
 
 		let proto = LightProtocol::new(chain.clone(), params);
-		Peer {
-			proto: proto,
+		Self {
+			proto,
 			queue: RwLock::new(VecDeque::new()),
 			data: PeerData::Full(chain),
 		}
@@ -138,8 +138,8 @@ impl Peer {
 		let provider = LightProvider::new(chain.clone(), Arc::new(RwLock::new(Default::default())));
 		let mut proto = LightProtocol::new(Arc::new(provider), params);
 		proto.add_handler(sync.clone());
-		Peer {
-			proto: proto,
+		Self {
+			proto,
 			queue: RwLock::new(VecDeque::new()),
 			data: PeerData::Light(sync, chain),
 		}
@@ -147,17 +147,19 @@ impl Peer {
 
 	// get the chain from the client, asserting that it is a full node.
 	pub fn chain(&self) -> &TestBlockChainClient {
-		match self.data {
-			PeerData::Full(ref chain) => &*chain,
-			_ => panic!("Attempted to access full chain on light peer."),
+		if let PeerData::Full(chain) = &self.data {
+			&*chain
+		} else {
+			panic!("Attempted to access full chain on light peer.")
 		}
 	}
 
 	// get the light chain from the peer, asserting that it is a light node.
 	pub fn light_chain(&self) -> &LightClient {
-		match self.data {
-			PeerData::Light(_, ref chain) => &*chain,
-			_ => panic!("Attempted to access light chain on full peer."),
+		if let PeerData::Light(_, chain) = &self.data {
+			&*chain
+		} else {
+			panic!("Attempted to access light chain on full peer.")
 		}
 	}
 
@@ -165,7 +167,7 @@ impl Peer {
 	fn io(&self, sender: Option<PeerId>) -> TestIoContext {
 		TestIoContext {
 			queue: &self.queue,
-			sender: sender,
+			sender,
 			to_disconnect: RwLock::new(HashSet::new()),
 		}
 	}
@@ -195,19 +197,20 @@ impl PeerLike for Peer {
 	}
 
 	fn is_done(&self) -> bool {
-		self.queue.read().is_empty() && match self.data {
-			PeerData::Light(_, ref client) => {
+		self.queue.read().is_empty() && {
+			if let PeerData::Light(_, client) = &self.data {
 				// should create a test light client which just imports
 				// headers directly and doesn't have a queue to drain.
 				client.import_verified();
 				client.queue_info().is_empty()
+			} else {
+				true
 			}
-			_ => true,
 		}
 	}
 
 	fn sync_step(&self) {
-		if let PeerData::Light(_, ref client) = self.data {
+		if let PeerData::Light(_, client) = &self.data {
 			client.flush_queue();
 
 			while !client.queue_info().is_empty() {

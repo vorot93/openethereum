@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-//! URLHint Contract
+//! `URLHint` Contract
 
 use std::sync::Weak;
 use rustc_hex::ToHex;
@@ -28,8 +28,8 @@ use types::ids::BlockId;
 use_contract!(urlhint, "res/urlhint.json");
 
 const COMMIT_LEN: usize = 20;
-const GITHUB_HINT: &'static str = "githubhint";
-/// GithubHint entries with commit set as `0x0..01` should be treated
+const GITHUB_HINT: &str = "githubhint";
+/// `GithubHint` entries with commit set as `0x0..01` should be treated
 /// as Github Dapp, downloadable zip files, than can be extracted, containing
 /// the manifest.json file along with the dapp
 static GITHUB_DAPP_COMMIT: &[u8; COMMIT_LEN] = &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1];
@@ -55,15 +55,13 @@ impl GithubApp {
 		format!("https://codeload.github.com/{}/{}/zip/{}", self.account, self.repo, self.commit.to_hex())
 	}
 
-	fn commit(bytes: &[u8]) -> Option<[u8;COMMIT_LEN]> {
+	fn commit(bytes: &[u8]) -> Option<[u8; COMMIT_LEN]> {
 		if bytes.len() < COMMIT_LEN {
 			return None;
 		}
 
 		let mut commit = [0; COMMIT_LEN];
-		for i in 0..COMMIT_LEN {
-			commit[i] = bytes[i];
-		}
+		commit[..COMMIT_LEN].copy_from_slice(&bytes[..COMMIT_LEN]);
 
 		Some(commit)
 	}
@@ -91,7 +89,7 @@ pub enum URLHintResult {
 	Content(Content),
 }
 
-/// URLHint Contract interface
+/// `URLHint` Contract interface
 pub trait URLHint: Send + Sync {
 	/// Resolves given id to registrar entry.
 	fn resolve(&self, id: H256) -> Result<Option<URLHintResult>, String>;
@@ -105,8 +103,8 @@ pub struct URLHintContract {
 impl URLHintContract {
 	/// Creates new `URLHintContract`
 	pub fn new(client: Weak<dyn RegistrarClient>) -> Self {
-		URLHintContract {
-			client: client,
+		Self {
+			client,
 		}
 	}
 }
@@ -150,10 +148,10 @@ fn decode_urlhint_output(
 	};
 
 	commit.map(|commit| URLHintResult::Dapp(GithubApp {
-		account: account,
-		repo: repo,
-		commit: commit,
-		owner: owner,
+		account,
+		repo,
+		commit,
+		owner,
 	}))
 }
 
@@ -182,7 +180,7 @@ impl URLHint for URLHintContract {
 }
 
 fn guess_mime_type(url: &str) -> Option<Mime> {
-	const CONTENT_TYPE: &'static str = "content-type=";
+	const CONTENT_TYPE: &str = "content-type=";
 
 	let mut it = url.split('#');
 	// skip url
@@ -222,12 +220,12 @@ pub mod tests {
 		pub responses: Mutex<Vec<Result<Bytes, String>>>,
 	}
 
-	pub const REGISTRAR: &'static str = "8e4e9b13d4b45cb0befc93c3061b1408f67316b2";
-	pub const URLHINT: &'static str = "deadbeefcafe0000000000000000000000000000";
+	pub const REGISTRAR: &str = "8e4e9b13d4b45cb0befc93c3061b1408f67316b2";
+	pub const URLHINT: &str = "deadbeefcafe0000000000000000000000000000";
 
-	impl FakeRegistrar {
-		pub fn new() -> Self {
-			FakeRegistrar {
+	impl Default for FakeRegistrar {
+		fn default() -> Self {
+			Self {
 				calls: Arc::new(Mutex::new(Vec::new())),
 				responses: Mutex::new(
 					vec![
@@ -239,6 +237,12 @@ pub mod tests {
 		}
 	}
 
+	impl FakeRegistrar {
+		pub fn new() -> Self {
+			Self::default()
+		}
+	}
+
 	impl CallContract for FakeRegistrar {
 		fn call_contract(
 			&self,
@@ -247,9 +251,7 @@ pub mod tests {
 			data: Bytes
 		) -> Result<Bytes, String> {
 			self.calls.lock().push((address.to_hex(), data.to_hex()));
-			let res = self.responses.lock().remove(0);
-
-			res
+			Ok(self.responses.lock().remove(0)?)
 		}
 	}
 
@@ -261,7 +263,7 @@ pub mod tests {
 
 	fn h256_from_short_str(s: &str) -> H256 {
 		let mut bytes = s.as_bytes().to_vec();
-		bytes.resize(32usize, 0u8);
+		bytes.resize(32_usize, 0_u8);
 		H256::from_slice(bytes.as_ref())
 	}
 

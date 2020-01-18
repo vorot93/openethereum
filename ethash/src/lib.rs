@@ -14,6 +14,54 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
+
 extern crate common_types;
 extern crate either;
 extern crate ethereum_types;
@@ -86,8 +134,8 @@ pub struct EthashManager {
 
 impl EthashManager {
 	/// Create a new new instance of ethash manager
-	pub fn new<T: Into<Option<OptimizeFor>>>(cache_dir: &Path, optimize_for: T, progpow_transition: u64) -> EthashManager {
-		EthashManager {
+	pub fn new<T: Into<Option<OptimizeFor>>>(cache_dir: &Path, optimize_for: T, progpow_transition: u64) -> Self {
+		Self {
 			cache_dir: cache_dir.to_path_buf(),
 			nodecache_builder: NodeCacheBuilder::new(optimize_for.into().unwrap_or_default(), progpow_transition),
 			progpow_transition,
@@ -113,9 +161,9 @@ impl EthashManager {
 				// we need to regenerate the cache to trigger algorithm change to progpow inside `Light`
 				None
 			} else {
-				match lights.recent_epoch.clone() {
-					Some(ref e) if *e == epoch => lights.recent.clone(),
-					_ => match lights.prev_epoch.clone() {
+				match lights.recent_epoch {
+					Some(e) if e == epoch => lights.recent.clone(),
+					_ => match lights.prev_epoch {
 						Some(e) if e == epoch => {
 							// don't swap if recent is newer.
 							if lights.recent_epoch > lights.prev_epoch {
@@ -195,7 +243,7 @@ fn test_lru() {
 
 	let tempdir = TempDir::new("").unwrap();
 	let ethash = EthashManager::new(tempdir.path(), None, u64::max_value());
-	let hash = [0u8; 32];
+	let hash = [0_u8; 32];
 	ethash.compute_light(1, &hash, 1);
 	ethash.compute_light(50000, &hash, 1);
 	assert_eq!(ethash.cache.lock().recent_epoch.unwrap(), 1);

@@ -110,10 +110,10 @@ struct ActiveJobSessionData<PartialJobResponse> {
 impl<Executor, Transport> JobSession<Executor, Transport> where Executor: JobExecutor, Transport: JobTransport<PartialJobRequest = Executor::PartialJobRequest, PartialJobResponse = Executor::PartialJobResponse> {
 	/// Create new session.
 	pub fn new(meta: SessionMeta, executor: Executor, transport: Transport) -> Self {
-		JobSession {
-			meta: meta,
-			executor: executor,
-			transport: transport,
+		Self {
+			meta,
+			executor,
+			transport,
 			data: JobSessionData {
 				state: JobSessionState::Inactive,
 				active_data: None,
@@ -180,7 +180,7 @@ impl<Executor, Transport> JobSession<Executor, Transport> where Executor: JobExe
 		debug_assert!(self.meta.self_node_id == self.meta.master_node_id);
 		self.data.active_data.as_ref()
 			.expect("is_result_ready is only called on master nodes after initialization; on master nodes active_data is filled during initialization; qed")
-			.responses.len() >= self.meta.threshold + 1
+			.responses.len() > self.meta.threshold
 	}
 
 	/// Get job result.
@@ -235,7 +235,7 @@ impl<Executor, Transport> JobSession<Executor, Transport> where Executor: JobExe
 
 		// if we are waiting for response from self => do it
 		if let Some(self_response) = self_response.clone() {
-			let self_node_id = self.meta.self_node_id.clone();
+			let self_node_id = self.meta.self_node_id;
 			self.on_partial_response(&self_node_id, self_response)?;
 		}
 
@@ -267,12 +267,12 @@ impl<Executor, Transport> JobSession<Executor, Transport> where Executor: JobExe
 		}
 
 		let partial_request_action = self.executor.process_partial_request(request)?;
-		let partial_response = match partial_request_action {
-			JobPartialRequestAction::Respond(ref partial_response) => {
+		let partial_response = match &partial_request_action {
+			JobPartialRequestAction::Respond(partial_response) => {
 				self.data.state = JobSessionState::Finished;
 				partial_response.clone()
 			},
-			JobPartialRequestAction::Reject(ref partial_response) => {
+			JobPartialRequestAction::Reject(partial_response) => {
 				self.data.state = JobSessionState::Failed;
 				partial_response.clone()
 			},
@@ -328,10 +328,10 @@ impl<Executor, Transport> JobSession<Executor, Transport> where Executor: JobExe
 			}
 
 			self.data.state = JobSessionState::Failed;
-			return Err(if !error.is_non_fatal() {
-				Error::ConsensusUnreachable
-			} else {
+			return Err(if error.is_non_fatal() {
 				Error::ConsensusTemporaryUnreachable
+			} else {
+				Error::ConsensusUnreachable
 			});
 		}
 
@@ -372,8 +372,8 @@ impl<PartialJobResponse> JobPartialRequestAction<PartialJobResponse> {
 	/// Take actual response.
 	pub fn take_response(self) -> PartialJobResponse {
 		match self {
-			JobPartialRequestAction::Respond(response) => response,
-			JobPartialRequestAction::Reject(response) => response,
+			Self::Respond(response) => response,
+			Self::Reject(response) => response,
 		}
 	}
 }
@@ -406,7 +406,7 @@ pub mod tests {
 		fn prepare_partial_request(&self, _n: &NodeId, _nodes: &BTreeSet<NodeId>) -> Result<u32, Error> { Ok(2) }
 		fn process_partial_request(&mut self, r: u32) -> Result<JobPartialRequestAction<u32>, Error> { if r <= 10 { Ok(JobPartialRequestAction::Respond(r * r)) } else { Err(Error::InvalidMessage) } }
 		fn check_partial_response(&mut self, _s: &NodeId, r: &u32) -> Result<JobPartialResponseAction, Error> { if r % 2 == 0 { Ok(JobPartialResponseAction::Accept) } else { Ok(JobPartialResponseAction::Reject) } }
-		fn compute_response(&self, r: &BTreeMap<NodeId, u32>) -> Result<u32, Error> { Ok(r.values().fold(0, |v1, v2| v1 + v2)) }
+		fn compute_response(&self, r: &BTreeMap<NodeId, u32>) -> Result<u32, Error> { Ok(r.values().sum()) }
 	}
 
 	#[derive(Default)]
@@ -429,17 +429,17 @@ pub mod tests {
 		type PartialJobRequest = T;
 		type PartialJobResponse = U;
 
-		fn send_partial_request(&self, node: &NodeId, request: T) -> Result<(), Error> { self.requests.lock().push_back((node.clone(), request)); Ok(()) }
-		fn send_partial_response(&self, node: &NodeId, response: U) -> Result<(), Error> { self.responses.lock().push_back((node.clone(), response)); Ok(()) }
+		fn send_partial_request(&self, node: &NodeId, request: T) -> Result<(), Error> { self.requests.lock().push_back((*node, request)); Ok(()) }
+		fn send_partial_response(&self, node: &NodeId, response: U) -> Result<(), Error> { self.responses.lock().push_back((*node, response)); Ok(()) }
 	}
 
 	pub fn make_master_session_meta(threshold: usize) -> SessionMeta {
-		SessionMeta { id: SessionId::default(), master_node_id: NodeId::from_low_u64_be(1), self_node_id: NodeId::from_low_u64_be(1), threshold: threshold,
+		SessionMeta { id: SessionId::default(), master_node_id: NodeId::from_low_u64_be(1), self_node_id: NodeId::from_low_u64_be(1), threshold,
 			configured_nodes_count: 5, connected_nodes_count: 5 }
 	}
 
 	pub fn make_slave_session_meta(threshold: usize) -> SessionMeta {
-		SessionMeta { id: SessionId::default(), master_node_id: NodeId::from_low_u64_be(1), self_node_id: NodeId::from_low_u64_be(2), threshold: threshold,
+		SessionMeta { id: SessionId::default(), master_node_id: NodeId::from_low_u64_be(1), self_node_id: NodeId::from_low_u64_be(2), threshold,
 			configured_nodes_count: 5, connected_nodes_count: 5 }
 	}
 

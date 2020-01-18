@@ -64,7 +64,7 @@ pub trait Kind: 'static + Sized + Send + Sync {
 	/// Attempt to create the `Unverified` item from the input.
 	///
 	/// The return type is quite complex because in some scenarios the input
-	/// is needed (typically for BlockError) to get the raw block bytes without cloning them
+	/// is needed (typically for `BlockError`) to get the raw block bytes without cloning them
 	fn create(
 		input: Self::Input,
 		engine: &dyn Engine,
@@ -208,9 +208,10 @@ pub mod headers {
 		}
 
 		fn verify(unverified: Self::Unverified, engine: &dyn Engine, check_seal: bool) -> Result<Self::Verified, Error> {
-			match check_seal {
-				true => engine.verify_block_unordered(&unverified).map(|_| unverified),
-				false => Ok(unverified),
+			if check_seal {
+				engine.verify_block_unordered(&unverified).map(|_| unverified)
+			} else {
+				Ok(unverified)
 			}
 		}
 	}

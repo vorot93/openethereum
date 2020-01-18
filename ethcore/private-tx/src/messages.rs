@@ -35,29 +35,30 @@ pub struct PrivateTransaction {
 impl PrivateTransaction {
 	/// Constructor
 	pub fn new(encrypted: Bytes, contract: Address) -> Self {
-		PrivateTransaction {
+		Self {
 			encrypted,
 			contract,
 			hash: H256::zero(),
 		}.compute_hash()
 	}
 
-	fn compute_hash(mut self) -> PrivateTransaction {
+	fn compute_hash(mut self) -> Self {
 		self.hash = keccak(&*self.rlp_bytes());
 		self
 	}
 
 	/// Hash of the private transaction
-	pub fn hash(&self) -> H256 {
+	pub const fn hash(&self) -> H256 {
 		self.hash
 	}
 
 	/// Address of the contract
-	pub fn contract(&self) -> Address {
+	pub const fn contract(&self) -> Address {
 		self.contract
 	}
 
 	/// Encrypted data
+	// TODO: return reference
 	pub fn encrypted(&self) -> Bytes {
 		self.encrypted.clone()
 	}
@@ -82,8 +83,8 @@ pub struct SignedPrivateTransaction {
 impl SignedPrivateTransaction {
 	/// Construct a signed private transaction message
 	pub fn new(private_transaction_hash: H256, sig: Signature, chain_id: Option<u64>) -> Self {
-		SignedPrivateTransaction {
-			private_transaction_hash: private_transaction_hash,
+		Self {
+			private_transaction_hash,
 			r: sig.r().into(),
 			s: sig.s().into(),
 			v: add_chain_replay_protection(sig.v() as u64, chain_id),
@@ -91,7 +92,7 @@ impl SignedPrivateTransaction {
 		}.compute_hash()
 	}
 
-	fn compute_hash(mut self) -> SignedPrivateTransaction {
+	fn compute_hash(mut self) -> Self {
 		self.hash = keccak(&*self.rlp_bytes());
 		self
 	}
@@ -108,12 +109,12 @@ impl SignedPrivateTransaction {
 	}
 
 	/// Get the hash of of the original transaction.
-	pub fn private_transaction_hash(&self) -> H256 {
+	pub const fn private_transaction_hash(&self) -> H256 {
 		self.private_transaction_hash
 	}
 
 	/// Own hash
-	pub fn hash(&self) -> H256 {
+	pub const fn hash(&self) -> H256 {
 		self.hash
 	}
 }

@@ -30,7 +30,7 @@ pub struct AddressesFilter {
 
 impl From<Vec<Address>> for AddressesFilter {
 	fn from(addresses: Vec<Address>) -> Self {
-		AddressesFilter { list: addresses }
+		Self { list: addresses }
 	}
 }
 
@@ -47,29 +47,31 @@ impl AddressesFilter {
 
 	/// Returns blooms of this addresses filter.
 	pub fn blooms(&self) -> Vec<Bloom> {
-		match self.list.is_empty() {
-			true => vec![Bloom::default()],
-			false => self.list.iter()
+		if self.list.is_empty() {
+			vec![Bloom::default()]
+		} else {
+			self.list.iter()
 				.map(|address| Bloom::from(BloomInput::Raw(address.as_bytes())))
-				.collect(),
+				.collect()
 		}
 	}
 
 	/// Returns vector of blooms zipped with blooms of this addresses filter.
-	pub fn with_blooms(&self, blooms: Vec<Bloom>) -> Vec<Bloom> {
-		match self.list.is_empty() {
-			true => blooms,
-			false => blooms
+	pub fn with_blooms(&self, mut blooms: Vec<Bloom>) -> Vec<Bloom> {
+		if !self.list.is_empty() {
+			blooms = blooms
 				.into_iter()
 				.flat_map(|bloom| self.list.iter()
 					.map(|address| {
-						let mut bloom = bloom.clone();
+						let mut bloom = bloom;
 						bloom.accrue(BloomInput::Raw(address.as_bytes()));
 						bloom
 					})
 					.collect::<Vec<_>>())
-				.collect(),
+				.collect()
 		}
+
+		blooms
 	}
 }
 
@@ -94,28 +96,29 @@ impl Filter {
 
 	/// Returns true if given trace matches the filter.
 	pub fn matches(&self, trace: &FlatTrace) -> bool {
-		match trace.action {
-			Action::Call(ref call) => {
+		match &trace.action {
+			Action::Call(call) => {
 				let from_matches = self.from_address.matches(&call.from);
 				let to_matches = self.to_address.matches(&call.to);
 				from_matches && to_matches
 			},
-			Action::Create(ref create) => {
+			Action::Create(create) => {
 				let from_matches = self.from_address.matches(&create.from);
 
-				let to_matches = match trace.result {
-					Res::Create(ref create_result) => self.to_address.matches(&create_result.address),
-					_ => self.to_address.matches_all(),
+				let to_matches = if let Res::Create(create_result) = &trace.result {
+					self.to_address.matches(&create_result.address)
+				} else {
+					self.to_address.matches_all()
 				};
 
 				from_matches && to_matches
 			},
-			Action::Suicide(ref suicide) => {
+			Action::Suicide(suicide) => {
 				let from_matches = self.from_address.matches(&suicide.address);
 				let to_matches = self.to_address.matches(&suicide.refund_address);
 				from_matches && to_matches
 			},
-			Action::Reward(ref reward) => {
+			Action::Reward(reward) => {
 				self.from_address.matches_all() && self.to_address.matches(&reward.author)
 			},
 		}
@@ -136,8 +139,8 @@ mod tests {
 	fn empty_trace_filter_bloom_possibilities() {
 		let filter = Filter {
 			range: (0..0),
-			from_address: AddressesFilter::from(vec![]),
-			to_address: AddressesFilter::from(vec![]),
+			from_address: AddressesFilter::from(Vec::new()),
+			to_address: AddressesFilter::from(Vec::new()),
 		};
 
 		let blooms = filter.bloom_possibilities();
@@ -165,7 +168,7 @@ mod tests {
 		let filter = Filter {
 			range: (0..0),
 			from_address: AddressesFilter::from(vec![Address::from_low_u64_be(1)]),
-			to_address: AddressesFilter::from(vec![]),
+			to_address: AddressesFilter::from(Vec::new()),
 		};
 
 		let blooms = filter.bloom_possibilities();
@@ -179,7 +182,7 @@ mod tests {
 	fn only_to_trace_filter_bloom_possibility() {
 		let filter = Filter {
 			range: (0..0),
-			from_address: AddressesFilter::from(vec![]),
+			from_address: AddressesFilter::from(Vec::new()),
 			to_address: AddressesFilter::from(vec![Address::from_low_u64_be(1)]),
 		};
 
@@ -227,30 +230,30 @@ mod tests {
 		let f0 = Filter {
 			range: (0..0),
 			from_address: AddressesFilter::from(vec![Address::from_low_u64_be(1)]),
-			to_address: AddressesFilter::from(vec![]),
+			to_address: AddressesFilter::from(Vec::new()),
 		};
 
 		let f1 = Filter {
 			range: (0..0),
 			from_address: AddressesFilter::from(vec![Address::from_low_u64_be(3), Address::from_low_u64_be(1)]),
-			to_address: AddressesFilter::from(vec![]),
+			to_address: AddressesFilter::from(Vec::new()),
 		};
 
 		let f2 = Filter {
 			range: (0..0),
-			from_address: AddressesFilter::from(vec![]),
-			to_address: AddressesFilter::from(vec![]),
+			from_address: AddressesFilter::from(Vec::new()),
+			to_address: AddressesFilter::from(Vec::new()),
 		};
 
 		let f3 = Filter {
 			range: (0..0),
-			from_address: AddressesFilter::from(vec![]),
+			from_address: AddressesFilter::from(Vec::new()),
 			to_address: AddressesFilter::from(vec![Address::from_low_u64_be(2)]),
 		};
 
 		let f4 = Filter {
 			range: (0..0),
-			from_address: AddressesFilter::from(vec![]),
+			from_address: AddressesFilter::from(Vec::new()),
 			to_address: AddressesFilter::from(vec![Address::from_low_u64_be(2), Address::from_low_u64_be(3)]),
 		};
 
@@ -297,7 +300,7 @@ mod tests {
 			}),
 			result: Res::Create(CreateResult {
 				gas_used: 10.into(),
-				code: vec![],
+				code: Vec::new(),
 				address: Address::from_low_u64_be(2),
 			}),
 			trace_address: vec![0].into_iter().collect(),
@@ -319,7 +322,7 @@ mod tests {
 				balance: 3.into(),
 			}),
 			result: Res::None,
-			trace_address: vec![].into_iter().collect(),
+			trace_address: Vec::new().into_iter().collect(),
 			subtraces: 0
 		};
 
@@ -338,7 +341,7 @@ mod tests {
 				reward_type: RewardType::Block,
 			}),
 			result: Res::None,
-			trace_address: vec![].into_iter().collect(),
+			trace_address: Vec::new().into_iter().collect(),
 			subtraces: 0
 		};
 
@@ -356,18 +359,18 @@ mod tests {
 		let f0 = Filter {
 			range: (0..0),
 			from_address: vec![Address::from_low_u64_be(1)].into(),
-			to_address: vec![].into(),
+			to_address: Vec::new().into(),
 		};
 
 		let f1 = Filter {
 			range: (0..0),
-			from_address: vec![].into(),
-			to_address: vec![].into(),
+			from_address: Vec::new().into(),
+			to_address: Vec::new().into(),
 		};
 
 		let f2 = Filter {
 			range: (0..0),
-			from_address: vec![].into(),
+			from_address: Vec::new().into(),
 			to_address: vec![Address::from_low_u64_be(2)].into(),
 		};
 
@@ -392,18 +395,18 @@ mod tests {
 		let f0 = Filter {
 			range: (0..0),
 			from_address: vec![Address::from_low_u64_be(1)].into(),
-			to_address: vec![].into(),
+			to_address: Vec::new().into(),
 		};
 
 		let f1 = Filter {
 			range: (0..0),
-			from_address: vec![].into(),
-			to_address: vec![].into(),
+			from_address: Vec::new().into(),
+			to_address: Vec::new().into(),
 		};
 
 		let f2 = Filter {
 			range: (0..0),
-			from_address: vec![].into(),
+			from_address: Vec::new().into(),
 			to_address: vec![Address::from_low_u64_be(2)].into(),
 		};
 
@@ -415,7 +418,7 @@ mod tests {
 				value: 3.into(),
 			}),
 			result: Res::FailedCall(TraceError::BadInstruction),
-			trace_address: vec![].into_iter().collect(),
+			trace_address: Vec::new().into_iter().collect(),
 			subtraces: 0
 		};
 

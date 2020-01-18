@@ -34,20 +34,20 @@ pub struct LenCachingMutex<T: ?Sized> {
 
 impl<T: Len + Default> Default for LenCachingMutex<T> {
 	fn default() -> Self {
-		LenCachingMutex::new(T::default())
+		Self::new(T::default())
 	}
 }
 
 impl<T: Len> From<T> for LenCachingMutex<T> {
 	fn from(data: T) -> Self {
-		LenCachingMutex::new(data)
+		Self::new(data)
 	}
 }
 
 impl<T: Len> LenCachingMutex<T> {
-	/// Constructs a new LenCachingMutex
+	/// Constructs a new `LenCachingMutex`
 	pub fn new(data: T) -> Self {
-		LenCachingMutex {
+		Self {
 			len: AtomicUsize::new(data.len()),
 			data: Mutex::new(data),
 		}

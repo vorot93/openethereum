@@ -102,7 +102,7 @@ pub trait Drain {
 
 impl<'x> OpenBlock<'x> {
 	/// Create a new `OpenBlock` ready for transaction pushing.
-	pub fn new<'a>(
+	pub fn new(
 		engine: &'x dyn Engine,
 		factories: Factories,
 		tracing: bool,
@@ -115,7 +115,7 @@ impl<'x> OpenBlock<'x> {
 		is_epoch_begin: bool,
 	) -> Result<Self, Error> {
 		let number = parent.number() + 1;
-		let state = State::from_existing(db, parent.state_root().clone(), engine.account_start_nonce(number), factories)?;
+		let state = State::from_existing(db, *parent.state_root(), engine.account_start_nonce(number), factories)?;
 		let mut r = OpenBlock { block: ExecutedBlock::new(state, last_hashes, tracing), engine, parent: parent.clone()};
 
 		r.block.header.set_parent_hash(parent.hash());
@@ -177,8 +177,8 @@ impl<'x> OpenBlock<'x> {
 		let outcome = self.block.state.apply(&env_info, self.engine.machine(), &t, self.block.traces.is_enabled())?;
 
 		self.block.transactions_set.insert(h.unwrap_or_else(||t.hash()));
-		self.block.transactions.push(t.into());
-		if let Tracing::Enabled(ref mut traces) = self.block.traces {
+		self.block.transactions.push(t);
+		if let Tracing::Enabled(traces) = &mut self.block.traces {
 			traces.push(outcome.trace.into());
 		}
 		self.block.receipts.push(outcome.receipt);
@@ -304,6 +304,7 @@ impl ops::Deref for SealedBlock {
 
 impl ClosedBlock {
 	/// Turn this into a `LockedBlock`, unable to be reopened again.
+	#[allow(clippy::missing_const_for_fn)]
 	pub fn lock(self) -> LockedBlock {
 		LockedBlock {
 			block: self.block,
@@ -343,10 +344,10 @@ impl LockedBlock {
 		let expected_seal_fields = engine.seal_fields(&self.header);
 		let mut s = self;
 		if seal.len() != expected_seal_fields {
-			Err(BlockError::InvalidSealArity(Mismatch {
+			return Err(BlockError::InvalidSealArity(Mismatch {
 				expected: expected_seal_fields,
 				found: seal.len()
-			}))?;
+			}).into());
 		}
 
 		s.block.header.set_seal(seal);
@@ -417,7 +418,7 @@ pub(crate) fn enact(
 ) -> Result<LockedBlock, Error> {
 	// For trace log
 	let trace_state = if log_enabled!(target: "enact", ::log::Level::Trace) {
-		Some(State::from_existing(db.boxed_clone(), parent.state_root().clone(), engine.account_start_nonce(parent.number() + 1), factories.clone())?)
+		Some(State::from_existing(db.boxed_clone(), *parent.state_root(), engine.account_start_nonce(parent.number() + 1), factories.clone())?)
 	} else {
 		None
 	};
@@ -432,12 +433,12 @@ pub(crate) fn enact(
 		// Engine such as Clique will calculate author from extra_data.
 		// this is only important for executing contracts as the 'executive_author'.
 		engine.executive_author(&header)?,
-		(3141562.into(), 31415620.into()),
-		vec![],
+		(3_141_562.into(), 31_415_620.into()),
+		Vec::new(),
 		is_epoch_begin,
 	)?;
 
-	if let Some(ref s) = trace_state {
+	if let Some(s) = trace_state {
 		let env = b.env_info();
 		let root = s.root();
 		let author_balance = s.balance(&env.author)?;
@@ -525,9 +526,9 @@ mod tests {
 
 		{
 			if ::log::max_level() >= ::log::Level::Trace {
-				let s = State::from_existing(db.boxed_clone(), parent.state_root().clone(), engine.account_start_nonce(parent.number() + 1), factories.clone())?;
+				let s = State::from_existing(db.boxed_clone(), *parent.state_root(), engine.account_start_nonce(parent.number() + 1), factories.clone())?;
 				trace!(target: "enact", "num={}, root={}, author={}, author_balance={}\n",
-					header.number(), s.root(), header.author(), s.balance(&header.author())?);
+					header.number(), s.root(), header.author(), s.balance(header.author())?);
 			}
 		}
 
@@ -539,8 +540,8 @@ mod tests {
 			parent,
 			last_hashes,
 			Address::zero(),
-			(3141562.into(), 31415620.into()),
-			vec![],
+			(3_141_562.into(), 31_415_620.into()),
+			Vec::new(),
 			false,
 		)?;
 
@@ -575,9 +576,9 @@ mod tests {
 		let genesis_header = spec.genesis_header();
 		let db = spec.ensure_db_good(get_temp_state_db(), &Default::default()).unwrap();
 		let last_hashes = Arc::new(vec![genesis_header.hash()]);
-		let b = OpenBlock::new(&*spec.engine, Default::default(), false, db, &genesis_header, last_hashes, Address::zero(), (3141562.into(), 31415620.into()), vec![], false).unwrap();
+		let b = OpenBlock::new(&*spec.engine, Default::default(), false, db, &genesis_header, last_hashes, Address::zero(), (3_141_562.into(), 31_415_620.into()), Vec::new(), false).unwrap();
 		let b = b.close_and_lock().unwrap();
-		let _ = b.seal(&*spec.engine, vec![]);
+		let _ = b.seal(&*spec.engine, Vec::new());
 	}
 
 	#[test]
@@ -588,8 +589,8 @@ mod tests {
 
 		let db = spec.ensure_db_good(get_temp_state_db(), &Default::default()).unwrap();
 		let last_hashes = Arc::new(vec![genesis_header.hash()]);
-		let b = OpenBlock::new(engine, Default::default(), false, db, &genesis_header, last_hashes.clone(), Address::zero(), (3141562.into(), 31415620.into()), vec![], false).unwrap()
-			.close_and_lock().unwrap().seal(engine, vec![]).unwrap();
+		let b = OpenBlock::new(engine, Default::default(), false, db, &genesis_header, last_hashes.clone(), Address::zero(), (3_141_562.into(), 31_415_620.into()), Vec::new(), false).unwrap()
+			.close_and_lock().unwrap().seal(engine, Vec::new()).unwrap();
 		let orig_bytes = b.rlp_bytes();
 		let orig_db = b.drain().state.drop().1;
 
@@ -600,8 +601,9 @@ mod tests {
 
 		let db = e.drain().state.drop().1;
 		assert_eq!(orig_db.journal_db().keys(), db.journal_db().keys());
-		assert!(orig_db.journal_db().keys().iter().filter(|k| orig_db.journal_db().get(k.0, EMPTY_PREFIX)
-			!= db.journal_db().get(k.0, EMPTY_PREFIX)).next() == None);
+		assert_eq!(orig_db.journal_db().keys().iter().find(|k| {
+			orig_db.journal_db().get(k.0, EMPTY_PREFIX) != db.journal_db().get(k.0, EMPTY_PREFIX)
+		}), None);
 	}
 
 	#[test]
@@ -612,14 +614,14 @@ mod tests {
 
 		let db = spec.ensure_db_good(get_temp_state_db(), &Default::default()).unwrap();
 		let last_hashes = Arc::new(vec![genesis_header.hash()]);
-		let mut open_block = OpenBlock::new(engine, Default::default(), false, db, &genesis_header, last_hashes.clone(), Address::zero(), (3141562.into(), 31415620.into()), vec![], false).unwrap();
+		let mut open_block = OpenBlock::new(engine, Default::default(), false, db, &genesis_header, last_hashes.clone(), Address::zero(), (3_141_562.into(), 31_415_620.into()), Vec::new(), false).unwrap();
 		let mut uncle1_header = Header::new();
 		uncle1_header.set_extra_data(b"uncle1".to_vec());
 		let mut uncle2_header = Header::new();
 		uncle2_header.set_extra_data(b"uncle2".to_vec());
 		open_block.push_uncle(uncle1_header).unwrap();
 		open_block.push_uncle(uncle2_header).unwrap();
-		let b = open_block.close_and_lock().unwrap().seal(engine, vec![]).unwrap();
+		let b = open_block.close_and_lock().unwrap().seal(engine, Vec::new()).unwrap();
 
 		let orig_bytes = b.rlp_bytes();
 		let orig_db = b.drain().state.drop().1;
@@ -634,7 +636,8 @@ mod tests {
 
 		let db = e.drain().state.drop().1;
 		assert_eq!(orig_db.journal_db().keys(), db.journal_db().keys());
-		assert!(orig_db.journal_db().keys().iter().filter(|k| orig_db.journal_db().get(k.0, EMPTY_PREFIX)
-			!= db.journal_db().get(k.0, EMPTY_PREFIX)).next() == None);
+		assert_eq!(orig_db.journal_db().keys().iter().find(|k| {
+			orig_db.journal_db().get(k.0, EMPTY_PREFIX) != db.journal_db().get(k.0, EMPTY_PREFIX)
+		}), None);
 	}
 }

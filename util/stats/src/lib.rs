@@ -16,6 +16,54 @@
 
 //! Statistical functions and helpers.
 
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
+
 use std::iter::FromIterator;
 use std::ops::{Add, Sub, Deref, Div};
 
@@ -29,7 +77,7 @@ pub struct Corpus<T>(Vec<T>);
 impl<T: Ord> From<Vec<T>> for Corpus<T> {
 	fn from(mut data: Vec<T>) -> Self {
 		data.sort();
-		Corpus(data)
+		Self(data)
 	}
 }
 
@@ -99,10 +147,10 @@ impl<T: Ord + Copy + ::std::fmt::Display> Histogram<T>
 	where T: Add<Output=T> + Sub<Output=T> + Div<Output=T> + From<usize>
 {
 	// Histogram of a sorted corpus if it at least spans the buckets. Bounds are left closed.
-	fn create(corpus: &[T], bucket_number: usize) -> Option<Histogram<T>> {
-		if corpus.len() < 1 { return None; }
-		let corpus_end = corpus.last().expect("there is at least 1 element; qed").clone();
-		let corpus_start = corpus.first().expect("there is at least 1 element; qed").clone();
+	fn create(corpus: &[T], bucket_number: usize) -> Option<Self> {
+		if corpus.is_empty() { return None; }
+		let corpus_end = *corpus.last().expect("there is at least 1 element; qed");
+		let corpus_start = *corpus.first().expect("there is at least 1 element; qed");
 		trace!(target: "stats", "Computing histogram from {} to {} with {} buckets.", corpus_start, corpus_end, bucket_number);
 		// Bucket needs to be at least 1 wide.
 		let bucket_size = {
@@ -117,7 +165,7 @@ impl<T: Ord + Copy + ::std::fmt::Display> Histogram<T>
 		let mut corpus_i = 0;
 		// Go through the corpus adding to buckets.
 		for bucket in 0..bucket_number {
-			while corpus.get(corpus_i).map_or(false, |v| v < &bucket_end) {
+			while corpus.get(corpus_i).map_or(false, |v| *v < bucket_end) {
 				// Initialized to size bucket_number above; iterates up to bucket_number; qed
 				counts[bucket] += 1;
 				corpus_i += 1;
@@ -126,7 +174,7 @@ impl<T: Ord + Copy + ::std::fmt::Display> Histogram<T>
 			bucket_bounds[bucket + 1] = bucket_end;
 			bucket_end = bucket_end + bucket_size;
 		}
-		Some(Histogram { bucket_bounds: bucket_bounds, counts: counts })
+		Some(Self { bucket_bounds, counts })
 	}
 }
 

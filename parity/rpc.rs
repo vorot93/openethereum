@@ -31,7 +31,7 @@ use rpc_apis::{self, ApiSet};
 pub use parity_rpc::{IpcServer, HttpServer, RequestMiddleware};
 pub use parity_rpc::ws::{Server as WsServer, ws};
 
-pub const DAPPS_DOMAIN: &'static str = "web3.site";
+pub const DAPPS_DOMAIN: &str = "web3.site";
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct HttpConfiguration {
@@ -58,13 +58,13 @@ pub struct HttpConfiguration {
 
 impl Default for HttpConfiguration {
 	fn default() -> Self {
-		HttpConfiguration {
+		Self {
 			enabled: true,
 			interface: "127.0.0.1".into(),
 			port: 8545,
 			apis: ApiSet::UnsafeContext,
-			cors: Some(vec![]),
-			hosts: Some(vec![]),
+			cors: Some(Vec::new()),
+			hosts: Some(Vec::new()),
 			server_threads: 4,
 			max_payload: 5,
 			keep_alive: true,
@@ -82,7 +82,7 @@ pub struct IpcConfiguration {
 
 impl Default for IpcConfiguration {
 	fn default() -> Self {
-		IpcConfiguration {
+		Self {
 			enabled: true,
 			socket_addr: if cfg!(windows) {
 				r"\\.\pipe\jsonrpc.ipc".into()
@@ -112,7 +112,7 @@ pub struct WsConfiguration {
 impl Default for WsConfiguration {
 	fn default() -> Self {
 		let data_dir = default_data_path();
-		WsConfiguration {
+		Self {
 			enabled: true,
 			interface: "127.0.0.1".into(),
 			port: 8546,
@@ -137,8 +137,8 @@ fn address(enabled: bool, bind_iface: &str, bind_port: u16, hosts: &Option<Vec<S
 		return None;
 	}
 
-	match *hosts {
-		Some(ref hosts) if !hosts.is_empty() => Some(hosts[0].clone().into()),
+	match hosts {
+		Some(hosts) if !hosts.is_empty() => Some(hosts[0].clone().into()),
 		_ => Some(format!("{}:{}", bind_iface, bind_port).into()),
 	}
 }
@@ -177,12 +177,11 @@ pub fn new_ws<D: rpc_apis::Dependencies>(
 	let allowed_hosts = into_domains(with_domain(conf.hosts, domain, &Some(url.clone().into())));
 
 	let signer_path;
-	let path = match conf.support_token_api {
-		true => {
-			signer_path = ::signer::codes_path(&conf.signer_path);
-			Some(signer_path.as_path())
-		},
-		false => None
+	let path = if conf.support_token_api {
+		signer_path = ::signer::codes_path(&conf.signer_path);
+		Some(signer_path.as_path())
+	} else {
+		None
 	};
 	let start_result = rpc::start_ws(
 		&addr,
@@ -190,15 +189,15 @@ pub fn new_ws<D: rpc_apis::Dependencies>(
 		allowed_origins,
 		allowed_hosts,
 		conf.max_connections,
-		rpc::WsExtractor::new(path.clone()),
-		rpc::WsExtractor::new(path.clone()),
+		rpc::WsExtractor::new(path),
+		rpc::WsExtractor::new(path),
 		rpc::WsStats::new(deps.stats.clone()),
 	);
 
 	match start_result {
 		Ok(server) => Ok(Some(server)),
 		Err(rpc::ws::Error::WsError(ws::Error {
-			kind: ws::ErrorKind::Io(ref err), ..
+			kind: ws::ErrorKind::Io(err), ..
 		})) if err.kind() == io::ErrorKind::AddrInUse => Err(
 			format!("WebSockets address {} is already in use, make sure that another instance of an Ethereum client is not running or change the address using the --ws-port and --ws-interface options.", url)
 		),
@@ -237,7 +236,7 @@ pub fn new_http<D: rpc_apis::Dependencies>(
 
 	match start_result {
 		Ok(server) => Ok(Some(server)),
-		Err(ref err) if err.kind() == io::ErrorKind::AddrInUse => Err(
+		Err(err) if err.kind() == io::ErrorKind::AddrInUse => Err(
 			format!("{} address {} is already in use, make sure that another instance of an Ethereum client is not running or change the address using the --{}-port and --{}-interface options.", id, url, options, options)
 		),
 		Err(e) => Err(format!("{} error: {:?}", id, e)),

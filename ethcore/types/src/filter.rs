@@ -21,7 +21,7 @@ use ids::BlockId;
 use log_entry::LogEntry;
 
 /// Blockchain Filter.
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Filter {
 	/// Blockchain will be searched from this block.
 	pub from_block: BlockId,
@@ -48,44 +48,22 @@ pub struct Filter {
 	pub limit: Option<usize>,
 }
 
-impl Clone for Filter {
-	fn clone(&self) -> Self {
-		let mut topics = [
-			None,
-			None,
-			None,
-			None,
-		];
-		for i in 0..4 {
-			topics[i] = self.topics[i].clone();
-		}
-
-		Filter {
-			from_block: self.from_block.clone(),
-			to_block: self.to_block.clone(),
-			address: self.address.clone(),
-			topics: topics[..].to_vec(),
-			limit: self.limit,
-		}
-	}
-}
-
 impl Filter {
 	/// Returns combinations of each address and topic.
 	pub fn bloom_possibilities(&self) -> Vec<Bloom> {
-		let blooms = match self.address {
-			Some(ref addresses) if !addresses.is_empty() =>
+		let blooms = match &self.address {
+			Some(addresses) if !addresses.is_empty() =>
 				addresses.iter()
-					.map(|ref address| Bloom::from(BloomInput::Raw(address.as_bytes())))
+					.map(|address| Bloom::from(BloomInput::Raw(address.as_bytes())))
 					.collect(),
 			_ => vec![Bloom::default()]
 		};
 
-		self.topics.iter().fold(blooms, |bs, topic| match *topic {
+		self.topics.iter().fold(blooms, |bs, topic| match topic {
 			None => bs,
-			Some(ref topics) => bs.into_iter().flat_map(|bloom| {
-				topics.into_iter().map(|topic| {
-					let mut b = bloom.clone();
+			Some(topics) => bs.into_iter().flat_map(|bloom| {
+				topics.iter().map(|topic| {
+					let mut b = bloom;
 					b.accrue(BloomInput::Raw(topic.as_bytes()));
 					b
 				}).collect::<Vec<Bloom>>()
@@ -95,13 +73,13 @@ impl Filter {
 
 	/// Returns true if given log entry matches filter.
 	pub fn matches(&self, log: &LogEntry) -> bool {
-		let matches = match self.address {
-			Some(ref addresses) if !addresses.is_empty() =>	addresses.iter().any(|address| &log.address == address),
+		let matches = match &self.address {
+			Some(addresses) if !addresses.is_empty() =>	addresses.iter().any(|address| &log.address == address),
 			_ => true
 		};
 
-		matches && self.topics.iter().enumerate().all(|(i, topic)| match *topic {
-			Some(ref topics) if !topics.is_empty() => topics.iter().any(|topic| log.topics.get(i) == Some(topic)),
+		matches && self.topics.iter().enumerate().all(|(i, topic)| match topic {
+			Some(topics) if !topics.is_empty() => topics.iter().any(|topic| log.topics.get(i) == Some(topic)),
 			_ => true
 		})
 	}
@@ -221,7 +199,7 @@ mod tests {
 				H256::from_str("ff74e91598aed6ae5d2fdcf8b24cd2c7be49a0808112a305069355b7160f23fa").unwrap(),
 				H256::from_str("ff74e91598aed6ae5d2fdcf8b24cd2c7be49a0808112a305069355b7160f23f9").unwrap(),
 			],
-			data: vec![]
+			data: Vec::new()
 		};
 
 		let entry1 = LogEntry {
@@ -231,7 +209,7 @@ mod tests {
 				H256::from_str("ff74e91598aed6ae5d2fdcf8b24cd2c7be49a0808112a305069355b7160f23fa").unwrap(),
 				H256::from_str("ff74e91598aed6ae5d2fdcf8b24cd2c7be49a0808112a305069355b7160f23f9").unwrap(),
 			],
-			data: vec![]
+			data: Vec::new()
 		};
 
 		let entry2 = LogEntry {
@@ -239,7 +217,7 @@ mod tests {
 			topics: vec![
 				H256::from_str("ff74e91598aed6ae5d2fdcf8b24cd2c7be49a0808112a305069355b7160f23f9").unwrap(),
 			],
-			data: vec![]
+			data: Vec::new()
 		};
 
 		assert_eq!(filter.matches(&entry0), true);

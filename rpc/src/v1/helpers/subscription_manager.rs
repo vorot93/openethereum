@@ -40,7 +40,7 @@ struct Subscription {
 }
 
 /// A struct managing all subscriptions.
-/// TODO [ToDr] Depending on the method decide on poll interval.
+/// TODO [`ToDr`] Depending on the method decide on poll interval.
 /// For most of the methods it will be enough to poll on new block instead of time-interval.
 pub struct GenericPollManager<S: core::Middleware<Metadata>> {
 	subscribers: Subscribers<Subscription>,
@@ -50,8 +50,8 @@ pub struct GenericPollManager<S: core::Middleware<Metadata>> {
 impl<S: core::Middleware<Metadata>> GenericPollManager<S> {
 	/// Creates new poll manager
 	pub fn new(rpc: MetaIoHandler<Metadata, S>) -> Self {
-		GenericPollManager {
-			subscribers: Default::default(),
+		Self {
+			subscribers: Subscribers::default(),
 			rpc,
 		}
 	}
@@ -74,7 +74,7 @@ impl<S: core::Middleware<Metadata>> GenericPollManager<S> {
 			method,
 			params,
 			sink,
-			last_result: Default::default(),
+			last_result: Arc::<_>::default(),
 		};
 		let id = self.subscribers.insert(subscription);
 		(id, stream)

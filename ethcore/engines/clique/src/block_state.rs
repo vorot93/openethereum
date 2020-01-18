@@ -124,43 +124,43 @@ impl fmt::Display for CliqueBlockState {
 impl CliqueBlockState {
 	/// Create new state with given information, this is used creating new state from Checkpoint block.
 	pub fn new(signers: BTreeSet<Address>) -> Self {
-		CliqueBlockState {
+		Self {
 			signers,
-			..Default::default()
+			..Self::default()
 		}
 	}
 
 	// see https://github.com/ethereum/go-ethereum/blob/master/consensus/clique/clique.go#L474
 	fn verify(&self, header: &Header) -> Result<Address, Error> {
-		let creator = recover_creator(header)?.clone();
+		let creator = recover_creator(header)?;
 
 		// The signer is not authorized
 		if !self.signers.contains(&creator) {
 			trace!(target: "engine", "current state: {}", self);
-			Err(EngineError::NotAuthorized(creator))?
+			return Err(EngineError::NotAuthorized(creator).into());
 		}
 
 		// The signer has signed a block too recently
 		if self.recent_signers.contains(&creator) {
 			trace!(target: "engine", "current state: {}", self);
-			Err(EngineError::CliqueTooRecentlySigned(creator))?
+			return Err(EngineError::CliqueTooRecentlySigned(creator).into());
 		}
 
 		// Wrong difficulty
 		let inturn = self.is_inturn(header.number(), &creator);
 
 		if inturn && *header.difficulty() != DIFF_INTURN {
-			Err(BlockError::InvalidDifficulty(Mismatch {
+			return Err(BlockError::InvalidDifficulty(Mismatch {
 				expected: DIFF_INTURN,
 				found: *header.difficulty(),
-			}))?
+			}).into());
 		}
 
 		if !inturn && *header.difficulty() != DIFF_NOTURN {
-			Err(BlockError::InvalidDifficulty(Mismatch {
+			return Err(BlockError::InvalidDifficulty(Mismatch {
 				expected: DIFF_NOTURN,
 				found: *header.difficulty(),
-			}))?
+			}).into());
 		}
 
 		Ok(creator)
@@ -177,10 +177,9 @@ impl CliqueBlockState {
 			let signers = extract_signers(header)?;
 			if self.signers != signers {
 				let invalid_signers: Vec<String> = signers.into_iter()
-					.filter(|s| !self.signers.contains(s))
-					.map(|s| format!("{}", s))
+					.filter_map(|s| if self.signers.contains(&s) { None } else { Some(s.to_string()) })
 					.collect();
-				Err(EngineError::CliqueFaultyRecoveredSigners(invalid_signers))?
+				return Err(EngineError::CliqueFaultyRecoveredSigners(invalid_signers).into());
 			};
 
 			// TODO(niklasad1): I'm not sure if we should shrink here because it is likely that next epoch
@@ -196,7 +195,7 @@ impl CliqueBlockState {
 		if *header.author() != NULL_AUTHOR {
 			let decoded_seal = header.decode_seal::<Vec<_>>()?;
 			if decoded_seal.len() != 2 {
-				Err(BlockError::InvalidSealArity(Mismatch { expected: 2, found: decoded_seal.len() }))?
+				return Err(BlockError::InvalidSealArity(Mismatch { expected: 2, found: decoded_seal.len() }).into());
 			}
 
 			let nonce = H64::from_slice(decoded_seal[1]);
@@ -278,7 +277,7 @@ impl CliqueBlockState {
 		self.next_timestamp_inturn = inturn;
 
 		let delay = Duration::from_millis(
-			rand::thread_rng().gen_range(0u64, (self.signers.len() as u64 / 2 + 1) * SIGNING_DELAY_NOTURN_MS));
+			rand::thread_rng().gen_range(0_u64, (self.signers.len() as u64 / 2 + 1) * SIGNING_DELAY_NOTURN_MS));
 		self.next_timestamp_noturn = inturn.map(|inturn|  {
 			inturn + delay
 		});
@@ -286,7 +285,7 @@ impl CliqueBlockState {
 		if self.next_timestamp_inturn.is_some() && self.next_timestamp_noturn.is_some() {
 			Ok(())
 		} else {
-			Err(BlockError::TimestampOverflow)?
+			Err(BlockError::TimestampOverflow.into())
 		}
 	}
 
@@ -314,7 +313,7 @@ impl CliqueBlockState {
 	}
 
 	/// Returns the list of current signers
-	pub fn signers(&self) -> &BTreeSet<Address> {
+	pub const fn signers(&self) -> &BTreeSet<Address> {
 		&self.signers
 	}
 
@@ -349,8 +348,7 @@ impl CliqueBlockState {
 
 	fn get_current_votes_and_kind(&self, beneficiary: Address) -> Option<(usize, VoteType)> {
 		let kind = self.votes.iter()
-			.find(|(v, _t)| v.beneficiary == beneficiary)
-			.map(|(_v, t)| t.kind)?;
+			.find_map(|(v, t)| if v.beneficiary == beneficiary { Some(t.kind) } else { None })?;
 
 		let votes = self.votes.keys()
 			.filter(|vote| vote.beneficiary == beneficiary)
@@ -360,7 +358,7 @@ impl CliqueBlockState {
 	}
 
 	fn rotate_recent_signers(&mut self) {
-		if self.recent_signers.len() >= ( self.signers.len() / 2 ) + 1 {
+		if self.recent_signers.len() > ( self.signers.len() / 2 ) {
 			self.recent_signers.pop_back();
 		}
 	}

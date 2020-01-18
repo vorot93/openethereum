@@ -59,7 +59,7 @@ const REPORTS_SKIP_BLOCKS: u64 = 1;
 const MEMOIZE_CAPACITY: usize = 500;
 
 // TODO: ethabi should be able to generate this.
-const EVENT_NAME: &'static [u8] = &*b"InitiateChange(bytes32,address[])";
+const EVENT_NAME: &[u8] = &*b"InitiateChange(bytes32,address[])";
 
 lazy_static! {
 	static ref EVENT_NAME_HASH: H256 = keccak(EVENT_NAME);
@@ -80,7 +80,7 @@ impl engine::StateDependentProof for StateProof {
 	fn check_proof(&self, machine: &Machine, proof: &[u8]) -> Result<(), String> {
 		let (header, state_items) = decode_first_proof(&Rlp::new(proof))
 			.map_err(|e| format!("proof incorrectly encoded: {}", e))?;
-		if &header != &self.header {
+		if header != self.header {
 			return Err("wrong header in proof".into());
 		}
 
@@ -145,8 +145,8 @@ fn check_first_proof(machine: &Machine, contract_address: Address, old_header: H
 		nonce: machine.account_start_nonce(number),
 		action: Action::Call(contract_address),
 		gas: PROVIDED_GAS.into(),
-		gas_price: U256::default(),
-		value: U256::default(),
+		gas_price: U256::zero(),
+		value: U256::zero(),
 		data,
 	}.fake_sign(from);
 
@@ -214,7 +214,7 @@ fn prove_initial(contract_address: Address, header: &Header, caller: &Call) -> R
 
 impl ValidatorSafeContract {
 	pub fn new(contract_address: Address, posdao_transition: Option<BlockNumber>) -> Self {
-		ValidatorSafeContract {
+		Self {
 			contract_address,
 			validators: RwLock::new(MemoryLruCache::new(MEMOIZE_CAPACITY)),
 			client: RwLock::new(None),
@@ -231,7 +231,7 @@ impl ValidatorSafeContract {
 		let tx_request = TransactionRequest::call(self.contract_address, data).gas_price(U256::zero()).nonce(nonce);
 		match full_client.transact(tx_request) {
 			Ok(()) | Err(transaction::Error::AlreadyImported) => Ok(()),
-			Err(e) => Err(e)?,
+			Err(e) => Err(e.into()),
 		}
 	}
 
@@ -311,20 +311,21 @@ impl ValidatorSafeContract {
 		//// iterate in reverse because only the _last_ change in a given
 		//// block actually has any effect.
 		//// the contract should only increment the nonce once.
+		#[allow(clippy::filter_map)]
 		let mut decoded_events = receipts.iter()
 			.rev()
 			.filter(|r| r.log_bloom.contains_bloom(&bloom))
 			.flat_map(|r| r.logs.iter())
-			.filter(move |l| check_log(l))
 			.filter_map(|log| {
-				validator_set::events::initiate_change::parse_log((log.topics.clone(), log.data.clone()).into()).ok()
+				if check_log(log) {
+					validator_set::events::initiate_change::parse_log((log.topics.clone(), log.data.clone()).into()).ok()
+				} else {
+					None
+				}
 			});
 
 		// only last log is taken into account
-		match decoded_events.next() {
-			None => None,
-			Some(matched_event) => Some(SimpleList::new(matched_event.new_set))
-		}
+		decoded_events.next().map(|matched_event| SimpleList::new(matched_event.new_set))
 	}
 }
 
@@ -360,9 +361,9 @@ impl ValidatorSet for ValidatorSafeContract {
 			.map_err(|x| format!("chain spec bug: could not decode: {:?}", x)))
 			.map_err(EngineError::FailedSystemCall)?;
 		if !emit_initiate_change_callable {
-			trace!(target: "engine", "New block #{} issued ― no need to call emitInitiateChange()", header.number());
+			trace!(target: "engine", "New block #{} issued - no need to call emitInitiateChange()", header.number());
 		} else {
-			trace!(target: "engine", "New block issued #{} ― calling emitInitiateChange()", header.number());
+			trace!(target: "engine", "New block issued #{} - calling emitInitiateChange()", header.number());
 			let (data, _decoder) = validator_set::functions::emit_initiate_change::call();
 			transactions.push((self.contract_address, data));
 		}
@@ -469,7 +470,7 @@ impl ValidatorSet for ValidatorSafeContract {
 					info!(target: "engine", "Signal for transition within contract. New validator list: {:?}",
 						&*list);
 
-					let proof = encode_proof(&header, receipts);
+					let proof = encode_proof(header, receipts);
 					engine::EpochChange::Yes(engine::Proof::Known(proof))
 				}
 			},
@@ -657,7 +658,7 @@ mod tests {
 	use ethereum_types::Address;
 	use keccak_hash::keccak;
 	use rustc_hex::FromHex;
-	use spec;
+	
 
 	use super::super::ValidatorSet;
 	use super::{ValidatorSafeContract, EVENT_NAME_HASH};
@@ -719,7 +720,7 @@ mod tests {
 		EngineClient::update_sealing(&*client, ForceUpdateSealing::No);
 		assert_eq!(client.chain_info().best_block_number, 2);
 		// Switch back to the added validator, since the state is updated.
-		let signer = Box::new((tap.clone(), v1, "".into()));
+		let signer = Box::new((tap, v1, "".into()));
 		client.miner().set_author(miner::Author::Sealer(signer));
 		let tx = Transaction {
 			nonce: 2.into(),
@@ -747,7 +748,7 @@ mod tests {
 	#[test]
 	fn detects_bloom() {
 		let client = generate_dummy_client_with_spec(spec::new_validator_safe_contract);
-		let engine = client.engine().clone();
+		let engine = client.engine();
 		let validator_contract = "0000000000000000000000000000000000000005".parse::<Address>().unwrap();
 
 		let last_hash = client.best_block_header().hash();
@@ -781,7 +782,7 @@ mod tests {
 	#[test]
 	fn initial_contract_is_signal() {
 		let client = generate_dummy_client_with_spec(spec::new_validator_safe_contract);
-		let engine = client.engine().clone();
+		let engine = client.engine();
 
 		let mut new_header = Header::default();
 		new_header.set_number(0); // so the validator set doesn't look for a log

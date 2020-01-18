@@ -35,23 +35,23 @@ pub enum Tracing {
 
 impl Tracing {
 	/// Creates new instance of enabled tracing object.
-	pub fn enabled() -> Self {
-		Tracing::Enabled(Default::default())
+	pub const fn enabled() -> Self {
+		Self::Enabled(Vec::new())
 	}
 
 	/// Returns true if tracing is enabled.
 	pub fn is_enabled(&self) -> bool {
-		match *self {
-			Tracing::Enabled(_) => true,
-			Tracing::Disabled => false,
+		match self {
+			Self::Enabled(_) => true,
+			Self::Disabled => false,
 		}
 	}
 
 	/// Drain all traces.
 	pub fn drain(self) -> Vec<FlatTransactionTraces> {
 		match self {
-			Tracing::Enabled(traces) => traces,
-			Tracing::Disabled => vec![],
+			Self::Enabled(traces) => traces,
+			Self::Disabled => Vec::new(),
 		}
 	}
 }

@@ -68,12 +68,12 @@ fn can_trace_block_and_uncle_reward() {
 	// block with transaction and uncle
 
 	let genesis_header = spec.genesis_header();
-	let genesis_gas = genesis_header.gas_limit().clone();
+	let genesis_gas = *genesis_header.gas_limit();
 
 	let mut db = spec.ensure_db_good(get_temp_state_db(), &Default::default()).unwrap();
 	let mut rolling_timestamp = 40;
-	let mut last_hashes = vec![];
-	let mut last_header = genesis_header.clone();
+	let mut last_hashes = Vec::new();
+	let mut last_header = genesis_header;
 	last_hashes.push(last_header.hash());
 
 	let kp = KeyPair::from_secret_slice(keccak("").as_bytes()).unwrap();
@@ -87,15 +87,15 @@ fn can_trace_block_and_uncle_reward() {
 		db,
 		&last_header,
 		Arc::new(last_hashes.clone()),
-		author.clone(),
-		(3141562.into(), 31415620.into()),
-		vec![],
+		author,
+		(3_141_562.into(), 31_415_620.into()),
+		Vec::new(),
 		false,
 	).unwrap();
 	rolling_timestamp += 10;
 	root_block.set_timestamp(rolling_timestamp);
 
-	let root_block = root_block.close_and_lock().unwrap().seal(engine, vec![]).unwrap();
+	let root_block = root_block.close_and_lock().unwrap().seal(engine, Vec::new()).unwrap();
 
 	if let Err(e) = client.import_block(Unverified::from_rlp(root_block.rlp_bytes()).unwrap()) {
 		panic!("error importing block which is valid by definition: {:?}", e);
@@ -115,15 +115,15 @@ fn can_trace_block_and_uncle_reward() {
 		db,
 		&last_header,
 		Arc::new(last_hashes.clone()),
-		author.clone(),
-		(3141562.into(), 31415620.into()),
-		vec![],
+		author,
+		(3_141_562.into(), 31_415_620.into()),
+		Vec::new(),
 		false,
 	).unwrap();
 	rolling_timestamp += 10;
 	parent_block.set_timestamp(rolling_timestamp);
 
-	let parent_block = parent_block.close_and_lock().unwrap().seal(engine, vec![]).unwrap();
+	let parent_block = parent_block.close_and_lock().unwrap().seal(engine, Vec::new()).unwrap();
 
 	if let Err(e) = client.import_block(Unverified::from_rlp(parent_block.rlp_bytes()).unwrap()) {
 		panic!("error importing block which is valid by definition: {:?}", e);
@@ -141,27 +141,23 @@ fn can_trace_block_and_uncle_reward() {
 		true,
 		db,
 		&last_header,
-		Arc::new(last_hashes.clone()),
-		author.clone(),
-		(3141562.into(), 31415620.into()),
-		vec![],
+		Arc::new(last_hashes),
+		author,
+		(3_141_562.into(), 31_415_620.into()),
+		Vec::new(),
 		false,
 		).unwrap();
 	rolling_timestamp += 10;
 	block.set_timestamp(rolling_timestamp);
 
-	let mut n = 0;
-	for _ in 0..1 {
-		block.push_transaction(Transaction {
-			nonce: n.into(),
-			gas_price: 10000.into(),
-			gas: 100000.into(),
-			action: Action::Create,
-			data: vec![],
-			value: U256::zero(),
-		}.sign(kp.secret(), Some(spec.network_id())), None).unwrap();
-		n += 1;
-	}
+	block.push_transaction(Transaction {
+		nonce: 0.into(),
+		gas_price: 10000.into(),
+		gas: 100_000.into(),
+		action: Action::Create,
+		data: Vec::new(),
+		value: U256::zero(),
+	}.sign(kp.secret(), Some(spec.network_id())), None).unwrap();
 
 	let mut uncle = Header::new();
 	let uncle_author = Address::from_str("ef2d6d194084c2de36e0dabfce45d046b37d1106").unwrap();
@@ -172,7 +168,7 @@ fn can_trace_block_and_uncle_reward() {
 	uncle.set_timestamp(rolling_timestamp);
 	block.push_uncle(uncle).unwrap();
 
-	let block = block.close_and_lock().unwrap().seal(engine, vec![]).unwrap();
+	let block = block.close_and_lock().unwrap().seal(engine, Vec::new()).unwrap();
 
 	let res = client.import_block(Unverified::from_rlp(block.rlp_bytes()).unwrap());
 	if res.is_err() {
@@ -185,8 +181,8 @@ fn can_trace_block_and_uncle_reward() {
 	// Test0. Check overall filter
 	let filter = TraceFilter {
 		range: (BlockId::Number(1)..BlockId::Number(3)),
-		from_address: vec![],
-		to_address: vec![],
+		from_address: Vec::new(),
+		to_address: Vec::new(),
 		after: None,
 		count: None,
 	};
@@ -194,13 +190,13 @@ fn can_trace_block_and_uncle_reward() {
 	let traces = client.filter_traces(filter);
 	assert!(traces.is_some(), "Filtered traces should be present");
 	let traces_vec = traces.unwrap();
-	let block_reward_traces: Vec<LocalizedTrace> = traces_vec.clone().into_iter().filter(|trace| match (trace).action {
-		Reward(ref a) => a.reward_type == RewardType::Block,
+	let block_reward_traces: Vec<LocalizedTrace> = traces_vec.clone().into_iter().filter(|trace| match &trace.action {
+		Reward(a) => a.reward_type == RewardType::Block,
 		_ => false,
 	}).collect();
 	assert_eq!(block_reward_traces.len(), 3);
-	let uncle_reward_traces: Vec<LocalizedTrace> = traces_vec.clone().into_iter().filter(|trace| match (trace).action {
-		Reward(ref a) => a.reward_type == RewardType::Uncle,
+	let uncle_reward_traces: Vec<LocalizedTrace> = traces_vec.into_iter().filter(|trace| match &trace.action {
+		Reward(a) => a.reward_type == RewardType::Uncle,
 		_ => false,
 	}).collect();
 	assert_eq!(uncle_reward_traces.len(), 1);

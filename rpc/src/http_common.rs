@@ -33,8 +33,8 @@ pub struct MetaExtractor<T> {
 }
 
 impl<T> MetaExtractor<T> {
-	pub fn new(extractor: T) -> Self {
-		MetaExtractor { extractor }
+	pub const fn new(extractor: T) -> Self {
+		Self { extractor }
 	}
 }
 

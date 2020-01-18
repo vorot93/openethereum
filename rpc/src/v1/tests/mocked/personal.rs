@@ -79,14 +79,12 @@ fn setup_with(c: Config) -> PersonalTester {
 	let mut io = IoHandler::default();
 	io.extend_with(personal.to_delegate());
 
-	let tester = PersonalTester {
+	PersonalTester {
 		_runtime: runtime,
-		accounts: accounts,
-		io: io,
-		miner: miner,
-	};
-
-	tester
+		accounts,
+		io,
+		miner,
+	}
 }
 
 #[test]
@@ -96,7 +94,7 @@ fn accounts() {
 	let request = r#"{"jsonrpc": "2.0", "method": "personal_listAccounts", "params": [], "id": 1}"#;
 	let response = r#"{"jsonrpc":"2.0","result":[""#.to_owned() + &format!("0x{:x}", address) + r#""],"id":1}"#;
 
-	assert_eq!(tester.io.handle_request_sync(request), Some(response.to_owned()));
+	assert_eq!(tester.io.handle_request_sync(request), Some(response));
 }
 
 #[test]
@@ -141,7 +139,7 @@ fn invalid_password_test(method: &str)
 fn sign() {
 	let tester = setup();
 	let address = tester.accounts.new_account(&"password123".into()).unwrap();
-	let data = vec![5u8];
+	let data = vec![5_u8];
 
 	let request = r#"{
 		"jsonrpc": "2.0",
@@ -223,11 +221,11 @@ fn sign_and_send_test(method: &str) {
 
 	let t = Transaction {
 		nonce: U256::zero(),
-		gas_price: U256::from(0x9184e72a000u64),
+		gas_price: U256::from(0x0918_4e72_a000_u64),
 		gas: U256::from(0x76c0),
 		action: Action::Call(Address::from_str("d46e8dd67c5d32be8058bb8eb970870f07244567").unwrap()),
-		value: U256::from(0x9184e72au64),
-		data: vec![]
+		value: U256::from(0x9184_e72a_u64),
+		data: Vec::new()
 	};
 	tester.accounts.unlock_account_temporarily(address, "password123".into()).unwrap();
 	let signature = tester.accounts.sign(address, None, t.hash(None)).unwrap();
@@ -241,11 +239,11 @@ fn sign_and_send_test(method: &str) {
 
 	let t = Transaction {
 		nonce: U256::one(),
-		gas_price: U256::from(0x9184e72a000u64),
+		gas_price: U256::from(0x0918_4e72_a000_u64),
 		gas: U256::from(0x76c0),
 		action: Action::Call(Address::from_str("d46e8dd67c5d32be8058bb8eb970870f07244567").unwrap()),
-		value: U256::from(0x9184e72au64),
-		data: vec![]
+		value: U256::from(0x9184_e72a_u64),
+		data: Vec::new()
 	};
 	tester.accounts.unlock_account_temporarily(address, "password123".into()).unwrap();
 	let signature = tester.accounts.sign(address, None, t.hash(None)).unwrap();
@@ -260,7 +258,7 @@ fn sign_and_send_test(method: &str) {
 fn ec_recover() {
 	let tester = setup();
 	let address = tester.accounts.new_account(&"password123".into()).unwrap();
-	let data = vec![5u8];
+	let data = vec![5_u8];
 
 	let hash = eth_data_hash(data.clone());
 	let signature = H520(tester.accounts.sign(address, Some("password123".into()), hash).unwrap().into_electrum());
@@ -279,13 +277,13 @@ fn ec_recover() {
 	let address = format!("0x{:x}", address);
 	let response = r#"{"jsonrpc":"2.0","result":""#.to_owned() + &address + r#"","id":1}"#;
 
-	assert_eq!(tester.io.handle_request_sync(request.as_ref()), Some(response.into()));
+	assert_eq!(tester.io.handle_request_sync(request.as_ref()), Some(response));
 }
 
 #[test]
 fn ec_recover_invalid_signature() {
 	let tester = setup();
-	let data = vec![5u8];
+	let data = vec![5_u8];
 
 	let request = r#"{
 		"jsonrpc": "2.0",
@@ -362,7 +360,7 @@ fn sign_eip191_with_validator() {
 		"id": 1
 	}"#;
 	let with_validator = to_value(PresignedTransaction {
-		validator: address.into(),
+		validator: address,
 		data: keccak("hello world").as_bytes().to_vec().into()
 	}).unwrap();
 	let result = eip191::hash_message(EIP191Version::PresignedTransaction, with_validator).unwrap();
@@ -504,7 +502,7 @@ fn should_disable_experimental_apis() {
 		],
 		"id": 1
 	}"#;
-	let r1 = tester.io.handle_request_sync(&request).unwrap();
+	let r1 = tester.io.handle_request_sync(request).unwrap();
 	let request = r#"{
 		"jsonrpc": "2.0",
 		"method": "personal_signTypedData",
@@ -525,7 +523,7 @@ fn should_disable_experimental_apis() {
 		],
 		"id": 1
 	}"#;
-	let r2 = tester.io.handle_request_sync(&request).unwrap();
+	let r2 = tester.io.handle_request_sync(request).unwrap();
 
 	// then
 	let expected = r#"{"jsonrpc":"2.0","error":{"code":-32071,"message":"This method is not part of the official RPC API yet (EIP-191). Run with `--jsonrpc-experimental` to enable it.","data":"See EIP: https://eips.ethereum.org/EIPS/eip-191"},"id":1}"#;

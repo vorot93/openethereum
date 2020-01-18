@@ -55,7 +55,7 @@ impl<P: PostSign> ProspectiveSigner<P> {
 	) -> Self {
 		let supports_prospective = signer.supports_prospective_signing(&filled.from, &password);
 
-		ProspectiveSigner {
+		Self {
 			signer,
 			filled,
 			chain_id,

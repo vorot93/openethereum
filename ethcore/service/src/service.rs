@@ -46,8 +46,8 @@ pub struct PrivateTxService {
 }
 
 impl PrivateTxService {
-	fn new(provider: Arc<ethcore_private_tx::Provider>) -> Self {
-		PrivateTxService {
+	const fn new(provider: Arc<ethcore_private_tx::Provider>) -> Self {
+		Self {
 			provider,
 		}
 	}
@@ -64,7 +64,7 @@ impl PrivateTxHandler for PrivateTxService {
 			Ok(import_result) => Ok(import_result),
 			Err(err) => {
 				warn!(target: "privatetx", "Unable to import private transaction packet: {}", err);
-				return Err(err.to_string())
+				Err(err.to_string())
 			}
 		}
 	}
@@ -74,19 +74,18 @@ impl PrivateTxHandler for PrivateTxService {
 			Ok(import_result) => Ok(import_result),
 			Err(err) => {
 				warn!(target: "privatetx", "Unable to import signed private transaction packet: {}", err);
-				return Err(err.to_string())
+				Err(err.to_string())
 			}
 		}
 	}
 
 	fn private_state_synced(&self, hash: &H256) -> Result<(), String> {
-		match self.provider.private_state_synced(hash) {
-			Ok(handle_result) => Ok(handle_result),
-			Err(err) => {
-				warn!(target: "privatetx", "Unable to handle private state synced message: {}", err);
-				return Err(err.to_string())
-			}
+		if let Err(err) = self.provider.private_state_synced(hash) {
+			warn!(target: "privatetx", "Unable to handle private state synced message: {}", err);
+			return Err(err);
 		}
+
+		Ok(())
 	}
 }
 
@@ -113,7 +112,7 @@ impl ClientService {
 		encryptor: Box<dyn ethcore_private_tx::Encryptor>,
 		private_tx_conf: ethcore_private_tx::ProviderConfig,
 		private_encryptor_conf: ethcore_private_tx::EncryptorConfig,
-		) -> Result<ClientService, EthcoreError>
+		) -> Result<Self, EthcoreError>
 	{
 		let io_service = IoService::<ClientIoMessage<Client>>::start()?;
 
@@ -122,7 +121,7 @@ impl ClientService {
 		let pruning = config.pruning;
 		let client = Client::new(
 			config,
-			&spec,
+			spec,
 			blockchain_db.clone(),
 			miner.clone(),
 			io_service.channel(),
@@ -165,7 +164,7 @@ impl ClientService {
 		});
 		io_service.register_handler(client_io)?;
 
-		Ok(ClientService {
+		Ok(Self {
 			io_service: Arc::new(io_service),
 			client,
 			snapshot,
@@ -249,32 +248,34 @@ where
 	}
 
 	fn message(&self, _io: &IoContext<ClientIoMessage<C>>, net_message: &ClientIoMessage<C>) {
-		trace_time!("service::message");
 		use std::thread;
+		trace_time!("service::message");
 
-		match *net_message {
+		match net_message {
 			ClientIoMessage::BlockVerified => {
 				self.client.import_verified_blocks();
 			}
-			ClientIoMessage::BeginRestoration(ref manifest) => {
+			ClientIoMessage::BeginRestoration(manifest) => {
 				if let Err(e) = self.snapshot.init_restore(manifest.clone(), true) {
 					warn!("Failed to initialize snapshot restoration: {}", e);
 				}
 			}
-			ClientIoMessage::FeedStateChunk(ref hash, ref chunk) => {
+			ClientIoMessage::FeedStateChunk(hash, chunk) => {
 				self.snapshot.feed_state_chunk(*hash, chunk)
 			}
-			ClientIoMessage::FeedBlockChunk(ref hash, ref chunk) => {
+			ClientIoMessage::FeedBlockChunk(hash, chunk) => {
 				self.snapshot.feed_block_chunk(*hash, chunk)
 			}
 			ClientIoMessage::TakeSnapshot(num) => {
 				let client = self.client.clone();
 				let snapshot = self.snapshot.clone();
+				let num = *num;
 				let res = thread::Builder::new().name("Periodic Snapshot".into()).spawn(move || {
 					if let Err(e) = snapshot.take_snapshot(&*client, num) {
-						match e {
-							EthcoreError::Snapshot(SnapshotError::SnapshotAborted) => info!("Snapshot aborted"),
-							_ => warn!("Failed to take snapshot at block #{}: {}", num, e),
+						if let EthcoreError::Snapshot(SnapshotError::SnapshotAborted) = e {
+							info!("Snapshot aborted");
+						} else {
+							warn!("Failed to take snapshot at block #{}: {}", num, e);
 						}
 					}
 				});
@@ -283,7 +284,7 @@ where
 					debug!(target: "snapshot", "Failed to initialize periodic snapshot thread: {:?}", e);
 				}
 			},
-			ClientIoMessage::Execute(ref exec) => {
+			ClientIoMessage::Execute(exec) => {
 				(*exec.0)(&self.client);
 			}
 			_ => {} // ignore other messages

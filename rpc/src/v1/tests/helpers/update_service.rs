@@ -44,12 +44,10 @@ impl UpdateService for TestUpdater {
 	fn capability(&self) -> CapState {
 		if self.updated.load(Ordering::Relaxed) {
 			CapState::Capable
+		} else if self.current_block.load(Ordering::Relaxed) < 15100 {
+			CapState::CapableUntil(15100)
 		} else {
-			if self.current_block.load(Ordering::Relaxed) < 15100 {
-				CapState::CapableUntil(15100)
-			} else {
-				CapState::IncapableSince(15100)
-			}
+			CapState::IncapableSince(15100)
 		}
 	}
 
@@ -73,7 +71,7 @@ impl UpdateService for TestUpdater {
 	fn version_info(&self) -> VersionInfo {
 		VersionInfo {
 			track: ReleaseTrack::Stable,
-			version: Version{major: 1, minor: 5, patch: 0, build: vec![], pre: vec![]},
+			version: Version{major: 1, minor: 5, patch: 0, build: Vec::new(), pre: Vec::new()},
 			hash: H160::from_low_u64_be(150),
 		}
 	}
@@ -85,7 +83,7 @@ impl UpdateService for TestUpdater {
 			track: ReleaseInfo {
 				version: VersionInfo {
 					track: ReleaseTrack::Stable,
-					version: Version{major: 1, minor: 5, patch: 1, build: vec![], pre: vec![]},
+					version: Version{major: 1, minor: 5, patch: 1, build: Vec::new(), pre: Vec::new()},
 					hash: H160::from_low_u64_be(151),
 				},
 				is_critical: true,

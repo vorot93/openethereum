@@ -47,11 +47,11 @@ pub fn recover_creator(header: &Header) -> Result<Address, Error> {
 
 	let data = header.extra_data();
 	if data.len() < VANITY_LENGTH {
-		Err(EngineError::CliqueMissingVanity)?
+		return Err(EngineError::CliqueMissingVanity.into());
 	}
 
 	if data.len() < VANITY_LENGTH + SIGNATURE_LENGTH {
-		Err(EngineError::CliqueMissingSignature)?
+		return Err(EngineError::CliqueMissingSignature.into());
 	}
 
 	// Split `signed_extra data` and `signature`
@@ -76,9 +76,9 @@ pub fn recover_creator(header: &Header) -> Result<Address, Error> {
 	Ok(creator)
 }
 
-/// Extract signer list from extra_data.
+/// Extract signer list from `extra_data`.
 ///
-/// Layout of extra_data:
+/// Layout of `extra_data`:
 /// ----
 /// VANITY: 32 bytes
 /// Signers: N * 32 bytes as hex encoded (20 characters)
@@ -88,14 +88,14 @@ pub fn extract_signers(header: &Header) -> Result<BTreeSet<Address>, Error> {
 	let data = header.extra_data();
 
 	if data.len() <= VANITY_LENGTH + SIGNATURE_LENGTH {
-		Err(EngineError::CliqueCheckpointNoSigner)?
+		return Err(EngineError::CliqueCheckpointNoSigner.into());
 	}
 
 	// extract only the portion of extra_data which includes the signer list
 	let signers_raw = &data[(VANITY_LENGTH)..data.len() - (SIGNATURE_LENGTH)];
 
 	if signers_raw.len() % ADDRESS_LENGTH != 0 {
-		Err(EngineError::CliqueCheckpointInvalidSigners(signers_raw.len()))?
+		return Err(EngineError::CliqueCheckpointInvalidSigners(signers_raw.len()).into())
 	}
 
 	let num_signers = signers_raw.len() / 20;

@@ -48,7 +48,7 @@ impl<C, M> FullDispatcher<C, M> {
 		nonces: Arc<Mutex<nonce::Reservations>>,
 		gas_price_percentile: usize,
 	) -> Self {
-		FullDispatcher {
+		Self {
 			client,
 			miner,
 			nonces,
@@ -59,7 +59,7 @@ impl<C, M> FullDispatcher<C, M> {
 
 impl<C, M> Clone for FullDispatcher<C, M> {
 	fn clone(&self) -> Self {
-		FullDispatcher {
+		Self {
 			client: self.client.clone(),
 			miner: self.miner.clone(),
 			nonces: self.nonces.clone(),

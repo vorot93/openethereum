@@ -16,7 +16,7 @@
 
 use std::{error, io, fmt};
 use std::path::{Path, PathBuf};
-use ethbloom;
+
 use crate::file::{File, FileIterator};
 
 fn other_io_err<E>(e: E) -> io::Error where E: Into<Box<dyn error::Error + Send + Sync>> {
@@ -32,8 +32,8 @@ struct Positions {
 }
 
 impl Positions {
-	fn from_index(index: u64) -> Self {
-		Positions {
+	const fn from_index(index: u64) -> Self {
+		Self {
 			top: index >> 8,
 			mid: index >> 4,
 			bot: index,
@@ -65,8 +65,8 @@ struct DatabaseFiles {
 
 impl DatabaseFiles {
 	/// Open the blooms db files
-	pub fn open(path: &Path) -> io::Result<DatabaseFiles> {
-		Ok(DatabaseFiles {
+	pub fn open(path: &Path) -> io::Result<Self> {
+		Ok(Self {
 			top: File::open(path.join("top.bdb"))?,
 			mid: File::open(path.join("mid.bdb"))?,
 			bot: File::open(path.join("bot.bdb"))?,
@@ -113,11 +113,11 @@ pub struct Database {
 
 impl Database {
 	/// Opens blooms database.
-	pub fn open<P>(path: P) -> io::Result<Database> where P: AsRef<Path> {
+	pub fn open<P>(path: P) -> io::Result<Self> where P: AsRef<Path> {
 		let path: PathBuf = path.as_ref().to_path_buf();
-		let database = Database {
+		let database = Self {
 			db_files: Some(DatabaseFiles::open(&path)?),
-			path: path,
+			path,
 		};
 
 		Ok(database)
@@ -138,9 +138,9 @@ impl Database {
 	/// Insert consecutive blooms into database starting at the given positon.
 	pub fn insert_blooms<'a, I, B>(&mut self, from: u64, blooms: I) -> io::Result<()>
 	where ethbloom::BloomRef<'a>: From<B>, I: Iterator<Item = B> {
-		match self.db_files {
-			Some(ref mut db_files) => {
-				for (index, bloom) in (from..).into_iter().zip(blooms.map(Into::into)) {
+		match &mut self.db_files {
+			Some(db_files) => {
+				for (index, bloom) in (from..).zip(blooms.map(Into::into)) {
 					let pos = Positions::from_index(index);
 
 					// Constant forks may lead to increased ratio of false positives in bloom filters
@@ -158,8 +158,8 @@ impl Database {
 	/// Returns an iterator yielding all indexes containing given bloom.
 	pub fn iterate_matching<'a, 'b, B, I, II>(&'a mut self, from: u64, to: u64, blooms: II) -> io::Result<DatabaseIterator<'a, II>>
 	where ethbloom::BloomRef<'b>: From<B>, 'b: 'a, II: IntoIterator<Item = B, IntoIter = I> + Copy, I: Iterator<Item = B> {
-		match self.db_files {
-			Some(ref mut db_files) => {
+		match &mut self.db_files {
+			Some(db_files) => {
 				let index = from / 256 * 256;
 				let pos = Positions::from_index(index);
 				let files_iter = db_files.iterator_from(pos)?;

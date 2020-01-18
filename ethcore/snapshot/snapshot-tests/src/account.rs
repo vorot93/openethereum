@@ -40,7 +40,7 @@ fn encoding_basic() {
 
 	let account = BasicAccount {
 		nonce: 50.into(),
-		balance: 123456789.into(),
+		balance: 123_456_789.into(),
 		storage_root: KECCAK_NULL_RLP,
 		code_hash: KECCAK_EMPTY,
 		code_version: 0.into(),
@@ -49,7 +49,7 @@ fn encoding_basic() {
 	let thin_rlp = ::rlp::encode(&account);
 	assert_eq!(::rlp::decode::<BasicAccount>(&thin_rlp).unwrap(), account);
 	let p = RwLock::new(Progress::new());
-	let fat_rlps = to_fat_rlps(&keccak(&addr), &account, &AccountDB::from_hash(db.as_hash_db(), keccak(addr)), &mut Default::default(), usize::max_value(), usize::max_value(), &p).unwrap();
+	let fat_rlps = to_fat_rlps(&keccak(&addr), &account, &AccountDB::from_hash(db.as_hash_db(), keccak(addr)), &mut HashSet::new(), usize::max_value(), usize::max_value(), &p).unwrap();
 	let fat_rlp = Rlp::new(&fat_rlps[0]).at(1).unwrap();
 	assert_eq!(from_fat_rlp(&mut AccountDBMut::from_hash(db.as_hash_db_mut(), keccak(addr)), fat_rlp, H256::zero()).unwrap().0, account);
 }
@@ -61,7 +61,7 @@ fn encoding_version() {
 
 	let account = BasicAccount {
 		nonce: 50.into(),
-		balance: 123456789.into(),
+		balance: 123_456_789.into(),
 		storage_root: KECCAK_NULL_RLP,
 		code_hash: KECCAK_EMPTY,
 		code_version: 1.into(),
@@ -70,7 +70,7 @@ fn encoding_version() {
 	let thin_rlp = ::rlp::encode(&account);
 	assert_eq!(::rlp::decode::<BasicAccount>(&thin_rlp).unwrap(), account);
 	let p = RwLock::new(Progress::new());
-	let fat_rlps = to_fat_rlps(&keccak(&addr), &account, &AccountDB::from_hash(db.as_hash_db(), keccak(addr)), &mut Default::default(), usize::max_value(), usize::max_value(), &p).unwrap();
+	let fat_rlps = to_fat_rlps(&keccak(&addr), &account, &AccountDB::from_hash(db.as_hash_db(), keccak(addr)), &mut HashSet::new(), usize::max_value(), usize::max_value(), &p).unwrap();
 	let fat_rlp = Rlp::new(&fat_rlps[0]).at(1).unwrap();
 	assert_eq!(from_fat_rlp(&mut AccountDBMut::from_hash(db.as_hash_db_mut(), keccak(addr)), fat_rlp, H256::zero()).unwrap().0, account);
 }
@@ -86,7 +86,7 @@ fn encoding_storage() {
 		fill_storage(acct_db, &mut root, &mut H256::zero());
 		BasicAccount {
 			nonce: 25.into(),
-			balance: 987654321.into(),
+			balance: 987_654_321.into(),
 			storage_root: root,
 			code_hash: KECCAK_EMPTY,
 			code_version: 0.into(),
@@ -98,7 +98,7 @@ fn encoding_storage() {
 
 	let p = RwLock::new(Progress::new());
 
-	let fat_rlp = to_fat_rlps(&keccak(&addr), &account, &AccountDB::from_hash(db.as_hash_db(), keccak(addr)), &mut Default::default(), usize::max_value(), usize::max_value(), &p).unwrap();
+	let fat_rlp = to_fat_rlps(&keccak(&addr), &account, &AccountDB::from_hash(db.as_hash_db(), keccak(addr)), &mut HashSet::new(), usize::max_value(), usize::max_value(), &p).unwrap();
 	let fat_rlp = Rlp::new(&fat_rlp[0]).at(1).unwrap();
 	assert_eq!(from_fat_rlp(&mut AccountDBMut::from_hash(db.as_hash_db_mut(), keccak(addr)), fat_rlp, H256::zero()).unwrap().0, account);
 }
@@ -114,7 +114,7 @@ fn encoding_storage_split() {
 		fill_storage(acct_db, &mut root, &mut H256::zero());
 		BasicAccount {
 			nonce: 25.into(),
-			balance: 987654321.into(),
+			balance: 987_654_321.into(),
 			storage_root: root,
 			code_hash: KECCAK_EMPTY,
 			code_version: 0.into(),
@@ -125,13 +125,13 @@ fn encoding_storage_split() {
 	assert_eq!(::rlp::decode::<BasicAccount>(&thin_rlp).unwrap(), account);
 
 	let p = RwLock::new(Progress::new());
-	let fat_rlps = to_fat_rlps(&keccak(addr), &account, &AccountDB::from_hash(db.as_hash_db(), keccak(addr)), &mut Default::default(), 500, 1000, &p).unwrap();
+	let fat_rlps = to_fat_rlps(&keccak(addr), &account, &AccountDB::from_hash(db.as_hash_db(), keccak(addr)), &mut HashSet::new(), 500, 1000, &p).unwrap();
 	let mut root = KECCAK_NULL_RLP;
 	let mut restored_account = None;
 	for rlp in fat_rlps {
 		let fat_rlp = Rlp::new(&rlp).at(1).unwrap();
 		restored_account = Some(from_fat_rlp(&mut AccountDBMut::from_hash(db.as_hash_db_mut(), keccak(addr)), fat_rlp, root).unwrap().0);
-		root = restored_account.as_ref().unwrap().storage_root.clone();
+		root = restored_account.as_ref().unwrap().storage_root;
 	}
 	assert_eq!(restored_account, Some(account));
 }
@@ -155,7 +155,7 @@ fn encoding_code() {
 
 	let account1 = BasicAccount {
 		nonce: 50.into(),
-		balance: 123456789.into(),
+		balance: 123_456_789.into(),
 		storage_root: KECCAK_NULL_RLP,
 		code_hash,
 		code_version: 0.into(),
@@ -163,7 +163,7 @@ fn encoding_code() {
 
 	let account2 = BasicAccount {
 		nonce: 400.into(),
-		balance: 98765432123456789usize.into(),
+		balance: 98_765_432_123_456_789_usize.into(),
 		storage_root: KECCAK_NULL_RLP,
 		code_hash,
 		code_version: 0.into(),

@@ -35,9 +35,9 @@ pub enum BlockTransactions {
 impl Serialize for BlockTransactions {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where S: Serializer {
-		match *self {
-			BlockTransactions::Hashes(ref hashes) => hashes.serialize(serializer),
-			BlockTransactions::Full(ref ts) => ts.serialize(serializer)
+		match self {
+			Self::Hashes(hashes) => hashes.serialize(serializer),
+			Self::Full(ts) => ts.serialize(serializer)
 		}
 	}
 }
@@ -138,7 +138,7 @@ impl From<EthHeader> for Header {
 
 impl<'a> From<&'a EthHeader> for Header {
 	fn from(h: &'a EthHeader) -> Self {
-		Header {
+		Self {
 			hash: Some(h.hash()),
 			size: Some(h.rlp().as_raw().len().into()),
 			parent_hash: h.parent_hash(),
@@ -216,7 +216,7 @@ mod tests {
 		let serialized = serde_json::to_string(&t).unwrap();
 		assert_eq!(serialized, r#"[{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"blockNumber":null,"transactionIndex":null,"from":"0x0000000000000000000000000000000000000000","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","input":"0x","creates":null,"raw":"0x","publicKey":null,"chainId":null,"standardV":"0x0","v":"0x0","r":"0x0","s":"0x0","condition":null}]"#);
 
-		let t = BlockTransactions::Hashes(vec![H256::zero().into()]);
+		let t = BlockTransactions::Hashes(vec![H256::zero()]);
 		let serialized = serde_json::to_string(&t).unwrap();
 		assert_eq!(serialized, r#"["0x0000000000000000000000000000000000000000000000000000000000000000"]"#);
 	}
@@ -232,17 +232,17 @@ mod tests {
 			state_root: H256::zero(),
 			transactions_root: H256::zero(),
 			receipts_root: H256::zero(),
-			number: Some(U256::default()),
-			gas_used: U256::default(),
-			gas_limit: U256::default(),
+			number: Some(U256::zero()),
+			gas_used: U256::zero(),
+			gas_limit: U256::zero(),
 			extra_data: Bytes::default(),
 			logs_bloom: Some(H2048::default()),
-			timestamp: U256::default(),
-			difficulty: U256::default(),
-			total_difficulty: Some(U256::default()),
+			timestamp: U256::zero(),
+			difficulty: U256::zero(),
+			total_difficulty: Some(U256::zero()),
 			seal_fields: vec![Bytes::default(), Bytes::default()],
-			uncles: vec![],
-			transactions: BlockTransactions::Hashes(vec![].into()),
+			uncles: Vec::new(),
+			transactions: BlockTransactions::Hashes(Vec::new()),
 			size: Some(69.into()),
 		};
 		let serialized_block = serde_json::to_string(&block).unwrap();
@@ -270,17 +270,17 @@ mod tests {
 			state_root: H256::zero(),
 			transactions_root: H256::zero(),
 			receipts_root: H256::zero(),
-			number: Some(U256::default()),
-			gas_used: U256::default(),
-			gas_limit: U256::default(),
+			number: Some(U256::zero()),
+			gas_used: U256::zero(),
+			gas_limit: U256::zero(),
 			extra_data: Bytes::default(),
 			logs_bloom: Some(H2048::default()),
-			timestamp: U256::default(),
-			difficulty: U256::default(),
-			total_difficulty: Some(U256::default()),
+			timestamp: U256::zero(),
+			difficulty: U256::zero(),
+			total_difficulty: Some(U256::zero()),
 			seal_fields: vec![Bytes::default(), Bytes::default()],
-			uncles: vec![],
-			transactions: BlockTransactions::Hashes(vec![].into()),
+			uncles: Vec::new(),
+			transactions: BlockTransactions::Hashes(Vec::new()),
 			size: None,
 		};
 		let serialized_block = serde_json::to_string(&block).unwrap();
@@ -308,13 +308,13 @@ mod tests {
 			state_root: H256::zero(),
 			transactions_root: H256::zero(),
 			receipts_root: H256::zero(),
-			number: Some(U256::default()),
-			gas_used: U256::default(),
-			gas_limit: U256::default(),
+			number: Some(U256::zero()),
+			gas_used: U256::zero(),
+			gas_limit: U256::zero(),
 			extra_data: Bytes::default(),
 			logs_bloom: H2048::default(),
-			timestamp: U256::default(),
-			difficulty: U256::default(),
+			timestamp: U256::zero(),
+			difficulty: U256::zero(),
 			seal_fields: vec![Bytes::default(), Bytes::default()],
 			size: Some(69.into()),
 		};

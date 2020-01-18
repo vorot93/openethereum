@@ -22,7 +22,7 @@ extern crate parity_runtime;
 extern crate url;
 extern crate hyper;
 
-use self::fetch::{Fetch, Request, Client as FetchClient, Method};
+use self::fetch::{Abort, Fetch, Request, Client as FetchClient, Method};
 use self::parity_runtime::Executor;
 use self::ethash::SeedHashCompute;
 use self::url::Url;
@@ -50,7 +50,7 @@ pub struct WorkPoster {
 impl WorkPoster {
 	/// Create new `WorkPoster`.
 	pub fn new(urls: &[String], fetch: FetchClient, executor: Executor) -> Self {
-		let urls = urls.into_iter().filter_map(|u| {
+		let urls = urls.iter().filter_map(|u| {
 			match Url::parse(u) {
 				Ok(url) => Some(url),
 				Err(e) => {
@@ -59,10 +59,10 @@ impl WorkPoster {
 				}
 			}
 		}).collect();
-		WorkPoster {
+		Self {
 			client: fetch,
-			executor: executor,
-			urls: urls,
+			executor,
+			urls,
 			seed_compute: Mutex::new(SeedHashCompute::default()),
 		}
 	}
@@ -84,7 +84,7 @@ impl NotifyWork for WorkPoster {
 			self.executor.spawn(self.client.fetch(
 				Request::new(u.clone(), Method::POST)
 					.with_header(header::CONTENT_TYPE, HeaderValue::from_static("application/json"))
-					.with_body(body.clone()), Default::default()
+					.with_body(body.clone()), Abort::default()
 			).map_err(move |e| {
 				warn!("Error sending HTTP notification to {} : {}, retrying", u, e);
 			}).map(|_| ()));

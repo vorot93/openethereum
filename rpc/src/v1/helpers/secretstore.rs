@@ -44,8 +44,8 @@ pub fn generate_document_key(account_public: Public, server_key_public: Public) 
 	).map_err(errors::encryption)?;
 
 	Ok(EncryptedDocumentKey {
-		common_point: common_point.into(),
-		encrypted_point: encrypted_point.into(),
+		common_point,
+		encrypted_point,
 		encrypted_key: encrypted_key.into(),
 	})
 }
@@ -100,7 +100,7 @@ pub fn ordered_servers_keccak(servers_set: BTreeSet<H512>) -> H256 {
 		servers_set_keccak.update(&server.0);
 	}
 
-	let mut servers_set_keccak_value = [0u8; 32];
+	let mut servers_set_keccak_value = [0_u8; 32];
 	servers_set_keccak.finalize(&mut servers_set_keccak_value);
 
 	servers_set_keccak_value.into()
@@ -117,7 +117,7 @@ fn into_document_key(key: Bytes) -> Result<Bytes, Error> {
 }
 
 fn initialization_vector() -> [u8; INIT_VEC_LEN] {
-	let mut result = [0u8; INIT_VEC_LEN];
+	let mut result = [0_u8; INIT_VEC_LEN];
 	let mut rng = OsRng;
 	rng.fill_bytes(&mut result);
 	result
@@ -150,7 +150,7 @@ fn encrypt_secret(secret: &Public, joint_public: &Public) -> Result<(Public, Pub
 		.map_err(errors::encryption)?;
 
 	// M + k * y
-	let mut encrypted_point = joint_public.clone();
+	let mut encrypted_point = *joint_public;
 	ec_math_utils::public_mul_secret(&mut encrypted_point, key_pair.secret())
 		.map_err(errors::encryption)?;
 	ec_math_utils::public_add(&mut encrypted_point, secret)
@@ -173,7 +173,7 @@ mod tests {
 		let encrypted_document = encrypt_document(document_key.clone(), document.clone()).unwrap();
 		assert!(document != encrypted_document);
 
-		let decrypted_document = decrypt_document(document_key.clone(), encrypted_document).unwrap();
+		let decrypted_document = decrypt_document(document_key, encrypted_document).unwrap();
 		assert_eq!(decrypted_document, document);
 	}
 

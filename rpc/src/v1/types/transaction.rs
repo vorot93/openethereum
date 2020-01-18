@@ -100,7 +100,7 @@ impl Serialize for LocalTransactionStatus {
 	{
 		use self::LocalTransactionStatus::*;
 
-		let elems = match *self {
+		let elems = match self {
 			Pending | Future => 1,
 			Mined(..) | Culled(..) | Dropped(..) | Invalid(..) | Canceled(..) => 2,
 			Rejected(..) => 3,
@@ -111,35 +111,35 @@ impl Serialize for LocalTransactionStatus {
 		let transaction = "transaction";
 
 		let mut struc = serializer.serialize_struct("LocalTransactionStatus", elems)?;
-		match *self {
+		match self {
 			Pending => struc.serialize_field(status, "pending")?,
 			Future => struc.serialize_field(status, "future")?,
-			Mined(ref tx) => {
+			Mined(tx) => {
 				struc.serialize_field(status, "mined")?;
 				struc.serialize_field(transaction, tx)?;
 			},
-			Culled(ref tx) => {
+			Culled(tx) => {
 				struc.serialize_field(status, "culled")?;
 				struc.serialize_field(transaction, tx)?;
 			},
-			Dropped(ref tx) => {
+			Dropped(tx) => {
 				struc.serialize_field(status, "dropped")?;
 				struc.serialize_field(transaction, tx)?;
 			},
-			Canceled(ref tx) => {
+			Canceled(tx) => {
 				struc.serialize_field(status, "canceled")?;
 				struc.serialize_field(transaction, tx)?;
 			},
-			Invalid(ref tx) => {
+			Invalid(tx) => {
 				struc.serialize_field(status, "invalid")?;
 				struc.serialize_field(transaction, tx)?;
 			},
-			Rejected(ref tx, ref reason) => {
+			Rejected(tx, reason) => {
 				struc.serialize_field(status, "rejected")?;
 				struc.serialize_field(transaction, tx)?;
 				struc.serialize_field("error", reason)?;
 			},
-			Replaced(ref tx, ref gas_price, ref hash) => {
+			Replaced(tx, gas_price, hash) => {
 				struc.serialize_field(status, "replaced")?;
 				struc.serialize_field(transaction, tx)?;
 				struc.serialize_field("hash", hash)?;
@@ -151,7 +151,7 @@ impl Serialize for LocalTransactionStatus {
 	}
 }
 
-/// Geth-compatible output for eth_signTransaction method
+/// Geth-compatible output for `eth_signTransaction` method
 #[derive(Debug, Default, Clone, PartialEq, Serialize)]
 pub struct RichRawTransaction {
 	/// Raw transaction RLP
@@ -165,7 +165,7 @@ impl RichRawTransaction {
 	/// Creates new `RichRawTransaction` from `SignedTransaction`.
 	pub fn from_signed(tx: SignedTransaction) -> Self {
 		let tx = Transaction::from_signed(tx);
-		RichRawTransaction {
+		Self {
 			raw: tx.raw.clone(),
 			transaction: tx,
 		}
@@ -174,25 +174,25 @@ impl RichRawTransaction {
 
 impl Transaction {
 	/// Convert `LocalizedTransaction` into RPC Transaction.
-	pub fn from_localized(mut t: LocalizedTransaction) -> Transaction {
+	pub fn from_localized(mut t: LocalizedTransaction) -> Self {
 		let signature = t.signature();
 		let scheme = CreateContractAddress::FromSenderAndNonce;
-		Transaction {
+		Self {
 			hash: t.hash(),
 			nonce: t.nonce,
 			block_hash: Some(t.block_hash),
 			block_number: Some(t.block_number.into()),
 			transaction_index: Some(t.transaction_index.into()),
 			from: t.sender(),
-			to: match t.action {
+			to: match &t.action {
 				Action::Create => None,
-				Action::Call(ref address) => Some(*address)
+				Action::Call(address) => Some(*address)
 			},
 			value: t.value,
 			gas_price: t.gas_price,
 			gas: t.gas,
 			input: Bytes::new(t.data.clone()),
-			creates: match t.action {
+			creates: match &t.action {
 				Action::Create => Some(contract_address(scheme, &t.sender(), &t.nonce, &t.data).0),
 				Action::Call(_) => None,
 			},
@@ -208,25 +208,25 @@ impl Transaction {
 	}
 
 	/// Convert `SignedTransaction` into RPC Transaction.
-	pub fn from_signed(t: SignedTransaction) -> Transaction {
+	pub fn from_signed(t: SignedTransaction) -> Self {
 		let signature = t.signature();
 		let scheme = CreateContractAddress::FromSenderAndNonce;
-		Transaction {
+		Self {
 			hash: t.hash(),
 			nonce: t.nonce,
 			block_hash: None,
 			block_number: None,
 			transaction_index: None,
 			from: t.sender(),
-			to: match t.action {
+			to: match &t.action {
 				Action::Create => None,
-				Action::Call(ref address) => Some(*address)
+				Action::Call(address) => Some(*address)
 			},
 			value: t.value,
 			gas_price: t.gas_price,
 			gas: t.gas,
 			input: Bytes::new(t.data.clone()),
-			creates: match t.action {
+			creates: match &t.action {
 				Action::Create => Some(contract_address(scheme, &t.sender(), &t.nonce, &t.data).0),
 				Action::Call(_) => None,
 			},
@@ -242,8 +242,8 @@ impl Transaction {
 	}
 
 	/// Convert `PendingTransaction` into RPC Transaction.
-	pub fn from_pending(t: PendingTransaction) -> Transaction {
-		let mut r = Transaction::from_signed(t.transaction);
+	pub fn from_pending(t: PendingTransaction) -> Self {
+		let mut r = Self::from_signed(t.transaction);
 		r.condition = r.condition.map(Into::into);
 		r
 	}
@@ -252,19 +252,20 @@ impl Transaction {
 impl LocalTransactionStatus {
 	/// Convert `LocalTransactionStatus` into RPC `LocalTransactionStatus`.
 	pub fn from(s: miner::pool::local_transactions::Status) -> Self {
+		use miner::pool::local_transactions::Status::*;
+
 		let convert = |tx: Arc<miner::pool::VerifiedTransaction>| {
 			Transaction::from_signed(tx.signed().clone())
 		};
-		use miner::pool::local_transactions::Status::*;
 		match s {
-			Pending(_) => LocalTransactionStatus::Pending,
-			Mined(tx) => LocalTransactionStatus::Mined(convert(tx)),
-			Culled(tx) => LocalTransactionStatus::Culled(convert(tx)),
-			Dropped(tx) => LocalTransactionStatus::Dropped(convert(tx)),
-			Rejected(tx, reason) => LocalTransactionStatus::Rejected(convert(tx), reason),
-			Invalid(tx) => LocalTransactionStatus::Invalid(convert(tx)),
-			Canceled(tx) => LocalTransactionStatus::Canceled(convert(tx)),
-			Replaced { old, new } => LocalTransactionStatus::Replaced(
+			Pending(_) => Self::Pending,
+			Mined(tx) => Self::Mined(convert(tx)),
+			Culled(tx) => Self::Culled(convert(tx)),
+			Dropped(tx) => Self::Dropped(convert(tx)),
+			Rejected(tx, reason) => Self::Rejected(convert(tx), reason),
+			Invalid(tx) => Self::Invalid(convert(tx)),
+			Canceled(tx) => Self::Canceled(convert(tx)),
+			Replaced { old, new } => Self::Replaced(
 				convert(old),
 				new.signed().gas_price,
 				new.signed().hash(),
@@ -308,26 +309,26 @@ mod tests {
 		);
 		assert_eq!(
 			serde_json::to_string(&status3).unwrap(),
-			r#"{"status":"mined","transaction":"#.to_owned() + &format!("{}", tx_ser) + r#"}"#
+			r#"{"status":"mined","transaction":"#.to_owned() + &tx_ser.to_string() + r#"}"#
 		);
 		assert_eq!(
 			serde_json::to_string(&status4).unwrap(),
-			r#"{"status":"dropped","transaction":"#.to_owned() + &format!("{}", tx_ser) + r#"}"#
+			r#"{"status":"dropped","transaction":"#.to_owned() + &tx_ser.to_string() + r#"}"#
 		);
 		assert_eq!(
 			serde_json::to_string(&status5).unwrap(),
-			r#"{"status":"invalid","transaction":"#.to_owned() + &format!("{}", tx_ser) + r#"}"#
+			r#"{"status":"invalid","transaction":"#.to_owned() + &tx_ser.to_string() + r#"}"#
 		);
 		assert_eq!(
 			serde_json::to_string(&status6).unwrap(),
 			r#"{"status":"rejected","transaction":"#.to_owned() +
-			&format!("{}", tx_ser) +
+			&tx_ser.to_string() +
 			r#","error":"Just because"}"#
 		);
 		assert_eq!(
 			serde_json::to_string(&status7).unwrap(),
 			r#"{"status":"replaced","transaction":"#.to_owned() +
-			&format!("{}", tx_ser) +
+			&tx_ser +
 			r#","hash":"0x000000000000000000000000000000000000000000000000000000000000000a","gasPrice":"0x5"}"#
 		);
 	}

@@ -27,7 +27,7 @@ use key_server_cluster::io::message::{MessageHeader, deserialize_message, decryp
 pub fn read_payload<A>(a: A, header: MessageHeader) -> ReadPayload<A> where A: AsyncRead {
 	ReadPayload {
 		reader: read_exact(a, vec![0; header.size as usize]),
-		header: header,
+		header,
 		key: None,
 	}
 }
@@ -36,7 +36,7 @@ pub fn read_payload<A>(a: A, header: MessageHeader) -> ReadPayload<A> where A: A
 pub fn read_encrypted_payload<A>(a: A, header: MessageHeader, key: KeyPair) -> ReadPayload<A> where A: AsyncRead {
 	ReadPayload {
 		reader: read_exact(a, vec![0; header.size as usize]),
-		header: header,
+		header,
 		key: Some(key),
 	}
 }

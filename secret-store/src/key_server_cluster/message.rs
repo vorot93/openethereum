@@ -1064,28 +1064,28 @@ pub enum FailedKeyVersionContinueAction {
 
 impl Message {
 	pub fn is_initialization_message(&self) -> bool {
-		match *self {
-			Message::Generation(GenerationMessage::InitializeSession(_)) => true,
-			Message::Encryption(EncryptionMessage::InitializeEncryptionSession(_)) => true,
-			Message::Decryption(DecryptionMessage::DecryptionConsensusMessage(ref msg)) => match msg.message {
+		match self {
+			Self::Generation(GenerationMessage::InitializeSession(_)) => true,
+			Self::Encryption(EncryptionMessage::InitializeEncryptionSession(_)) => true,
+			Self::Decryption(DecryptionMessage::DecryptionConsensusMessage(msg)) => match msg.message {
 				ConsensusMessage::InitializeConsensusSession(_) => true,
 				_ => false
 			},
-			Message::SchnorrSigning(SchnorrSigningMessage::SchnorrSigningConsensusMessage(ref msg)) => match msg.message {
+			Self::SchnorrSigning(SchnorrSigningMessage::SchnorrSigningConsensusMessage(msg)) => match msg.message {
 				ConsensusMessage::InitializeConsensusSession(_) => true,
 				_ => false
 			},
-			Message::EcdsaSigning(EcdsaSigningMessage::EcdsaSigningConsensusMessage(ref msg)) => match msg.message {
+			Self::EcdsaSigning(EcdsaSigningMessage::EcdsaSigningConsensusMessage(msg)) => match msg.message {
 				ConsensusMessage::InitializeConsensusSession(_) => true,
 				_ => false
 			},
-			Message::KeyVersionNegotiation(KeyVersionNegotiationMessage::RequestKeyVersions(_)) => true,
-			Message::KeyVersionNegotiation(KeyVersionNegotiationMessage::KeyVersionsError(ref msg)) if msg.continue_with.is_some() => true,
-			Message::ShareAdd(ShareAddMessage::ShareAddConsensusMessage(ref msg)) => match msg.message {
+			Self::KeyVersionNegotiation(KeyVersionNegotiationMessage::RequestKeyVersions(_)) => true,
+			Self::KeyVersionNegotiation(KeyVersionNegotiationMessage::KeyVersionsError(msg)) if msg.continue_with.is_some() => true,
+			Self::ShareAdd(ShareAddMessage::ShareAddConsensusMessage(msg)) => match msg.message {
 				ConsensusMessageOfShareAdd::InitializeConsensusSession(_) => true,
 				_ => false
 			},
-			Message::ServersSetChange(ServersSetChangeMessage::ServersSetChangeConsensusMessage(ref msg)) => match msg.message {
+			Self::ServersSetChange(ServersSetChangeMessage::ServersSetChangeConsensusMessage(msg)) => match msg.message {
 				ConsensusMessageWithServersSet::InitializeConsensusSession(_) => true,
 				_ => false
 			},
@@ -1094,453 +1094,453 @@ impl Message {
 	}
 
 	pub fn is_delegation_message(&self) -> bool {
-		match *self {
-			Message::Decryption(DecryptionMessage::DecryptionSessionDelegation(_)) => true,
-			Message::SchnorrSigning(SchnorrSigningMessage::SchnorrSigningSessionDelegation(_)) => true,
-			Message::EcdsaSigning(EcdsaSigningMessage::EcdsaSigningSessionDelegation(_)) => true,
+		match self {
+			Self::Decryption(DecryptionMessage::DecryptionSessionDelegation(_)) => true,
+			Self::SchnorrSigning(SchnorrSigningMessage::SchnorrSigningSessionDelegation(_)) => true,
+			Self::EcdsaSigning(EcdsaSigningMessage::EcdsaSigningSessionDelegation(_)) => true,
 			_ => false,
 		}
 	}
 
 	pub fn is_error_message(&self) -> bool {
-		match *self {
-			Message::Generation(GenerationMessage::SessionError(_)) => true,
-			Message::Encryption(EncryptionMessage::EncryptionSessionError(_)) => true,
-			Message::Decryption(DecryptionMessage::DecryptionSessionError(_)) => true,
-			Message::SchnorrSigning(SchnorrSigningMessage::SchnorrSigningSessionError(_)) => true,
-			Message::EcdsaSigning(EcdsaSigningMessage::EcdsaSigningSessionError(_)) => true,
-			Message::KeyVersionNegotiation(KeyVersionNegotiationMessage::KeyVersionsError(_)) => true,
-			Message::ShareAdd(ShareAddMessage::ShareAddError(_)) => true,
-			Message::ServersSetChange(ServersSetChangeMessage::ServersSetChangeError(_)) => true,
+		match self {
+			Self::Generation(GenerationMessage::SessionError(_)) => true,
+			Self::Encryption(EncryptionMessage::EncryptionSessionError(_)) => true,
+			Self::Decryption(DecryptionMessage::DecryptionSessionError(_)) => true,
+			Self::SchnorrSigning(SchnorrSigningMessage::SchnorrSigningSessionError(_)) => true,
+			Self::EcdsaSigning(EcdsaSigningMessage::EcdsaSigningSessionError(_)) => true,
+			Self::KeyVersionNegotiation(KeyVersionNegotiationMessage::KeyVersionsError(_)) => true,
+			Self::ShareAdd(ShareAddMessage::ShareAddError(_)) => true,
+			Self::ServersSetChange(ServersSetChangeMessage::ServersSetChangeError(_)) => true,
 			_ => false,
 		}
 	}
 
 	pub fn is_exclusive_session_message(&self) -> bool {
-		match *self {
-			Message::ServersSetChange(_) => true,
+		match self {
+			Self::ServersSetChange(_) => true,
 			_ => false,
 		}
 	}
 
 	pub fn session_nonce(&self) -> Option<u64> {
-		match *self {
-			Message::Cluster(_) => None,
-			Message::Generation(ref message) => Some(message.session_nonce()),
-			Message::Encryption(ref message) => Some(message.session_nonce()),
-			Message::Decryption(ref message) => Some(message.session_nonce()),
-			Message::SchnorrSigning(ref message) => Some(message.session_nonce()),
-			Message::EcdsaSigning(ref message) => Some(message.session_nonce()),
-			Message::ShareAdd(ref message) => Some(message.session_nonce()),
-			Message::ServersSetChange(ref message) => Some(message.session_nonce()),
-			Message::KeyVersionNegotiation(ref message) => Some(message.session_nonce()),
+		match self {
+			Self::Cluster(_) => None,
+			Self::Generation(message) => Some(message.session_nonce()),
+			Self::Encryption(message) => Some(message.session_nonce()),
+			Self::Decryption(message) => Some(message.session_nonce()),
+			Self::SchnorrSigning(message) => Some(message.session_nonce()),
+			Self::EcdsaSigning(message) => Some(message.session_nonce()),
+			Self::ShareAdd(message) => Some(message.session_nonce()),
+			Self::ServersSetChange(message) => Some(message.session_nonce()),
+			Self::KeyVersionNegotiation(message) => Some(message.session_nonce()),
 		}
 	}
 }
 
 impl GenerationMessage {
 	pub fn session_id(&self) -> &SessionId {
-		match *self {
-			GenerationMessage::InitializeSession(ref msg) => &msg.session,
-			GenerationMessage::ConfirmInitialization(ref msg) => &msg.session,
-			GenerationMessage::CompleteInitialization(ref msg) => &msg.session,
-			GenerationMessage::KeysDissemination(ref msg) => &msg.session,
-			GenerationMessage::PublicKeyShare(ref msg) => &msg.session,
-			GenerationMessage::SessionError(ref msg) => &msg.session,
-			GenerationMessage::SessionCompleted(ref msg) => &msg.session,
+		match self {
+			Self::InitializeSession(msg) => &msg.session,
+			Self::ConfirmInitialization(msg) => &msg.session,
+			Self::CompleteInitialization(msg) => &msg.session,
+			Self::KeysDissemination(msg) => &msg.session,
+			Self::PublicKeyShare(msg) => &msg.session,
+			Self::SessionError(msg) => &msg.session,
+			Self::SessionCompleted(msg) => &msg.session,
 		}
 	}
 
 	pub fn session_nonce(&self) -> u64 {
-		match *self {
-			GenerationMessage::InitializeSession(ref msg) => msg.session_nonce,
-			GenerationMessage::ConfirmInitialization(ref msg) => msg.session_nonce,
-			GenerationMessage::CompleteInitialization(ref msg) => msg.session_nonce,
-			GenerationMessage::KeysDissemination(ref msg) => msg.session_nonce,
-			GenerationMessage::PublicKeyShare(ref msg) => msg.session_nonce,
-			GenerationMessage::SessionError(ref msg) => msg.session_nonce,
-			GenerationMessage::SessionCompleted(ref msg) => msg.session_nonce,
+		match self {
+			Self::InitializeSession(msg) => msg.session_nonce,
+			Self::ConfirmInitialization(msg) => msg.session_nonce,
+			Self::CompleteInitialization(msg) => msg.session_nonce,
+			Self::KeysDissemination(msg) => msg.session_nonce,
+			Self::PublicKeyShare(msg) => msg.session_nonce,
+			Self::SessionError(msg) => msg.session_nonce,
+			Self::SessionCompleted(msg) => msg.session_nonce,
 		}
 	}
 }
 
 impl EncryptionMessage {
 	pub fn session_id(&self) -> &SessionId {
-		match *self {
-			EncryptionMessage::InitializeEncryptionSession(ref msg) => &msg.session,
-			EncryptionMessage::ConfirmEncryptionInitialization(ref msg) => &msg.session,
-			EncryptionMessage::EncryptionSessionError(ref msg) => &msg.session,
+		match self {
+			Self::InitializeEncryptionSession(msg) => &msg.session,
+			Self::ConfirmEncryptionInitialization(msg) => &msg.session,
+			Self::EncryptionSessionError(msg) => &msg.session,
 		}
 	}
 
 	pub fn session_nonce(&self) -> u64 {
-		match *self {
-			EncryptionMessage::InitializeEncryptionSession(ref msg) => msg.session_nonce,
-			EncryptionMessage::ConfirmEncryptionInitialization(ref msg) => msg.session_nonce,
-			EncryptionMessage::EncryptionSessionError(ref msg) => msg.session_nonce,
+		match self {
+			Self::InitializeEncryptionSession(msg) => msg.session_nonce,
+			Self::ConfirmEncryptionInitialization(msg) => msg.session_nonce,
+			Self::EncryptionSessionError(msg) => msg.session_nonce,
 		}
 	}
 }
 
 impl DecryptionMessage {
 	pub fn session_id(&self) -> &SessionId {
-		match *self {
-			DecryptionMessage::DecryptionConsensusMessage(ref msg) => &msg.session,
-			DecryptionMessage::RequestPartialDecryption(ref msg) => &msg.session,
-			DecryptionMessage::PartialDecryption(ref msg) => &msg.session,
-			DecryptionMessage::DecryptionSessionError(ref msg) => &msg.session,
-			DecryptionMessage::DecryptionSessionCompleted(ref msg) => &msg.session,
-			DecryptionMessage::DecryptionSessionDelegation(ref msg) => &msg.session,
-			DecryptionMessage::DecryptionSessionDelegationCompleted(ref msg) => &msg.session,
+		match self {
+			Self::DecryptionConsensusMessage(msg) => &msg.session,
+			Self::RequestPartialDecryption(msg) => &msg.session,
+			Self::PartialDecryption(msg) => &msg.session,
+			Self::DecryptionSessionError(msg) => &msg.session,
+			Self::DecryptionSessionCompleted(msg) => &msg.session,
+			Self::DecryptionSessionDelegation(msg) => &msg.session,
+			Self::DecryptionSessionDelegationCompleted(msg) => &msg.session,
 		}
 	}
 
 	pub fn sub_session_id(&self) -> &Secret {
-		match *self {
-			DecryptionMessage::DecryptionConsensusMessage(ref msg) => &msg.sub_session,
-			DecryptionMessage::RequestPartialDecryption(ref msg) => &msg.sub_session,
-			DecryptionMessage::PartialDecryption(ref msg) => &msg.sub_session,
-			DecryptionMessage::DecryptionSessionError(ref msg) => &msg.sub_session,
-			DecryptionMessage::DecryptionSessionCompleted(ref msg) => &msg.sub_session,
-			DecryptionMessage::DecryptionSessionDelegation(ref msg) => &msg.sub_session,
-			DecryptionMessage::DecryptionSessionDelegationCompleted(ref msg) => &msg.sub_session,
+		match self {
+			Self::DecryptionConsensusMessage(msg) => &msg.sub_session,
+			Self::RequestPartialDecryption(msg) => &msg.sub_session,
+			Self::PartialDecryption(msg) => &msg.sub_session,
+			Self::DecryptionSessionError(msg) => &msg.sub_session,
+			Self::DecryptionSessionCompleted(msg) => &msg.sub_session,
+			Self::DecryptionSessionDelegation(msg) => &msg.sub_session,
+			Self::DecryptionSessionDelegationCompleted(msg) => &msg.sub_session,
 		}
 	}
 
 	pub fn session_nonce(&self) -> u64 {
-		match *self {
-			DecryptionMessage::DecryptionConsensusMessage(ref msg) => msg.session_nonce,
-			DecryptionMessage::RequestPartialDecryption(ref msg) => msg.session_nonce,
-			DecryptionMessage::PartialDecryption(ref msg) => msg.session_nonce,
-			DecryptionMessage::DecryptionSessionError(ref msg) => msg.session_nonce,
-			DecryptionMessage::DecryptionSessionCompleted(ref msg) => msg.session_nonce,
-			DecryptionMessage::DecryptionSessionDelegation(ref msg) => msg.session_nonce,
-			DecryptionMessage::DecryptionSessionDelegationCompleted(ref msg) => msg.session_nonce,
+		match self {
+			Self::DecryptionConsensusMessage(msg) => msg.session_nonce,
+			Self::RequestPartialDecryption(msg) => msg.session_nonce,
+			Self::PartialDecryption(msg) => msg.session_nonce,
+			Self::DecryptionSessionError(msg) => msg.session_nonce,
+			Self::DecryptionSessionCompleted(msg) => msg.session_nonce,
+			Self::DecryptionSessionDelegation(msg) => msg.session_nonce,
+			Self::DecryptionSessionDelegationCompleted(msg) => msg.session_nonce,
 		}
 	}
 }
 
 impl SchnorrSigningMessage {
 	pub fn session_id(&self) -> &SessionId {
-		match *self {
-			SchnorrSigningMessage::SchnorrSigningConsensusMessage(ref msg) => &msg.session,
-			SchnorrSigningMessage::SchnorrSigningGenerationMessage(ref msg) => &msg.session,
-			SchnorrSigningMessage::SchnorrRequestPartialSignature(ref msg) => &msg.session,
-			SchnorrSigningMessage::SchnorrPartialSignature(ref msg) => &msg.session,
-			SchnorrSigningMessage::SchnorrSigningSessionError(ref msg) => &msg.session,
-			SchnorrSigningMessage::SchnorrSigningSessionCompleted(ref msg) => &msg.session,
-			SchnorrSigningMessage::SchnorrSigningSessionDelegation(ref msg) => &msg.session,
-			SchnorrSigningMessage::SchnorrSigningSessionDelegationCompleted(ref msg) => &msg.session,
+		match self {
+			Self::SchnorrSigningConsensusMessage(msg) => &msg.session,
+			Self::SchnorrSigningGenerationMessage(msg) => &msg.session,
+			Self::SchnorrRequestPartialSignature(msg) => &msg.session,
+			Self::SchnorrPartialSignature(msg) => &msg.session,
+			Self::SchnorrSigningSessionError(msg) => &msg.session,
+			Self::SchnorrSigningSessionCompleted(msg) => &msg.session,
+			Self::SchnorrSigningSessionDelegation(msg) => &msg.session,
+			Self::SchnorrSigningSessionDelegationCompleted(msg) => &msg.session,
 		}
 	}
 
 	pub fn sub_session_id(&self) -> &Secret {
-		match *self {
-			SchnorrSigningMessage::SchnorrSigningConsensusMessage(ref msg) => &msg.sub_session,
-			SchnorrSigningMessage::SchnorrSigningGenerationMessage(ref msg) => &msg.sub_session,
-			SchnorrSigningMessage::SchnorrRequestPartialSignature(ref msg) => &msg.sub_session,
-			SchnorrSigningMessage::SchnorrPartialSignature(ref msg) => &msg.sub_session,
-			SchnorrSigningMessage::SchnorrSigningSessionError(ref msg) => &msg.sub_session,
-			SchnorrSigningMessage::SchnorrSigningSessionCompleted(ref msg) => &msg.sub_session,
-			SchnorrSigningMessage::SchnorrSigningSessionDelegation(ref msg) => &msg.sub_session,
-			SchnorrSigningMessage::SchnorrSigningSessionDelegationCompleted(ref msg) => &msg.sub_session,
+		match self {
+			Self::SchnorrSigningConsensusMessage(msg) => &msg.sub_session,
+			Self::SchnorrSigningGenerationMessage(msg) => &msg.sub_session,
+			Self::SchnorrRequestPartialSignature(msg) => &msg.sub_session,
+			Self::SchnorrPartialSignature(msg) => &msg.sub_session,
+			Self::SchnorrSigningSessionError(msg) => &msg.sub_session,
+			Self::SchnorrSigningSessionCompleted(msg) => &msg.sub_session,
+			Self::SchnorrSigningSessionDelegation(msg) => &msg.sub_session,
+			Self::SchnorrSigningSessionDelegationCompleted(msg) => &msg.sub_session,
 		}
 	}
 
 	pub fn session_nonce(&self) -> u64 {
-		match *self {
-			SchnorrSigningMessage::SchnorrSigningConsensusMessage(ref msg) => msg.session_nonce,
-			SchnorrSigningMessage::SchnorrSigningGenerationMessage(ref msg) => msg.session_nonce,
-			SchnorrSigningMessage::SchnorrRequestPartialSignature(ref msg) => msg.session_nonce,
-			SchnorrSigningMessage::SchnorrPartialSignature(ref msg) => msg.session_nonce,
-			SchnorrSigningMessage::SchnorrSigningSessionError(ref msg) => msg.session_nonce,
-			SchnorrSigningMessage::SchnorrSigningSessionCompleted(ref msg) => msg.session_nonce,
-			SchnorrSigningMessage::SchnorrSigningSessionDelegation(ref msg) => msg.session_nonce,
-			SchnorrSigningMessage::SchnorrSigningSessionDelegationCompleted(ref msg) => msg.session_nonce,
+		match self {
+			Self::SchnorrSigningConsensusMessage(msg) => msg.session_nonce,
+			Self::SchnorrSigningGenerationMessage(msg) => msg.session_nonce,
+			Self::SchnorrRequestPartialSignature(msg) => msg.session_nonce,
+			Self::SchnorrPartialSignature(msg) => msg.session_nonce,
+			Self::SchnorrSigningSessionError(msg) => msg.session_nonce,
+			Self::SchnorrSigningSessionCompleted(msg) => msg.session_nonce,
+			Self::SchnorrSigningSessionDelegation(msg) => msg.session_nonce,
+			Self::SchnorrSigningSessionDelegationCompleted(msg) => msg.session_nonce,
 		}
 	}
 }
 
 impl EcdsaSigningMessage {
 	pub fn session_id(&self) -> &SessionId {
-		match *self {
-			EcdsaSigningMessage::EcdsaSigningConsensusMessage(ref msg) => &msg.session,
-			EcdsaSigningMessage::EcdsaSignatureNonceGenerationMessage(ref msg) => &msg.session,
-			EcdsaSigningMessage::EcdsaInversionNonceGenerationMessage(ref msg) => &msg.session,
-			EcdsaSigningMessage::EcdsaInversionZeroGenerationMessage(ref msg) => &msg.session,
-			EcdsaSigningMessage::EcdsaSigningInversedNonceCoeffShare(ref msg) => &msg.session,
-			EcdsaSigningMessage::EcdsaRequestPartialSignature(ref msg) => &msg.session,
-			EcdsaSigningMessage::EcdsaPartialSignature(ref msg) => &msg.session,
-			EcdsaSigningMessage::EcdsaSigningSessionError(ref msg) => &msg.session,
-			EcdsaSigningMessage::EcdsaSigningSessionCompleted(ref msg) => &msg.session,
-			EcdsaSigningMessage::EcdsaSigningSessionDelegation(ref msg) => &msg.session,
-			EcdsaSigningMessage::EcdsaSigningSessionDelegationCompleted(ref msg) => &msg.session,
+		match self {
+			Self::EcdsaSigningConsensusMessage(msg) => &msg.session,
+			Self::EcdsaSignatureNonceGenerationMessage(msg) => &msg.session,
+			Self::EcdsaInversionNonceGenerationMessage(msg) => &msg.session,
+			Self::EcdsaInversionZeroGenerationMessage(msg) => &msg.session,
+			Self::EcdsaSigningInversedNonceCoeffShare(msg) => &msg.session,
+			Self::EcdsaRequestPartialSignature(msg) => &msg.session,
+			Self::EcdsaPartialSignature(msg) => &msg.session,
+			Self::EcdsaSigningSessionError(msg) => &msg.session,
+			Self::EcdsaSigningSessionCompleted(msg) => &msg.session,
+			Self::EcdsaSigningSessionDelegation(msg) => &msg.session,
+			Self::EcdsaSigningSessionDelegationCompleted(msg) => &msg.session,
 		}
 	}
 
 	pub fn sub_session_id(&self) -> &Secret {
-		match *self {
-			EcdsaSigningMessage::EcdsaSigningConsensusMessage(ref msg) => &msg.sub_session,
-			EcdsaSigningMessage::EcdsaSignatureNonceGenerationMessage(ref msg) => &msg.sub_session,
-			EcdsaSigningMessage::EcdsaInversionNonceGenerationMessage(ref msg) => &msg.sub_session,
-			EcdsaSigningMessage::EcdsaInversionZeroGenerationMessage(ref msg) => &msg.sub_session,
-			EcdsaSigningMessage::EcdsaSigningInversedNonceCoeffShare(ref msg) => &msg.sub_session,
-			EcdsaSigningMessage::EcdsaRequestPartialSignature(ref msg) => &msg.sub_session,
-			EcdsaSigningMessage::EcdsaPartialSignature(ref msg) => &msg.sub_session,
-			EcdsaSigningMessage::EcdsaSigningSessionError(ref msg) => &msg.sub_session,
-			EcdsaSigningMessage::EcdsaSigningSessionCompleted(ref msg) => &msg.sub_session,
-			EcdsaSigningMessage::EcdsaSigningSessionDelegation(ref msg) => &msg.sub_session,
-			EcdsaSigningMessage::EcdsaSigningSessionDelegationCompleted(ref msg) => &msg.sub_session,
+		match self {
+			Self::EcdsaSigningConsensusMessage(msg) => &msg.sub_session,
+			Self::EcdsaSignatureNonceGenerationMessage(msg) => &msg.sub_session,
+			Self::EcdsaInversionNonceGenerationMessage(msg) => &msg.sub_session,
+			Self::EcdsaInversionZeroGenerationMessage(msg) => &msg.sub_session,
+			Self::EcdsaSigningInversedNonceCoeffShare(msg) => &msg.sub_session,
+			Self::EcdsaRequestPartialSignature(msg) => &msg.sub_session,
+			Self::EcdsaPartialSignature(msg) => &msg.sub_session,
+			Self::EcdsaSigningSessionError(msg) => &msg.sub_session,
+			Self::EcdsaSigningSessionCompleted(msg) => &msg.sub_session,
+			Self::EcdsaSigningSessionDelegation(msg) => &msg.sub_session,
+			Self::EcdsaSigningSessionDelegationCompleted(msg) => &msg.sub_session,
 		}
 	}
 
 	pub fn session_nonce(&self) -> u64 {
-		match *self {
-			EcdsaSigningMessage::EcdsaSigningConsensusMessage(ref msg) => msg.session_nonce,
-			EcdsaSigningMessage::EcdsaSignatureNonceGenerationMessage(ref msg) => msg.session_nonce,
-			EcdsaSigningMessage::EcdsaInversionNonceGenerationMessage(ref msg) => msg.session_nonce,
-			EcdsaSigningMessage::EcdsaInversionZeroGenerationMessage(ref msg) => msg.session_nonce,
-			EcdsaSigningMessage::EcdsaSigningInversedNonceCoeffShare(ref msg) => msg.session_nonce,
-			EcdsaSigningMessage::EcdsaRequestPartialSignature(ref msg) => msg.session_nonce,
-			EcdsaSigningMessage::EcdsaPartialSignature(ref msg) => msg.session_nonce,
-			EcdsaSigningMessage::EcdsaSigningSessionError(ref msg) => msg.session_nonce,
-			EcdsaSigningMessage::EcdsaSigningSessionCompleted(ref msg) => msg.session_nonce,
-			EcdsaSigningMessage::EcdsaSigningSessionDelegation(ref msg) => msg.session_nonce,
-			EcdsaSigningMessage::EcdsaSigningSessionDelegationCompleted(ref msg) => msg.session_nonce,
+		match self {
+			Self::EcdsaSigningConsensusMessage(msg) => msg.session_nonce,
+			Self::EcdsaSignatureNonceGenerationMessage(msg) => msg.session_nonce,
+			Self::EcdsaInversionNonceGenerationMessage(msg) => msg.session_nonce,
+			Self::EcdsaInversionZeroGenerationMessage(msg) => msg.session_nonce,
+			Self::EcdsaSigningInversedNonceCoeffShare(msg) => msg.session_nonce,
+			Self::EcdsaRequestPartialSignature(msg) => msg.session_nonce,
+			Self::EcdsaPartialSignature(msg) => msg.session_nonce,
+			Self::EcdsaSigningSessionError(msg) => msg.session_nonce,
+			Self::EcdsaSigningSessionCompleted(msg) => msg.session_nonce,
+			Self::EcdsaSigningSessionDelegation(msg) => msg.session_nonce,
+			Self::EcdsaSigningSessionDelegationCompleted(msg) => msg.session_nonce,
 		}
 	}
 }
 
 impl ServersSetChangeMessage {
 	pub fn session_id(&self) -> &SessionId {
-		match *self {
-			ServersSetChangeMessage::ServersSetChangeConsensusMessage(ref msg) => &msg.session,
-			ServersSetChangeMessage::UnknownSessionsRequest(ref msg) => &msg.session,
-			ServersSetChangeMessage::UnknownSessions(ref msg) => &msg.session,
-			ServersSetChangeMessage::ShareChangeKeyVersionNegotiation(ref msg) => &msg.session,
-			ServersSetChangeMessage::InitializeShareChangeSession(ref msg) => &msg.session,
-			ServersSetChangeMessage::ConfirmShareChangeSessionInitialization(ref msg) => &msg.session,
-			ServersSetChangeMessage::ServersSetChangeDelegate(ref msg) => &msg.session,
-			ServersSetChangeMessage::ServersSetChangeDelegateResponse(ref msg) => &msg.session,
-			ServersSetChangeMessage::ServersSetChangeShareAddMessage(ref msg) => &msg.session,
-			ServersSetChangeMessage::ServersSetChangeError(ref msg) => &msg.session,
-			ServersSetChangeMessage::ServersSetChangeCompleted(ref msg) => &msg.session,
+		match self {
+			Self::ServersSetChangeConsensusMessage(msg) => &msg.session,
+			Self::UnknownSessionsRequest(msg) => &msg.session,
+			Self::UnknownSessions(msg) => &msg.session,
+			Self::ShareChangeKeyVersionNegotiation(msg) => &msg.session,
+			Self::InitializeShareChangeSession(msg) => &msg.session,
+			Self::ConfirmShareChangeSessionInitialization(msg) => &msg.session,
+			Self::ServersSetChangeDelegate(msg) => &msg.session,
+			Self::ServersSetChangeDelegateResponse(msg) => &msg.session,
+			Self::ServersSetChangeShareAddMessage(msg) => &msg.session,
+			Self::ServersSetChangeError(msg) => &msg.session,
+			Self::ServersSetChangeCompleted(msg) => &msg.session,
 		}
 	}
 
 	pub fn session_nonce(&self) -> u64 {
-		match *self {
-			ServersSetChangeMessage::ServersSetChangeConsensusMessage(ref msg) => msg.session_nonce,
-			ServersSetChangeMessage::UnknownSessionsRequest(ref msg) => msg.session_nonce,
-			ServersSetChangeMessage::UnknownSessions(ref msg) => msg.session_nonce,
-			ServersSetChangeMessage::ShareChangeKeyVersionNegotiation(ref msg) => msg.session_nonce,
-			ServersSetChangeMessage::InitializeShareChangeSession(ref msg) => msg.session_nonce,
-			ServersSetChangeMessage::ConfirmShareChangeSessionInitialization(ref msg) => msg.session_nonce,
-			ServersSetChangeMessage::ServersSetChangeDelegate(ref msg) => msg.session_nonce,
-			ServersSetChangeMessage::ServersSetChangeDelegateResponse(ref msg) => msg.session_nonce,
-			ServersSetChangeMessage::ServersSetChangeShareAddMessage(ref msg) => msg.session_nonce,
-			ServersSetChangeMessage::ServersSetChangeError(ref msg) => msg.session_nonce,
-			ServersSetChangeMessage::ServersSetChangeCompleted(ref msg) => msg.session_nonce,
+		match self {
+			Self::ServersSetChangeConsensusMessage(msg) => msg.session_nonce,
+			Self::UnknownSessionsRequest(msg) => msg.session_nonce,
+			Self::UnknownSessions(msg) => msg.session_nonce,
+			Self::ShareChangeKeyVersionNegotiation(msg) => msg.session_nonce,
+			Self::InitializeShareChangeSession(msg) => msg.session_nonce,
+			Self::ConfirmShareChangeSessionInitialization(msg) => msg.session_nonce,
+			Self::ServersSetChangeDelegate(msg) => msg.session_nonce,
+			Self::ServersSetChangeDelegateResponse(msg) => msg.session_nonce,
+			Self::ServersSetChangeShareAddMessage(msg) => msg.session_nonce,
+			Self::ServersSetChangeError(msg) => msg.session_nonce,
+			Self::ServersSetChangeCompleted(msg) => msg.session_nonce,
 		}
 	}
 }
 
 impl ShareAddMessage {
 	pub fn session_id(&self) -> &SessionId {
-		match *self {
-			ShareAddMessage::ShareAddConsensusMessage(ref msg) => &msg.session,
-			ShareAddMessage::KeyShareCommon(ref msg) => &msg.session,
-			ShareAddMessage::NewKeysDissemination(ref msg) => &msg.session,
-			ShareAddMessage::ShareAddError(ref msg) => &msg.session,
+		match self {
+			Self::ShareAddConsensusMessage(msg) => &msg.session,
+			Self::KeyShareCommon(msg) => &msg.session,
+			Self::NewKeysDissemination(msg) => &msg.session,
+			Self::ShareAddError(msg) => &msg.session,
 		}
 	}
 
 	pub fn session_nonce(&self) -> u64 {
-		match *self {
-			ShareAddMessage::ShareAddConsensusMessage(ref msg) => msg.session_nonce,
-			ShareAddMessage::KeyShareCommon(ref msg) => msg.session_nonce,
-			ShareAddMessage::NewKeysDissemination(ref msg) => msg.session_nonce,
-			ShareAddMessage::ShareAddError(ref msg) => msg.session_nonce,
+		match self {
+			Self::ShareAddConsensusMessage(msg) => msg.session_nonce,
+			Self::KeyShareCommon(msg) => msg.session_nonce,
+			Self::NewKeysDissemination(msg) => msg.session_nonce,
+			Self::ShareAddError(msg) => msg.session_nonce,
 		}
 	}
 }
 
 impl KeyVersionNegotiationMessage {
 	pub fn session_id(&self) -> &SessionId {
-		match *self {
-			KeyVersionNegotiationMessage::RequestKeyVersions(ref msg) => &msg.session,
-			KeyVersionNegotiationMessage::KeyVersions(ref msg) => &msg.session,
-			KeyVersionNegotiationMessage::KeyVersionsError(ref msg) => &msg.session,
+		match self {
+			Self::RequestKeyVersions(msg) => &msg.session,
+			Self::KeyVersions(msg) => &msg.session,
+			Self::KeyVersionsError(msg) => &msg.session,
 		}
 	}
 
 	pub fn sub_session_id(&self) -> &Secret {
-		match *self {
-			KeyVersionNegotiationMessage::RequestKeyVersions(ref msg) => &msg.sub_session,
-			KeyVersionNegotiationMessage::KeyVersions(ref msg) => &msg.sub_session,
-			KeyVersionNegotiationMessage::KeyVersionsError(ref msg) => &msg.sub_session,
+		match self {
+			Self::RequestKeyVersions(msg) => &msg.sub_session,
+			Self::KeyVersions(msg) => &msg.sub_session,
+			Self::KeyVersionsError(msg) => &msg.sub_session,
 		}
 	}
 
 	pub fn session_nonce(&self) -> u64 {
-		match *self {
-			KeyVersionNegotiationMessage::RequestKeyVersions(ref msg) => msg.session_nonce,
-			KeyVersionNegotiationMessage::KeyVersions(ref msg) => msg.session_nonce,
-			KeyVersionNegotiationMessage::KeyVersionsError(ref msg) => msg.session_nonce,
+		match self {
+			Self::RequestKeyVersions(msg) => msg.session_nonce,
+			Self::KeyVersions(msg) => msg.session_nonce,
+			Self::KeyVersionsError(msg) => msg.session_nonce,
 		}
 	}
 }
 
 impl fmt::Display for Message {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match *self {
-			Message::Cluster(ref message) => write!(f, "Cluster.{}", message),
-			Message::Generation(ref message) => write!(f, "Generation.{}", message),
-			Message::Encryption(ref message) => write!(f, "Encryption.{}", message),
-			Message::Decryption(ref message) => write!(f, "Decryption.{}", message),
-			Message::SchnorrSigning(ref message) => write!(f, "SchnorrSigning.{}", message),
-			Message::EcdsaSigning(ref message) => write!(f, "EcdsaSigning.{}", message),
-			Message::ServersSetChange(ref message) => write!(f, "ServersSetChange.{}", message),
-			Message::ShareAdd(ref message) => write!(f, "ShareAdd.{}", message),
-			Message::KeyVersionNegotiation(ref message) => write!(f, "KeyVersionNegotiation.{}", message),
+		match self {
+			Self::Cluster(message) => write!(f, "Cluster.{}", message),
+			Self::Generation(message) => write!(f, "Generation.{}", message),
+			Self::Encryption(message) => write!(f, "Encryption.{}", message),
+			Self::Decryption(message) => write!(f, "Decryption.{}", message),
+			Self::SchnorrSigning(message) => write!(f, "SchnorrSigning.{}", message),
+			Self::EcdsaSigning(message) => write!(f, "EcdsaSigning.{}", message),
+			Self::ServersSetChange(message) => write!(f, "ServersSetChange.{}", message),
+			Self::ShareAdd(message) => write!(f, "ShareAdd.{}", message),
+			Self::KeyVersionNegotiation(message) => write!(f, "KeyVersionNegotiation.{}", message),
 		}
 	}
 }
 
 impl fmt::Display for ClusterMessage {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match *self {
-			ClusterMessage::NodePublicKey(_) => write!(f, "NodePublicKey"),
-			ClusterMessage::NodePrivateKeySignature(_) => write!(f, "NodePrivateKeySignature"),
-			ClusterMessage::KeepAlive(_) => write!(f, "KeepAlive"),
-			ClusterMessage::KeepAliveResponse(_) => write!(f, "KeepAliveResponse"),
+		match self {
+			Self::NodePublicKey(_) => write!(f, "NodePublicKey"),
+			Self::NodePrivateKeySignature(_) => write!(f, "NodePrivateKeySignature"),
+			Self::KeepAlive(_) => write!(f, "KeepAlive"),
+			Self::KeepAliveResponse(_) => write!(f, "KeepAliveResponse"),
 		}
 	}
 }
 
 impl fmt::Display for GenerationMessage {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match *self {
-			GenerationMessage::InitializeSession(_) => write!(f, "InitializeSession"),
-			GenerationMessage::ConfirmInitialization(_) => write!(f, "ConfirmInitialization"),
-			GenerationMessage::CompleteInitialization(_) => write!(f, "CompleteInitialization"),
-			GenerationMessage::KeysDissemination(_) => write!(f, "KeysDissemination"),
-			GenerationMessage::PublicKeyShare(_) => write!(f, "PublicKeyShare"),
-			GenerationMessage::SessionError(ref msg) => write!(f, "SessionError({})", msg.error),
-			GenerationMessage::SessionCompleted(_) => write!(f, "SessionCompleted"),
+		match self {
+			Self::InitializeSession(_) => write!(f, "InitializeSession"),
+			Self::ConfirmInitialization(_) => write!(f, "ConfirmInitialization"),
+			Self::CompleteInitialization(_) => write!(f, "CompleteInitialization"),
+			Self::KeysDissemination(_) => write!(f, "KeysDissemination"),
+			Self::PublicKeyShare(_) => write!(f, "PublicKeyShare"),
+			Self::SessionError(msg) => write!(f, "SessionError({})", msg.error),
+			Self::SessionCompleted(_) => write!(f, "SessionCompleted"),
 		}
 	}
 }
 
 impl fmt::Display for EncryptionMessage {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match *self {
-			EncryptionMessage::InitializeEncryptionSession(_) => write!(f, "InitializeEncryptionSession"),
-			EncryptionMessage::ConfirmEncryptionInitialization(_) => write!(f, "ConfirmEncryptionInitialization"),
-			EncryptionMessage::EncryptionSessionError(ref msg) => write!(f, "EncryptionSessionError({})", msg.error),
+		match self {
+			Self::InitializeEncryptionSession(_) => write!(f, "InitializeEncryptionSession"),
+			Self::ConfirmEncryptionInitialization(_) => write!(f, "ConfirmEncryptionInitialization"),
+			Self::EncryptionSessionError(msg) => write!(f, "EncryptionSessionError({})", msg.error),
 		}
 	}
 }
 
 impl fmt::Display for ConsensusMessage {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match *self {
-			ConsensusMessage::InitializeConsensusSession(_) => write!(f, "InitializeConsensusSession"),
-			ConsensusMessage::ConfirmConsensusInitialization(ref msg) => write!(f, "ConfirmConsensusInitialization({})", msg.is_confirmed),
+		match self {
+			Self::InitializeConsensusSession(_) => write!(f, "InitializeConsensusSession"),
+			Self::ConfirmConsensusInitialization(msg) => write!(f, "ConfirmConsensusInitialization({})", msg.is_confirmed),
 		}
 	}
 }
 
 impl fmt::Display for ConsensusMessageWithServersSet {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match *self {
-			ConsensusMessageWithServersSet::InitializeConsensusSession(_) => write!(f, "InitializeConsensusSession"),
-			ConsensusMessageWithServersSet::ConfirmConsensusInitialization(ref msg) => write!(f, "ConfirmConsensusInitialization({})", msg.is_confirmed),
+		match self {
+			Self::InitializeConsensusSession(_) => write!(f, "InitializeConsensusSession"),
+			Self::ConfirmConsensusInitialization(msg) => write!(f, "ConfirmConsensusInitialization({})", msg.is_confirmed),
 		}
 	}
 }
 
 impl fmt::Display for ConsensusMessageOfShareAdd {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match *self {
-			ConsensusMessageOfShareAdd::InitializeConsensusSession(_) => write!(f, "InitializeConsensusSession"),
-			ConsensusMessageOfShareAdd::ConfirmConsensusInitialization(ref msg) => write!(f, "ConfirmConsensusInitialization({})", msg.is_confirmed),
+		match self {
+			Self::InitializeConsensusSession(_) => write!(f, "InitializeConsensusSession"),
+			Self::ConfirmConsensusInitialization(msg) => write!(f, "ConfirmConsensusInitialization({})", msg.is_confirmed),
 		}
 	}
 }
 
 impl fmt::Display for DecryptionMessage {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match *self {
-			DecryptionMessage::DecryptionConsensusMessage(ref m) => write!(f, "DecryptionConsensusMessage.{}", m.message),
-			DecryptionMessage::RequestPartialDecryption(_) => write!(f, "RequestPartialDecryption"),
-			DecryptionMessage::PartialDecryption(_) => write!(f, "PartialDecryption"),
-			DecryptionMessage::DecryptionSessionError(_) => write!(f, "DecryptionSessionError"),
-			DecryptionMessage::DecryptionSessionCompleted(_) => write!(f, "DecryptionSessionCompleted"),
-			DecryptionMessage::DecryptionSessionDelegation(_) => write!(f, "DecryptionSessionDelegation"),
-			DecryptionMessage::DecryptionSessionDelegationCompleted(_) => write!(f, "DecryptionSessionDelegationCompleted"),
+		match self {
+			Self::DecryptionConsensusMessage(m) => write!(f, "DecryptionConsensusMessage.{}", m.message),
+			Self::RequestPartialDecryption(_) => write!(f, "RequestPartialDecryption"),
+			Self::PartialDecryption(_) => write!(f, "PartialDecryption"),
+			Self::DecryptionSessionError(_) => write!(f, "DecryptionSessionError"),
+			Self::DecryptionSessionCompleted(_) => write!(f, "DecryptionSessionCompleted"),
+			Self::DecryptionSessionDelegation(_) => write!(f, "DecryptionSessionDelegation"),
+			Self::DecryptionSessionDelegationCompleted(_) => write!(f, "DecryptionSessionDelegationCompleted"),
 		}
 	}
 }
 
 impl fmt::Display for SchnorrSigningMessage {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match *self {
-			SchnorrSigningMessage::SchnorrSigningConsensusMessage(ref m) => write!(f, "SchnorrSigningConsensusMessage.{}", m.message),
-			SchnorrSigningMessage::SchnorrSigningGenerationMessage(ref m) => write!(f, "SchnorrSigningGenerationMessage.{}", m.message),
-			SchnorrSigningMessage::SchnorrRequestPartialSignature(_) => write!(f, "SchnorrRequestPartialSignature"),
-			SchnorrSigningMessage::SchnorrPartialSignature(_) => write!(f, "SchnorrPartialSignature"),
-			SchnorrSigningMessage::SchnorrSigningSessionError(_) => write!(f, "SchnorrSigningSessionError"),
-			SchnorrSigningMessage::SchnorrSigningSessionCompleted(_) => write!(f, "SchnorrSigningSessionCompleted"),
-			SchnorrSigningMessage::SchnorrSigningSessionDelegation(_) => write!(f, "SchnorrSigningSessionDelegation"),
-			SchnorrSigningMessage::SchnorrSigningSessionDelegationCompleted(_) => write!(f, "SchnorrSigningSessionDelegationCompleted"),
+		match self {
+			Self::SchnorrSigningConsensusMessage(m) => write!(f, "SchnorrSigningConsensusMessage.{}", m.message),
+			Self::SchnorrSigningGenerationMessage(m) => write!(f, "SchnorrSigningGenerationMessage.{}", m.message),
+			Self::SchnorrRequestPartialSignature(_) => write!(f, "SchnorrRequestPartialSignature"),
+			Self::SchnorrPartialSignature(_) => write!(f, "SchnorrPartialSignature"),
+			Self::SchnorrSigningSessionError(_) => write!(f, "SchnorrSigningSessionError"),
+			Self::SchnorrSigningSessionCompleted(_) => write!(f, "SchnorrSigningSessionCompleted"),
+			Self::SchnorrSigningSessionDelegation(_) => write!(f, "SchnorrSigningSessionDelegation"),
+			Self::SchnorrSigningSessionDelegationCompleted(_) => write!(f, "SchnorrSigningSessionDelegationCompleted"),
 		}
 	}
 }
 
 impl fmt::Display for EcdsaSigningMessage {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match *self {
-			EcdsaSigningMessage::EcdsaSigningConsensusMessage(ref m) => write!(f, "EcdsaSigningConsensusMessage.{}", m.message),
-			EcdsaSigningMessage::EcdsaSignatureNonceGenerationMessage(ref m) => write!(f, "EcdsaSignatureNonceGenerationMessage.{}", m.message),
-			EcdsaSigningMessage::EcdsaInversionNonceGenerationMessage(ref m) => write!(f, "EcdsaInversionNonceGenerationMessage.{}", m.message),
-			EcdsaSigningMessage::EcdsaInversionZeroGenerationMessage(ref m) => write!(f, "EcdsaInversionZeroGenerationMessage.{}", m.message),
-			EcdsaSigningMessage::EcdsaSigningInversedNonceCoeffShare(_) => write!(f, "EcdsaSigningInversedNonceCoeffShare"),
-			EcdsaSigningMessage::EcdsaRequestPartialSignature(_) => write!(f, "EcdsaRequestPartialSignature"),
-			EcdsaSigningMessage::EcdsaPartialSignature(_) => write!(f, "EcdsaPartialSignature"),
-			EcdsaSigningMessage::EcdsaSigningSessionError(_) => write!(f, "EcdsaSigningSessionError"),
-			EcdsaSigningMessage::EcdsaSigningSessionCompleted(_) => write!(f, "EcdsaSigningSessionCompleted"),
-			EcdsaSigningMessage::EcdsaSigningSessionDelegation(_) => write!(f, "EcdsaSigningSessionDelegation"),
-			EcdsaSigningMessage::EcdsaSigningSessionDelegationCompleted(_) => write!(f, "EcdsaSigningSessionDelegationCompleted"),
+		match self {
+			Self::EcdsaSigningConsensusMessage(m) => write!(f, "EcdsaSigningConsensusMessage.{}", m.message),
+			Self::EcdsaSignatureNonceGenerationMessage(m) => write!(f, "EcdsaSignatureNonceGenerationMessage.{}", m.message),
+			Self::EcdsaInversionNonceGenerationMessage(m) => write!(f, "EcdsaInversionNonceGenerationMessage.{}", m.message),
+			Self::EcdsaInversionZeroGenerationMessage(m) => write!(f, "EcdsaInversionZeroGenerationMessage.{}", m.message),
+			Self::EcdsaSigningInversedNonceCoeffShare(_) => write!(f, "EcdsaSigningInversedNonceCoeffShare"),
+			Self::EcdsaRequestPartialSignature(_) => write!(f, "EcdsaRequestPartialSignature"),
+			Self::EcdsaPartialSignature(_) => write!(f, "EcdsaPartialSignature"),
+			Self::EcdsaSigningSessionError(_) => write!(f, "EcdsaSigningSessionError"),
+			Self::EcdsaSigningSessionCompleted(_) => write!(f, "EcdsaSigningSessionCompleted"),
+			Self::EcdsaSigningSessionDelegation(_) => write!(f, "EcdsaSigningSessionDelegation"),
+			Self::EcdsaSigningSessionDelegationCompleted(_) => write!(f, "EcdsaSigningSessionDelegationCompleted"),
 		}
 	}
 }
 
 impl fmt::Display for ServersSetChangeMessage {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match *self {
-			ServersSetChangeMessage::ServersSetChangeConsensusMessage(ref m) => write!(f, "ServersSetChangeConsensusMessage.{}", m.message),
-			ServersSetChangeMessage::UnknownSessionsRequest(_) => write!(f, "UnknownSessionsRequest"),
-			ServersSetChangeMessage::UnknownSessions(_) => write!(f, "UnknownSessions"),
-			ServersSetChangeMessage::ShareChangeKeyVersionNegotiation(ref m) => write!(f, "ShareChangeKeyVersionNegotiation.{}", m.message),
-			ServersSetChangeMessage::InitializeShareChangeSession(_) => write!(f, "InitializeShareChangeSession"),
-			ServersSetChangeMessage::ConfirmShareChangeSessionInitialization(_) => write!(f, "ConfirmShareChangeSessionInitialization"),
-			ServersSetChangeMessage::ServersSetChangeDelegate(_) => write!(f, "ServersSetChangeDelegate"),
-			ServersSetChangeMessage::ServersSetChangeDelegateResponse(_) => write!(f, "ServersSetChangeDelegateResponse"),
-			ServersSetChangeMessage::ServersSetChangeShareAddMessage(ref m) => write!(f, "ServersSetChangeShareAddMessage.{}", m.message),
-			ServersSetChangeMessage::ServersSetChangeError(_) => write!(f, "ServersSetChangeError"),
-			ServersSetChangeMessage::ServersSetChangeCompleted(_) => write!(f, "ServersSetChangeCompleted"),
+		match self {
+			Self::ServersSetChangeConsensusMessage(m) => write!(f, "ServersSetChangeConsensusMessage.{}", m.message),
+			Self::UnknownSessionsRequest(_) => write!(f, "UnknownSessionsRequest"),
+			Self::UnknownSessions(_) => write!(f, "UnknownSessions"),
+			Self::ShareChangeKeyVersionNegotiation(m) => write!(f, "ShareChangeKeyVersionNegotiation.{}", m.message),
+			Self::InitializeShareChangeSession(_) => write!(f, "InitializeShareChangeSession"),
+			Self::ConfirmShareChangeSessionInitialization(_) => write!(f, "ConfirmShareChangeSessionInitialization"),
+			Self::ServersSetChangeDelegate(_) => write!(f, "ServersSetChangeDelegate"),
+			Self::ServersSetChangeDelegateResponse(_) => write!(f, "ServersSetChangeDelegateResponse"),
+			Self::ServersSetChangeShareAddMessage(m) => write!(f, "ServersSetChangeShareAddMessage.{}", m.message),
+			Self::ServersSetChangeError(_) => write!(f, "ServersSetChangeError"),
+			Self::ServersSetChangeCompleted(_) => write!(f, "ServersSetChangeCompleted"),
 		}
 	}
 }
 
 impl fmt::Display for ShareAddMessage {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match *self {
-			ShareAddMessage::ShareAddConsensusMessage(ref m) => write!(f, "ShareAddConsensusMessage.{}", m.message),
-			ShareAddMessage::KeyShareCommon(_) => write!(f, "KeyShareCommon"),
-			ShareAddMessage::NewKeysDissemination(_) => write!(f, "NewKeysDissemination"),
-			ShareAddMessage::ShareAddError(_) => write!(f, "ShareAddError"),
+		match self {
+			Self::ShareAddConsensusMessage(m) => write!(f, "ShareAddConsensusMessage.{}", m.message),
+			Self::KeyShareCommon(_) => write!(f, "KeyShareCommon"),
+			Self::NewKeysDissemination(_) => write!(f, "NewKeysDissemination"),
+			Self::ShareAddError(_) => write!(f, "ShareAddError"),
 
 		}
 	}
@@ -1548,10 +1548,10 @@ impl fmt::Display for ShareAddMessage {
 
 impl fmt::Display for KeyVersionNegotiationMessage {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match *self {
-			KeyVersionNegotiationMessage::RequestKeyVersions(_) => write!(f, "RequestKeyVersions"),
-			KeyVersionNegotiationMessage::KeyVersions(_) => write!(f, "KeyVersions"),
-			KeyVersionNegotiationMessage::KeyVersionsError(_) => write!(f, "KeyVersionsError"),
+		match self {
+			Self::RequestKeyVersions(_) => write!(f, "RequestKeyVersions"),
+			Self::KeyVersions(_) => write!(f, "KeyVersions"),
+			Self::KeyVersionsError(_) => write!(f, "KeyVersionsError"),
 		}
 	}
 }

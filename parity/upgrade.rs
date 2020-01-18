@@ -36,11 +36,11 @@ pub enum Error {
 
 impl From<SemVerError> for Error {
 	fn from(err: SemVerError) -> Self {
-		Error::SemVer(err)
+		Self::SemVer(err)
 	}
 }
 
-const CURRENT_VERSION: &'static str = env!("CARGO_PKG_VERSION");
+const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Hash, PartialEq, Eq)]
 struct UpgradeKey {
@@ -116,7 +116,7 @@ fn with_locked_version<F>(db_path: &str, script: F) -> Result<usize, Error>
 					.ok()
 					.and_then(|_| Version::parse(&version_string).ok())
 			})
-			.unwrap_or(Version::new(0, 9, 0));
+			.unwrap_or_else(|| Version::new(0, 9, 0));
 
 	let mut lock = File::create(&path).map_err(Error::CannotWriteVersionFile)?;
 	let result = script(&version);
@@ -134,7 +134,7 @@ pub fn upgrade(db_path: &str) -> Result<usize, Error> {
 
 fn file_exists(path: &Path) -> bool {
 	match fs::metadata(&path) {
-		Err(ref e) if e.kind() == io::ErrorKind::NotFound => false,
+		Err(e) if e.kind() == io::ErrorKind::NotFound => false,
 		_ => true,
 	}
 }
@@ -143,21 +143,19 @@ fn file_exists(path: &Path) -> bool {
 pub fn upgrade_key_location(from: &PathBuf, to: &PathBuf) {
 	match fs::create_dir_all(&to).and_then(|()| fs::read_dir(from)) {
 		Ok(entries) => {
-			let files: Vec<_> = entries.filter_map(|f| f.ok().and_then(|f| if f.file_type().ok().map_or(false, |f| f.is_file()) { f.file_name().to_str().map(|s| s.to_owned()) } else { None })).collect();
+			let files: Vec<_> = entries.filter_map(|f| f.ok().and_then(|f| if f.file_type().ok().map_or(false, |f| f.is_file()) { f.file_name().to_str().map(ToOwned::to_owned) } else { None })).collect();
 			let mut num: usize = 0;
 			for name in files {
 				let mut from = from.clone();
 				from.push(&name);
 				let mut to = to.clone();
 				to.push(&name);
-				if !file_exists(&to) {
-					if let Err(e) = fs::rename(&from, &to) {
-						debug!("Error upgrading key {:?}: {:?}", from, e);
-					} else {
-						num += 1;
-					}
-				} else {
+				if file_exists(&to) {
 					debug!("Skipped upgrading key {:?}", from);
+				} else if let Err(e) = fs::rename(&from, &to) {
+					debug!("Error upgrading key {:?}: {:?}", from, e);
+				} else {
+					num += 1;
 				}
 			}
 			if num > 0 {
@@ -171,8 +169,10 @@ pub fn upgrade_key_location(from: &PathBuf, to: &PathBuf) {
 }
 
 fn upgrade_dir_location(source: &PathBuf, dest: &PathBuf) {
-	if file_exists(&source) {
-		if !file_exists(&dest) {
+	if file_exists(source) {
+		if file_exists(dest) {
+			debug!("Skipped upgrading directory {:?}, Destination already exists at {:?}", source, dest);
+		} else {
 			let mut parent = dest.clone();
 			parent.pop();
 			if let Err(e) = fs::create_dir_all(&parent).and_then(|()| fs::rename(&source, &dest)) {
@@ -180,8 +180,6 @@ fn upgrade_dir_location(source: &PathBuf, dest: &PathBuf) {
 			} else {
 				info!("Moved {} to {}", source.to_string_lossy(), dest.to_string_lossy());
 			}
-		} else {
-			debug!("Skipped upgrading directory {:?}, Destination already exists at {:?}", source, dest);
 		}
 	}
 }
@@ -190,12 +188,10 @@ fn upgrade_user_defaults(dirs: &DatabaseDirectories) {
 	let source = dirs.legacy_user_defaults_path();
 	let dest = dirs.user_defaults_path();
 	if file_exists(&source) {
-		if !file_exists(&dest) {
-			if let Err(e) = fs::rename(&source, &dest) {
-				debug!("Skipped upgrading user defaults {:?}:{:?}", dest, e);
-			}
-		} else {
+		if file_exists(&dest) {
 			debug!("Skipped upgrading user defaults {:?}, File exists at {:?}", source, dest);
+		} else if let Err(e) = fs::rename(&source, &dest) {
+			debug!("Skipped upgrading user defaults {:?}:{:?}", dest, e);
 		}
 	}
 }
@@ -213,5 +209,5 @@ pub fn upgrade_data_paths(base_path: &str, dirs: &DatabaseDirectories, pruning: 
 	upgrade_dir_location(&dirs.legacy_version_path(pruning), &dirs.db_path(pruning));
 	upgrade_dir_location(&dirs.legacy_snapshot_path(), &dirs.snapshot_path());
 	upgrade_dir_location(&dirs.legacy_network_path(), &dirs.network_path());
-	upgrade_user_defaults(&dirs);
+	upgrade_user_defaults(dirs);
 }

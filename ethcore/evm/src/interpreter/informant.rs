@@ -25,8 +25,9 @@ mod inner {
 
 	pub struct EvmInformant;
 	impl EvmInformant {
+		#[allow(clippy::missing_const_for_fn)]
 		pub fn new(_depth: usize) -> Self {
-			EvmInformant {}
+			Self {}
 		}
 		pub fn done(&mut self) {}
 	}
@@ -66,13 +67,13 @@ mod inner {
 	}
 
 	impl EvmInformant {
-
 		fn color(instruction: Instruction, name: &str) -> String {
 			let c = instruction as usize % 6;
 			let colors = [31, 34, 33, 32, 35, 36];
 			format!("\x1B[1;{}m{}\x1B[0m", colors[c], name)
 		}
 
+		#[allow(clippy::wrong_self_convention)]
 		fn as_micro(duration: &Duration) -> u64 {
 			let mut sec = duration.as_secs();
 			let subsec = duration.subsec_nanos() as u64;
@@ -82,14 +83,14 @@ mod inner {
 		}
 
 		pub fn new(depth: usize) -> Self {
-			EvmInformant {
+			Self {
 				spacing: iter::repeat(".").take(depth).collect(),
 				last_instruction: Instant::now(),
 				stats: HashMap::new(),
 			}
 		}
 
-		pub fn before_instruction<Cost: CostType>(&mut self, pc: usize, instruction: Instruction, info: &InstructionInfo, current_gas: &Cost, stack: &Stack<U256>) {
+		pub fn before_instruction<Cost: CostType>(&mut self, pc: usize, instruction: Instruction, info: &InstructionInfo, current_gas: &Cost, stack: &dyn Stack<U256>) {
 			let time = self.last_instruction.elapsed();
 			self.last_instruction = Instant::now();
 
@@ -110,7 +111,7 @@ mod inner {
 		}
 
 		pub fn after_instruction(&mut self, instruction: Instruction) {
-			let stats = self.stats.entry(instruction).or_insert_with(|| Stats::default());
+			let stats = self.stats.entry(instruction).or_insert_with(Stats::default);
 			let took = self.last_instruction.elapsed();
 			stats.note(took);
 		}
@@ -118,7 +119,7 @@ mod inner {
 		pub fn done(&mut self) {
 			// Print out stats
 			let mut stats: Vec<(_,_)> = self.stats.drain().collect();
-			stats.sort_by(|ref a, ref b| b.1.avg().cmp(&a.1.avg()));
+			stats.sort_by(|ref a, b| b.1.avg().cmp(&a.1.avg()));
 
 			print(format!("\n{}-------OPCODE STATS:", self.spacing));
 			for (instruction, stats) in stats.into_iter() {

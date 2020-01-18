@@ -165,21 +165,21 @@ pub enum SerializableRequester {
 }
 
 impl From<SerializableRequester> for Requester {
-	fn from(requester: SerializableRequester) -> Requester {
+	fn from(requester: SerializableRequester) -> Self {
 		match requester {
-			SerializableRequester::Signature(signature) => Requester::Signature(signature.into()),
-			SerializableRequester::Public(public) => Requester::Public(public.into()),
-			SerializableRequester::Address(address) => Requester::Address(address.into()),
+			SerializableRequester::Signature(signature) => Self::Signature(signature.into()),
+			SerializableRequester::Public(public) => Self::Public(public.into()),
+			SerializableRequester::Address(address) => Self::Address(address.into()),
 		}
 	}
 }
 
 impl From<Requester> for SerializableRequester {
-	fn from(requester: Requester) -> SerializableRequester {
+	fn from(requester: Requester) -> Self {
 		match requester {
-			Requester::Signature(signature) => SerializableRequester::Signature(signature.into()),
-			Requester::Public(public) => SerializableRequester::Public(public.into()),
-			Requester::Address(address) => SerializableRequester::Address(address.into()),
+			Requester::Signature(signature) => Self::Signature(signature.into()),
+			Requester::Public(public) => Self::Public(public.into()),
+			Requester::Address(address) => Self::Address(address.into()),
 		}
 	}
 }
@@ -238,7 +238,7 @@ mod tests {
 		let raw_s = "5a39ed1020c04d4d84539975b893a4e7c53eab6c2965db8bc3468093a31bc5ae";
 		let r = H256::from_str(raw_r).unwrap();
 		let s = H256::from_str(raw_s).unwrap();
-		let v = 42u8;
+		let v = 42_u8;
 		let public = SerializableSignature(Signature::from_rsv(&r, &s, v));
 		do_test!(public, format!("\"0x{}{}{:x}\"", raw_r, raw_s, v), SerializableSignature);
 	}

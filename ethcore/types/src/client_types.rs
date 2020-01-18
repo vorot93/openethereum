@@ -43,11 +43,11 @@ pub enum Mode {
 
 impl Display for Mode {
 	fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
-		match *self {
-			Mode::Active => write!(f, "active"),
-			Mode::Passive(..) => write!(f, "passive"),
-			Mode::Dark(..) => write!(f, "dark"),
-			Mode::Off => write!(f, "offline"),
+		match self {
+			Self::Active => write!(f, "active"),
+			Self::Passive(..) => write!(f, "passive"),
+			Self::Dark(..) => write!(f, "dark"),
+			Self::Off => write!(f, "offline"),
 		}
 	}
 }
@@ -70,20 +70,20 @@ impl ClientReport {
 	pub fn accrue_block(&mut self, header: &Header, transactions: usize) {
 		self.blocks_imported += 1;
 		self.transactions_applied += transactions;
-		self.gas_processed = self.gas_processed + *header.gas_used();
+		self.gas_processed += *header.gas_used();
 	}
 }
 
 impl<'a> ops::Sub<&'a ClientReport> for ClientReport {
 	type Output = Self;
 
-	fn sub(mut self, other: &'a ClientReport) -> Self {
+	fn sub(mut self, other: &'a Self) -> Self {
 		let higher_mem = cmp::max(self.state_db_mem, other.state_db_mem);
 		let lower_mem = cmp::min(self.state_db_mem, other.state_db_mem);
 
 		self.blocks_imported -= other.blocks_imported;
 		self.transactions_applied -= other.transactions_applied;
-		self.gas_processed = self.gas_processed - other.gas_processed;
+		self.gas_processed -= other.gas_processed;
 		self.state_db_mem = higher_mem - lower_mem;
 
 		self

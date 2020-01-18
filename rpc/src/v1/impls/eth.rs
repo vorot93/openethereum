@@ -35,6 +35,7 @@ use miner::external::ExternalMinerService;
 use sync::SyncProvider;
 use types::{
 	BlockNumber as EthBlockNumber,
+	call_analytics::CallAnalytics,
 	client_types::StateResult,
 	encoded,
 	header::Header,
@@ -92,7 +93,7 @@ impl EthClientOptions {
 
 impl Default for EthClientOptions {
 	fn default() -> Self {
-		EthClientOptions {
+		Self {
 			pending_nonce_from_queue: false,
 			allow_pending_receipt_query: true,
 			send_block_number_in_get_work: true,
@@ -130,14 +131,14 @@ enum BlockNumberOrId {
 }
 
 impl From<BlockId> for BlockNumberOrId {
-	fn from(value: BlockId) -> BlockNumberOrId {
-		BlockNumberOrId::Id(value)
+	fn from(value: BlockId) -> Self {
+		Self::Id(value)
 	}
 }
 
 impl From<BlockNumber> for BlockNumberOrId {
-	fn from(value: BlockNumber) -> BlockNumberOrId {
-		BlockNumberOrId::Number(value)
+	fn from(value: BlockNumber) -> Self {
+		Self::Number(value)
 	}
 }
 
@@ -191,7 +192,7 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM, T> EthClient<C, SN, S, M, EM> where
 	M: MinerService<State=T>,
 	EM: ExternalMinerService {
 
-	/// Creates new EthClient.
+	/// Creates new `EthClient`.
 	pub fn new(
 		client: &Arc<C>,
 		snapshot: &Arc<SN>,
@@ -201,7 +202,7 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM, T> EthClient<C, SN, S, M, EM> where
 		em: &Arc<EM>,
 		options: EthClientOptions
 	) -> Self {
-		EthClient {
+		Self {
 			client: client.clone(),
 			snapshot: snapshot.clone(),
 			sync: sync.clone(),
@@ -210,7 +211,7 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM, T> EthClient<C, SN, S, M, EM> where
 			external_miner: em.clone(),
 			seed_compute: Mutex::new(SeedHashCompute::default()),
 			options,
-			deprecation_notice: Default::default(),
+			deprecation_notice: DeprecationNotice::default(),
 		}
 	}
 
@@ -222,29 +223,26 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM, T> EthClient<C, SN, S, M, EM> where
 		let (block, difficulty, extra, is_pending) = match id {
 			BlockNumberOrId::Number(BlockNumber::Pending) => {
 				let info = self.client.chain_info();
-				match self.miner.pending_block(info.best_block_number) {
-					Some(pending_block) => {
-						warn!("`Pending` is deprecated and may be removed in future versions.");
+				if let Some(pending_block) = self.miner.pending_block(info.best_block_number) {
+					warn!("`Pending` is deprecated and may be removed in future versions.");
 
-						let difficulty = {
-							let latest_difficulty = self.client.block_total_difficulty(BlockId::Latest).expect("blocks in chain have details; qed");
-							let pending_difficulty = self.miner.pending_block_header(info.best_block_number).map(|header| *header.difficulty());
+					let difficulty = {
+						let latest_difficulty = self.client.block_total_difficulty(BlockId::Latest).expect("blocks in chain have details; qed");
+						let pending_difficulty = self.miner.pending_block_header(info.best_block_number).map(|header| *header.difficulty());
 
-							if let Some(difficulty) = pending_difficulty {
-								difficulty + latest_difficulty
-							} else {
-								latest_difficulty
-							}
-						};
+						if let Some(difficulty) = pending_difficulty {
+							difficulty + latest_difficulty
+						} else {
+							latest_difficulty
+						}
+					};
 
-						let extra = self.client.engine().extra_info(&pending_block.header);
+					let extra = self.client.engine().extra_info(&pending_block.header);
 
-						(Some(encoded::Block::new(pending_block.rlp_bytes())), Some(difficulty), Some(extra), true)
-					},
-					None => {
-						warn!("`Pending` is deprecated and may be removed in future versions. Falling back to `Latest`");
-						client_query(BlockId::Latest)
-					}
+					(Some(encoded::Block::new(pending_block.rlp_bytes())), Some(difficulty), Some(extra), true)
+				} else {
+					warn!("`Pending` is deprecated and may be removed in future versions. Falling back to `Latest`");
+					client_query(BlockId::Latest)
 				}
 			},
 
@@ -268,9 +266,10 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM, T> EthClient<C, SN, S, M, EM> where
 				let view = block.header_view();
 				Ok(Some(RichBlock {
 					inner: Block {
-						hash: match is_pending {
-							true => None,
-							false => Some(view.hash()),
+						hash: if is_pending {
+							None
+						} else {
+							Some(view.hash())
 						},
 						size: Some(block.rlp().as_raw().len().into()),
 						parent_hash: view.parent_hash(),
@@ -280,24 +279,27 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM, T> EthClient<C, SN, S, M, EM> where
 						state_root: view.state_root(),
 						transactions_root: view.transactions_root(),
 						receipts_root: view.receipts_root(),
-						number: match is_pending {
-							true => None,
-							false => Some(view.number().into()),
+						number: if is_pending {
+							None
+						} else {
+							Some(view.number().into())
 						},
 						gas_used: view.gas_used(),
 						gas_limit: view.gas_limit(),
-						logs_bloom: match is_pending {
-							true => None,
-							false => Some(view.log_bloom()),
+						logs_bloom: if is_pending {
+							None
+						} else {
+							Some(view.log_bloom())
 						},
 						timestamp: view.timestamp().into(),
 						difficulty: view.difficulty(),
 						total_difficulty: Some(total_difficulty),
 						seal_fields: view.seal().into_iter().map(Into::into).collect(),
 						uncles: block.uncle_hashes(),
-						transactions: match include_txs {
-							true => BlockTransactions::Full(block.view().localized_transactions().into_iter().map(Transaction::from_localized).collect()),
-							false => BlockTransactions::Hashes(block.transaction_hashes()),
+						transactions: if include_txs {
+							BlockTransactions::Full(block.view().localized_transactions().into_iter().map(Transaction::from_localized).collect())
+						} else {
+							BlockTransactions::Hashes(block.transaction_hashes())
 						},
 						extra_data: Bytes::new(view.extra_data()),
 					},
@@ -390,17 +392,16 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM, T> EthClient<C, SN, S, M, EM> where
 			PendingUncleId { id: PendingOrBlock::Block(block_id), position } => {
 				let uncle_id = UncleId { block: block_id, position };
 
-				let uncle = match client.uncle(uncle_id) {
-					Some(hdr) => match hdr.decode() {
-						Ok(h) => h,
-						Err(e) => return Err(errors::decode(e))
-					},
-					None => { return Ok(None); }
+				let uncle = if let Some(hdr) = client.uncle(uncle_id) {
+					hdr.decode().map_err(errors::decode)?
+				} else {
+					return Ok(None);
 				};
 
-				let parent_difficulty = match client.block_total_difficulty(BlockId::Hash(*uncle.parent_hash())) {
-					Some(difficulty) => difficulty,
-					None => { return Ok(None); }
+				let parent_difficulty = if let Some(difficulty) = client.block_total_difficulty(BlockId::Hash(*uncle.parent_hash())) {
+					difficulty
+				} else {
+					return Ok(None);
 				};
 
 				let extra = client.uncle_extra_info(uncle_id).expect(EXTRA_INFO_PROOF);
@@ -433,8 +434,8 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM, T> EthClient<C, SN, S, M, EM> where
 				receipts_root: *uncle.receipts_root(),
 				extra_data: uncle.extra_data().clone().into(),
 				seal_fields: uncle.seal().iter().cloned().map(Into::into).collect(),
-				uncles: vec![],
-				transactions: BlockTransactions::Hashes(vec![]),
+				uncles: Vec::new(),
+				transactions: BlockTransactions::Hashes(Vec::new()),
 			},
 			extra_info: extra,
 		};
@@ -456,12 +457,11 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM, T> EthClient<C, SN, S, M, EM> where
 
 				self.miner
 					.pending_state(info.best_block_number)
-					.map(|s| Box::new(s) as Box<dyn StateInfo>)
-					.unwrap_or_else(|| {
+					.map_or_else(|| {
 						warn!("Asked for best pending state, but none found. Falling back to latest state");
 						let (state, _) = self.client.latest_state_and_header();
 						Box::new(state) as Box<dyn StateInfo>
-					})
+					}, |s| Box::new(s) as Box<dyn StateInfo>)
 					.into()
 			}
 		}
@@ -476,12 +476,11 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM, T> EthClient<C, SN, S, M, EM> where
 				(Some(s), self.miner.pending_block_header(best_block_number))
 			});
 
-		match (maybe_state, maybe_header) {
-			(Some(state), Some(header)) => (state, header),
-			_ => {
-				warn!("Falling back to \"Latest\"");
-				self.client.latest_state_and_header()
-			}
+		if let (Some(state), Some(header)) = (maybe_state, maybe_header) {
+			 (state, header)
+		} else {
+			warn!("Falling back to \"Latest\"");
+			self.client.latest_state_and_header()
 		}
 	}
 }
@@ -494,11 +493,14 @@ pub fn pending_logs<M>(miner: &M, best_block: EthBlockNumber, filter: &EthcoreFi
 			let hash = r.transaction_hash;
 			r.logs.into_iter().map(move |l| (hash, l))
 		})
-		.filter(|pair| filter.matches(&pair.1))
-		.map(|pair| {
-			let mut log = Log::from(pair.1);
-			log.transaction_hash = Some(pair.0);
-			log
+		.filter_map(|pair| {
+			if filter.matches(&pair.1) {
+				let mut log = Log::from(pair.1);
+				log.transaction_hash = Some(pair.0);
+				Some(log)
+			} else {
+				None
+			}
 		})
 		.collect()
 }
@@ -513,7 +515,7 @@ fn check_known<C>(client: &C, number: BlockNumber) -> Result<()> where C: BlockC
 		BlockNumber::Earliest => BlockId::Earliest,
 		BlockNumber::Hash { hash, require_canonical } => {
 			// block check takes precedence over canon check.
-			match client.block_status(BlockId::Hash(hash.clone())) {
+			match client.block_status(BlockId::Hash(hash)) {
 				BlockStatus::InChain => {},
 				_ => return Err(errors::unknown_block()),
 			};
@@ -645,7 +647,7 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM, T: StateInfo + 'static> Eth for EthClient<
 			}
 		};
 
-		try_bf!(check_known(&*self.client, num.clone()));
+		try_bf!(check_known(&*self.client, num));
 		let res = match self.client.prove_account(key1, id) {
 			Some((proof, account)) => Ok(EthAccount {
 				address,
@@ -725,10 +727,10 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM, T: StateInfo + 'static> Eth for EthClient<
 	}
 
 	fn block_transaction_count_by_number(&self, num: BlockNumber) -> BoxFuture<Option<U256>> {
-		Box::new(future::done(match num {
-			BlockNumber::Pending =>
-				Ok(Some(self.miner.pending_transaction_hashes(&*self.client).len().into())),
-			_ => {
+		Box::new(future::done({
+			if let BlockNumber::Pending = num {
+				Ok(Some(self.miner.pending_transaction_hashes(&*self.client).len().into()))
+			} else {
 				let trx_count = self.client.block(block_number_to_id(num.clone()))
 					.map(|block| block.transactions_count().into());
 				Ok(trx_count)
@@ -750,18 +752,17 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM, T: StateInfo + 'static> Eth for EthClient<
 	}
 
 	fn block_uncles_count_by_number(&self, num: BlockNumber) -> BoxFuture<Option<U256>> {
-		Box::new(future::done(match num {
-			BlockNumber::Pending => Ok(Some(0.into())),
-			_ => {
-				let uncles_count = self.client.block(block_number_to_id(num.clone()))
-					.map(|block| block.uncles_count().into());
-				Ok(uncles_count)
-					.and_then(errors::check_block_number_existence(
-						&*self.client,
-						num,
-						self.options
-					))
-			}
+		Box::new(future::done(if let BlockNumber::Pending = num {
+			Ok(Some(0.into()))
+		} else {
+			let uncles_count = self.client.block(block_number_to_id(num.clone()))
+				.map(|block| block.uncles_count().into());
+			Ok(uncles_count)
+				.and_then(errors::check_block_number_existence(
+					&*self.client,
+					num,
+					self.options
+				))
 		}))
 	}
 
@@ -987,14 +988,15 @@ impl<C, SN: ?Sized, S: ?Sized, M, EM, T: StateInfo + 'static> Eth for EthClient<
 				(state, header)
 			};
 
-		let result = self.client.call(&signed, Default::default(), &mut state, &header);
+		let result = self.client.call(&signed, CallAnalytics::default(), &mut state, &header);
 
 		Box::new(future::done(result
 			.map_err(errors::call)
 			.and_then(|executed| {
-				match executed.exception {
-					Some(ref exception) => Err(errors::vm(exception, &executed.output)),
-					None => Ok(executed)
+				if let Some(exception) = &executed.exception {
+					Err(errors::vm(exception, &executed.output))
+				} else {
+					Ok(executed)
 				}
 			})
 			.map(|b| b.output.into())

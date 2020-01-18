@@ -16,6 +16,54 @@
 
 //! State database abstraction. For more info, see the doc for `StateDB`
 
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
+
 use std::collections::{HashSet, VecDeque};
 use std::io;
 use std::sync::Arc;
@@ -39,15 +87,15 @@ use memory_cache::MemoryLruCache;
 /// Value used to initialize bloom bitmap size.
 ///
 /// Bitmap size is the size in bytes (not bits) that will be allocated in memory.
-pub const ACCOUNT_BLOOM_SPACE: usize = 1048576;
+pub const ACCOUNT_BLOOM_SPACE: usize = 1_048_576;
 
 /// Value used to initialize bloom items count.
 ///
 /// Items count is an estimation of the maximum number of items to store.
-pub const DEFAULT_ACCOUNT_PRESET: usize = 1000000;
+pub const DEFAULT_ACCOUNT_PRESET: usize = 1_000_000;
 
 /// Key for a value storing amount of hashes
-pub const ACCOUNT_BLOOM_HASHCOUNT_KEY: &'static [u8] = b"account_hash_count";
+pub const ACCOUNT_BLOOM_HASHCOUNT_KEY: &[u8] = b"account_hash_count";
 
 const STATE_CACHE_BLOCKS: usize = 12;
 
@@ -137,13 +185,13 @@ impl StateDB {
 	/// of the LRU cache in bytes. Actual used memory may (read: will) be higher due to bookkeeping.
 	// TODO: make the cache size actually accurate by moving the account storage cache
 	// into the `AccountCache` structure as its own `LruCache<(Address, H256), H256>`.
-	pub fn new(db: Box<dyn JournalDB>, cache_size: usize) -> StateDB {
+	pub fn new(db: Box<dyn JournalDB>, cache_size: usize) -> Self {
 		let bloom = Self::load_bloom(&**db.backing());
 		let acc_cache_size = cache_size * ACCOUNT_CACHE_RATIO / 100;
 		let code_cache_size = cache_size - acc_cache_size;
 		let cache_items = acc_cache_size / ::std::mem::size_of::<Option<Account>>();
 
-		StateDB {
+		Self {
 			db,
 			account_cache: Arc::new(Mutex::new(AccountCache {
 				accounts: LruCache::new(cache_items),
@@ -173,17 +221,16 @@ impl StateDB {
 		assert_eq!(hash_count_bytes.len(), 1);
 		let hash_count = hash_count_bytes[0];
 
-		let mut bloom_parts = vec![0u64; ACCOUNT_BLOOM_SPACE / 8];
-		for i in 0..ACCOUNT_BLOOM_SPACE / 8 {
+		let mut bloom_parts = vec![0_u64; ACCOUNT_BLOOM_SPACE / 8];
+		for (i, part) in bloom_parts.iter_mut().enumerate().take(ACCOUNT_BLOOM_SPACE / 8) {
 			let key: [u8; 8] = (i as u64).to_le_bytes();
-			bloom_parts[i] = db.get(COL_ACCOUNT_BLOOM, &key).expect("low-level database error")
-				.map(|val| {
+			*part = db.get(COL_ACCOUNT_BLOOM, &key).expect("low-level database error")
+				.map_or(0_u64, |val| {
 					assert_eq!(val.len(), 8, "low-level database error");
-					let mut buff = [0u8; 8];
+					let mut buff = [0_u8; 8];
 					buff.copy_from_slice(&*val);
 					u64::from_le_bytes(buff)
-				})
-				.unwrap_or(0u64);
+				});
 		}
 
 		let bloom = Bloom::from_parts(&bloom_parts, hash_count as u32);
@@ -211,7 +258,7 @@ impl StateDB {
 			Self::commit_bloom(batch, bloom_lock.drain_journal())?;
 		}
 		let records = self.db.journal_under(batch, now, id)?;
-		self.commit_hash = Some(id.clone());
+		self.commit_hash = Some(*id);
 		self.commit_number = Some(now);
 		Ok(records)
 	}
@@ -238,7 +285,7 @@ impl StateDB {
 		let mut clear = false;
 		for block in enacted.iter().filter(|h| self.commit_hash.as_ref().map_or(true, |p| *h != p)) {
 			clear = clear || {
-				if let Some(ref mut m) = cache.modifications.iter_mut().find(|m| &m.hash == block) {
+				if let Some(mut m) = cache.modifications.iter_mut().find(|m| &m.hash == block) {
 					trace!("Reverting enacted block {:?}", block);
 					m.is_canon = true;
 					for a in &m.accounts {
@@ -254,7 +301,7 @@ impl StateDB {
 
 		for block in retracted {
 			clear = clear || {
-				if let Some(ref mut m) = cache.modifications.iter_mut().find(|m| &m.hash == block) {
+				if let Some(mut m) = cache.modifications.iter_mut().find(|m| &m.hash == block) {
 					trace!("Retracting block {:?}", block);
 					m.is_canon = false;
 					for a in &m.accounts {
@@ -277,7 +324,7 @@ impl StateDB {
 		// Propagate cache only if committing on top of the latest canonical state
 		// blocks are ordered by number and only one block with a given number is marked as canonical
 		// (contributed to canonical state cache)
-		if let (Some(ref number), Some(ref hash), Some(ref parent)) = (self.commit_number, self.commit_hash, self.parent_hash) {
+		if let (Some(number), Some(hash), Some(parent)) = (self.commit_number, self.commit_hash, self.parent_hash) {
 			if cache.modifications.len() == STATE_CACHE_BLOCKS {
 				cache.modifications.pop_back();
 			}
@@ -289,7 +336,7 @@ impl StateDB {
 				}
 				if is_best {
 					let acc = account.account.0;
-					if let Some(&mut Some(ref mut existing)) = cache.accounts.get_mut(&account.address) {
+					if let Some(Some(existing)) = cache.accounts.get_mut(&account.address) {
 						if let Some(new) = acc {
 							if account.modified {
 								existing.overwrite_with(new);
@@ -304,12 +351,12 @@ impl StateDB {
 			// Save modified accounts. These are ordered by the block number.
 			let block_changes = BlockChanges {
 				accounts: modifications,
-				number: *number,
-				hash: hash.clone(),
+				number,
+				hash,
 				is_canon: is_best,
-				parent: parent.clone(),
+				parent,
 			};
-			let insert_at = cache.modifications.iter().enumerate().find(|&(_, m)| m.number < *number).map(|(i, _)| i);
+			let insert_at = cache.modifications.iter().enumerate().find_map(|(i, m)| if m.number < number { Some(i) } else { None });
 			trace!("inserting modifications at {:?}", insert_at);
 			if let Some(insert_at) = insert_at {
 				cache.modifications.insert(insert_at, block_changes);
@@ -330,8 +377,8 @@ impl StateDB {
 	}
 
 	/// Clone the database.
-	pub fn boxed_clone(&self) -> StateDB {
-		StateDB {
+	pub fn boxed_clone(&self) -> Self {
+		Self {
 			db: self.db.boxed_clone(),
 			account_cache: self.account_cache.clone(),
 			code_cache: self.code_cache.clone(),
@@ -345,15 +392,15 @@ impl StateDB {
 	}
 
 	/// Clone the database for a canonical state.
-	pub fn boxed_clone_canon(&self, parent: &H256) -> StateDB {
-		StateDB {
+	pub fn boxed_clone_canon(&self, parent: &H256) -> Self {
+		Self {
 			db: self.db.boxed_clone(),
 			account_cache: self.account_cache.clone(),
 			code_cache: self.code_cache.clone(),
 			local_cache: Vec::new(),
 			account_bloom: self.account_bloom.clone(),
 			cache_size: self.cache_size,
-			parent_hash: Some(parent.clone()),
+			parent_hash: Some(*parent),
 			commit_hash: None,
 			commit_number: None,
 		}
@@ -380,7 +427,7 @@ impl StateDB {
 	}
 
 	/// Query how much memory is set aside for the accounts cache (in bytes).
-	pub fn cache_size(&self) -> usize {
+	pub const fn cache_size(&self) -> usize {
 		self.cache_size
 	}
 
@@ -440,7 +487,7 @@ impl account_state::Backend for StateDB {
 			if !Self::is_allowed(addr, parent_hash, &cache.modifications) {
 				return None;
 			}
-			cache.accounts.get_mut(addr).map(|a| a.as_ref().map(|a| a.clone_basic()))
+			cache.accounts.get_mut(addr).map(|a| a.as_ref().map(account_state::account::Account::clone_basic))
 		})
 	}
 
@@ -459,7 +506,7 @@ impl account_state::Backend for StateDB {
 	fn get_cached_code(&self, hash: &H256) -> Option<Arc<Vec<u8>>> {
 		let mut cache = self.code_cache.lock();
 
-		cache.get_mut(hash).map(|code| code.clone())
+		cache.get_mut(hash).cloned()
 	}
 
 	fn note_non_null_account(&self, address: &Address) {
@@ -471,8 +518,7 @@ impl account_state::Backend for StateDB {
 	fn is_known_null(&self, address: &Address) -> bool {
 		trace!(target: "account_bloom", "Check account bloom: {:?}", address);
 		let bloom = self.account_bloom.lock();
-		let is_null = !bloom.check(keccak(address).as_bytes());
-		is_null
+		!bloom.check(keccak(address).as_bytes())
 	}
 }
 
@@ -553,7 +599,7 @@ mod tests {
 		// blocks  [ 3b(c) 3a 2a 2b(c) 1b 1a 0 ]
 		let mut s = state_db.boxed_clone_canon(&h2b);
 		s.journal_under(&mut batch, 3, &h3b).unwrap();
-		s.sync_cache(&[h1b.clone(), h2b.clone(), h3b.clone()], &[h1a.clone(), h2a.clone(), h3a.clone()], true);
+		s.sync_cache(&[h1b, h2b, h3b], &[h1a, h2a, h3a], true);
 		let s = state_db.boxed_clone_canon(&h3a);
 		assert!(s.get_cached_account(&address).is_none());
 	}

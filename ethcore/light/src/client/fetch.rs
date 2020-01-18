@@ -58,7 +58,7 @@ pub trait ChainDataFetcher: Send + Sync + 'static {
 pub struct Unavailable;
 
 /// Create a fetcher which has all data unavailable.
-pub fn unavailable() -> Unavailable { Unavailable }
+pub const fn unavailable() -> Unavailable { Unavailable }
 
 impl ChainDataFetcher for Unavailable {
 	type Error = &'static str;

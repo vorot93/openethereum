@@ -63,10 +63,10 @@ fn harness(numbers: Vec<u64>, period: u64, history: u64, expected: Option<u64>) 
 
 	watcher.new_blocks(NewBlocks::new(
 		hashes,
-		vec![],
+		Vec::new(),
 		ChainRoute::default(),
-		vec![],
-		vec![],
+		Vec::new(),
+		Vec::new(),
 		DURATION_ZERO,
 		false
 	));

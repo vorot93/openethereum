@@ -36,7 +36,7 @@ impl Tracer for NoopTracer {
 	fn done_trace_failed(&mut self, _: &VmError) { }
 	fn trace_suicide(&mut self, _: Address, _: U256, _: Address) { }
 	fn trace_reward(&mut self, _: Address, _: U256, _: RewardType) { }
-	fn drain(self) -> Vec<FlatTrace> { vec![] }
+	fn drain(self) -> Vec<FlatTrace> { Vec::new() }
 }
 
 /// Nonoperative VM tracer. Does not trace anything.

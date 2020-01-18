@@ -57,7 +57,7 @@ fn run_test_path_inner<H: FnMut(&str, HookType)>(
 	errors: &mut Vec<String>
 ) {
 	let path = Path::new(p);
-	let extension = path.extension().and_then(|s| s.to_str());
+	let extension = path.extension().and_then(std::ffi::OsStr::to_str);
 	let skip_list: HashSet<OsString> = skip.iter().map(|s| {
 		let mut os: OsString = s.into();
 		os.push(".json");
@@ -81,7 +81,7 @@ fn run_test_path_inner<H: FnMut(&str, HookType)>(
 			run_test_path_inner(&test_file, skip, runner, start_stop_hook, errors);
 		}
 	} else if extension == Some("swp") || extension == None {
-		trace!(target: "json-tests", "ignoring '{}', extension {:?} – Junk?", path.display(), extension);
+		trace!(target: "json-tests", "ignoring '{}', extension {:?} - Junk?", path.display(), extension);
 		// Ignore junk
 	} else {
 		trace!(target: "json-tests", "running tests in '{}'", path.display());
@@ -98,12 +98,9 @@ fn run_test_file_append<H: FnMut(&str, HookType)>(
 	errors: &mut Vec<String>
 ) {
 	let mut data = Vec::new();
-	let mut file = match File::open(&path) {
-		Ok(file) => file,
-		Err(_) => panic!("Error opening test file at: {:?}", path),
-	};
+	let mut file = File::open(&path).unwrap_or_else(|e| panic!("Error opening test file at: {:?}: {}", path, e));
 	file.read_to_end(&mut data).expect("Error reading test file");
-	errors.append(&mut runner(&path, &data, start_stop_hook));
+	errors.append(&mut runner(path, &data, start_stop_hook));
 }
 
 pub fn run_test_file<H: FnMut(&str, HookType)>(
@@ -112,12 +109,9 @@ pub fn run_test_file<H: FnMut(&str, HookType)>(
 	start_stop_hook: &mut H
 ) {
 	let mut data = Vec::new();
-	let mut file = match File::open(&path) {
-		Ok(file) => file,
-		Err(_) => panic!("Error opening test file at: {:?}", path),
-	};
+	let mut file = File::open(&path).unwrap_or_else(|e| panic!("Error opening test file at: {:?}: {}", path, e));
 	file.read_to_end(&mut data).expect("Error reading test file");
-	let results = runner(&path, &data, start_stop_hook);
+	let results = runner(path, &data, start_stop_hook);
 	let empty: [String; 0] = [];
 	assert_eq!(results, empty);
 }

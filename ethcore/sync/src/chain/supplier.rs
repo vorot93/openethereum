@@ -71,39 +71,39 @@ impl SyncSupplier {
 
 		if let Some(id) = SyncPacket::from_u8(packet_id) {
 			let result = match id {
-				GetBlockBodiesPacket => SyncSupplier::return_rlp(
+				GetBlockBodiesPacket => Self::return_rlp(
 					io, &rlp, peer,
-					SyncSupplier::return_block_bodies,
+					Self::return_block_bodies,
 					|e| format!("Error sending block bodies: {:?}", e)),
 
-				GetBlockHeadersPacket => SyncSupplier::return_rlp(
+				GetBlockHeadersPacket => Self::return_rlp(
 					io, &rlp, peer,
-					SyncSupplier::return_block_headers,
+					Self::return_block_headers,
 					|e| format!("Error sending block headers: {:?}", e)),
 
-				GetReceiptsPacket => SyncSupplier::return_rlp(
+				GetReceiptsPacket => Self::return_rlp(
 					io, &rlp, peer,
-					SyncSupplier::return_receipts,
+					Self::return_receipts,
 					|e| format!("Error sending receipts: {:?}", e)),
 
-				GetNodeDataPacket => SyncSupplier::return_rlp(
+				GetNodeDataPacket => Self::return_rlp(
 					io, &rlp, peer,
-					SyncSupplier::return_node_data,
+					Self::return_node_data,
 					|e| format!("Error sending nodes: {:?}", e)),
 
-				GetSnapshotManifestPacket => SyncSupplier::return_rlp(
+				GetSnapshotManifestPacket => Self::return_rlp(
 					io, &rlp, peer,
-					SyncSupplier::return_snapshot_manifest,
+					Self::return_snapshot_manifest,
 					|e| format!("Error sending snapshot manifest: {:?}", e)),
 
-				GetSnapshotDataPacket => SyncSupplier::return_rlp(
+				GetSnapshotDataPacket => Self::return_rlp(
 					io, &rlp, peer,
-					SyncSupplier::return_snapshot_data,
+					Self::return_snapshot_data,
 					|e| format!("Error sending snapshot data: {:?}", e)),
 
-				GetPrivateStatePacket => SyncSupplier::return_rlp(
+				GetPrivateStatePacket => Self::return_rlp(
 					io, &rlp, peer,
-					SyncSupplier::return_private_state,
+					Self::return_private_state,
 					|e| format!("Error sending private state data: {:?}", e)),
 
 				StatusPacket => {
@@ -148,7 +148,7 @@ impl SyncSupplier {
 		}
 	}
 
-	/// Respond to GetBlockHeaders request
+	/// Respond to `GetBlockHeaders` request
 	fn return_block_headers(io: &dyn SyncIo, r: &Rlp, peer_id: PeerId) -> RlpResponseResult {
 		let payload_soft_limit = io.payload_soft_limit();
 		// Packet layout:
@@ -163,7 +163,7 @@ impl SyncSupplier {
 			trace!(target: "sync", "{} -> GetBlockHeaders (hash: {}, max: {}, skip: {}, reverse:{})", peer_id, hash, max_headers, skip, reverse);
 			match io.chain().block_header(BlockId::Hash(hash)) {
 				Some(hdr) => {
-					let number = hdr.number().into();
+					let number = hdr.number();
 					debug_assert_eq!(hdr.hash(), hash);
 
 					if max_headers == 1 || io.chain().block_hash(BlockId::Number(number)) != Some(hash) {
@@ -229,7 +229,7 @@ impl SyncSupplier {
 		Ok(Some((BlockHeadersPacket.id(), rlp)))
 	}
 
-	/// Respond to GetBlockBodies request
+	/// Respond to `GetBlockBodies` request
 	fn return_block_bodies(io: &dyn SyncIo, r: &Rlp, peer_id: PeerId) -> RlpResponseResult {
 		let payload_soft_limit = io.payload_soft_limit();
 		let mut count = r.item_count().unwrap_or(0);
@@ -238,7 +238,7 @@ impl SyncSupplier {
 			return Ok(None);
 		}
 		count = cmp::min(count, MAX_BODIES_TO_SEND);
-		let mut added = 0usize;
+		let mut added = 0_usize;
 		let mut data = Bytes::new();
 		for i in 0..count {
 			if let Some(body) = io.chain().block_body(BlockId::Hash(r.val_at::<H256>(i)?)) {
@@ -256,7 +256,7 @@ impl SyncSupplier {
 		Ok(Some((BlockBodiesPacket.id(), rlp)))
 	}
 
-	/// Respond to GetNodeData request
+	/// Respond to `GetNodeData` request
 	fn return_node_data(io: &dyn SyncIo, r: &Rlp, peer_id: PeerId) -> RlpResponseResult {
 		let payload_soft_limit = io.payload_soft_limit();
 		let mut count = r.item_count().unwrap_or(0);
@@ -266,7 +266,7 @@ impl SyncSupplier {
 			return Ok(None);
 		}
 		count = cmp::min(count, MAX_NODE_DATA_TO_SEND);
-		let mut added = 0usize;
+		let mut added = 0_usize;
 		let mut data = Vec::new();
 		let mut total_bytes = 0;
 		for i in 0..count {
@@ -297,7 +297,7 @@ impl SyncSupplier {
 			return Ok(None);
 		}
 		count = cmp::min(count, MAX_RECEIPTS_HEADERS_TO_SEND);
-		let mut added_headers = 0usize;
+		let mut added_headers = 0_usize;
 		let mut data = Bytes::new();
 		let mut total_bytes = 0;
 		for i in 0..count {
@@ -314,7 +314,7 @@ impl SyncSupplier {
 		Ok(Some((ReceiptsPacket.id(), rlp_result)))
 	}
 
-	/// Respond to GetSnapshotManifest request
+	/// Respond to `GetSnapshotManifest` request
 	fn return_snapshot_manifest(io: &dyn SyncIo, r: &Rlp, peer_id: PeerId) -> RlpResponseResult {
 		let count = r.item_count().unwrap_or(0);
 		trace!(target: "warp", "{} -> GetSnapshotManifest", peer_id);
@@ -322,14 +322,13 @@ impl SyncSupplier {
 			debug!(target: "warp", "Invalid GetSnapshotManifest request, ignoring.");
 			return Ok(None);
 		}
-		let rlp = match io.snapshot_service().manifest() {
-			Some(manifest) => {
+		let rlp = {
+			if let Some(manifest) = io.snapshot_service().manifest() {
 				trace!(target: "warp", "{} <- SnapshotManifest", peer_id);
 				let mut rlp = RlpStream::new_list(1);
 				rlp.append_raw(&manifest.into_rlp(), 1);
 				rlp
-			},
-			None => {
+			} else {
 				trace!(target: "warp", "{}: No snapshot manifest to return", peer_id);
 				RlpStream::new_list(0)
 			}
@@ -337,18 +336,17 @@ impl SyncSupplier {
 		Ok(Some((SnapshotManifestPacket.id(), rlp)))
 	}
 
-	/// Respond to GetSnapshotData request
+	/// Respond to `GetSnapshotData` request
 	fn return_snapshot_data(io: &dyn SyncIo, r: &Rlp, peer_id: PeerId) -> RlpResponseResult {
 		let hash: H256 = r.val_at(0)?;
 		trace!(target: "warp", "{} -> GetSnapshotData {:?}", peer_id, hash);
-		let rlp = match io.snapshot_service().chunk(hash) {
-			Some(data) => {
+		let rlp = {
+			if let Some(data) = io.snapshot_service().chunk(hash) {
 				let mut rlp = RlpStream::new_list(1);
 				trace!(target: "warp", "{} <- SnapshotData", peer_id);
 				rlp.append(&data);
 				rlp
-			},
-			None => {
+			} else {
 				trace!(target: "warp", "{}: No snapshot data to return", peer_id);
 				RlpStream::new_list(0)
 			}
@@ -356,7 +354,7 @@ impl SyncSupplier {
 		Ok(Some((SnapshotDataPacket.id(), rlp)))
 	}
 
-	/// Respond to GetPrivateStatePacket
+	/// Respond to `GetPrivateStatePacket`
 	fn return_private_state(io: &dyn SyncIo, r: &Rlp, peer_id: PeerId) -> RlpResponseResult {
 		let hash: H256 = r.val_at(0)?;
 		trace!(target: "privatetx", "{} -> GetPrivateStatePacket {:?}", peer_id, hash);
@@ -412,6 +410,7 @@ mod test {
 
 	use bytes::Bytes;
 	use client_traits::BlockChainClient;
+	use common_types::encoded::Block;
 	use ethcore::test_helpers::{EachBlockWith, TestBlockChainClient};
 	use ethereum_types::H256;
 	use parking_lot::RwLock;
@@ -424,7 +423,7 @@ mod test {
 			rlp.append(h);
 			rlp.append(&count);
 			rlp.append(&skip);
-			rlp.append(&if reverse {1u32} else {0u32});
+			rlp.append(&if reverse {1_u32} else {0_u32});
 			rlp.out()
 		}
 
@@ -433,7 +432,7 @@ mod test {
 			rlp.append(&n);
 			rlp.append(&count);
 			rlp.append(&skip);
-			rlp.append(&if reverse {1u32} else {0u32});
+			rlp.append(&if reverse {1_u32} else {0_u32});
 			rlp.out()
 		}
 
@@ -441,16 +440,16 @@ mod test {
 			Rlp::new(&rlp.unwrap().unwrap().1.out()).iter().map(|r| SyncHeader::from_rlp(r.as_raw().to_vec()).unwrap()).collect()
 		}
 
-		let mut client = TestBlockChainClient::new();
+		let client = TestBlockChainClient::new();
 		client.add_blocks(100, EachBlockWith::Nothing);
 		let blocks: Vec<_> = (0 .. 100)
-			.map(|i| (&client as &dyn BlockChainClient).block(BlockId::Number(i as BlockNumber)).map(|b| b.into_inner()).unwrap()).collect();
+			.map(|i| (&client as &dyn BlockChainClient).block(BlockId::Number(i as BlockNumber)).map(Block::into_inner).unwrap()).collect();
 		let headers: Vec<_> = blocks.iter().map(|b| SyncHeader::from_rlp(Rlp::new(b).at(0).unwrap().as_raw().to_vec()).unwrap()).collect();
 		let hashes: Vec<_> = headers.iter().map(|h| h.header.hash()).collect();
 
 		let queue = RwLock::new(VecDeque::new());
 		let ss = TestSnapshotService::new();
-		let io = TestIo::new(&mut client, &ss, &queue, None, None);
+		let io = TestIo::new(&client, &ss, &queue, None, None);
 
 		let unknown: H256 = H256::zero();
 		let result = SyncSupplier::return_block_headers(&io, &Rlp::new(&make_hash_req(&unknown, 1, 0, false)), 0);
@@ -489,7 +488,7 @@ mod test {
 		let large_num_blocks = 50;
 		let tx_per_block = 100;
 
-		let mut client = TestBlockChainClient::new();
+		let client = TestBlockChainClient::new();
 		client.add_blocks(large_num_blocks, EachBlockWith::Transactions(tx_per_block));
 
 		let mut small_rlp_request = RlpStream::new_list(small_num_blocks);
@@ -508,7 +507,7 @@ mod test {
 
 		let queue = RwLock::new(VecDeque::new());
 		let ss = TestSnapshotService::new();
-		let io = TestIo::new(&mut client, &ss, &queue, None, None);
+		let io = TestIo::new(&client, &ss, &queue, None, None);
 
 		let small_result = SyncSupplier::return_block_bodies(&io, &Rlp::new(&small_rlp_request.out()), 0);
 		let small_result = small_result.unwrap().unwrap().1;
@@ -521,11 +520,11 @@ mod test {
 
 	#[test]
 	fn return_nodes() {
-		let mut client = TestBlockChainClient::new();
+		let client = TestBlockChainClient::new();
 		let queue = RwLock::new(VecDeque::new());
 		let sync = dummy_sync_with_peer(H256::zero(), &client);
 		let ss = TestSnapshotService::new();
-		let mut io = TestIo::new(&mut client, &ss, &queue, None, None);
+		let mut io = TestIo::new(&client, &ss, &queue, None, None);
 
 		let mut node_list = RlpStream::new_list(3);
 		node_list.append(&H256::from_str("0000000000000000000000000000000000000000000000005555555555555555").unwrap());
@@ -545,18 +544,18 @@ mod test {
 		let rlp = Rlp::new(&rlp);
 		assert_eq!(Ok(1), rlp.item_count());
 
-		io.sender = Some(2usize);
+		io.sender = Some(2_usize);
 
-		SyncSupplier::dispatch_packet(&RwLock::new(sync), &mut io, 0usize, GetNodeDataPacket.id(), &node_request);
+		SyncSupplier::dispatch_packet(&RwLock::new(sync), &mut io, 0_usize, GetNodeDataPacket.id(), &node_request);
 		assert_eq!(1, io.packets.len());
 	}
 
 	#[test]
 	fn return_receipts_empty() {
-		let mut client = TestBlockChainClient::new();
+		let client = TestBlockChainClient::new();
 		let queue = RwLock::new(VecDeque::new());
 		let ss = TestSnapshotService::new();
-		let io = TestIo::new(&mut client, &ss, &queue, None, None);
+		let io = TestIo::new(&client, &ss, &queue, None, None);
 
 		let result = SyncSupplier::return_receipts(&io, &Rlp::new(&[0xc0]), 0);
 
@@ -565,11 +564,11 @@ mod test {
 
 	#[test]
 	fn return_receipts() {
-		let mut client = TestBlockChainClient::new();
+		let client = TestBlockChainClient::new();
 		let queue = RwLock::new(VecDeque::new());
 		let sync = dummy_sync_with_peer(H256::zero(), &client);
 		let ss = TestSnapshotService::new();
-		let mut io = TestIo::new(&mut client, &ss, &queue, None, None);
+		let mut io = TestIo::new(&client, &ss, &queue, None, None);
 
 		let mut receipt_list = RlpStream::new_list(4);
 		receipt_list.append(&H256::from_str("0000000000000000000000000000000000000000000000005555555555555555").unwrap());
@@ -588,8 +587,8 @@ mod test {
 		// the length of two rlp-encoded receipts
 		assert_eq!(603, rlp_result.unwrap().1.out().len());
 
-		io.sender = Some(2usize);
-		SyncSupplier::dispatch_packet(&RwLock::new(sync), &mut io, 0usize, GetReceiptsPacket.id(), &receipts_request);
+		io.sender = Some(2_usize);
+		SyncSupplier::dispatch_packet(&RwLock::new(sync), &mut io, 0_usize, GetReceiptsPacket.id(), &receipts_request);
 		assert_eq!(1, io.packets.len());
 	}
 }

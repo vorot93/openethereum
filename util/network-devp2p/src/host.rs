@@ -124,15 +124,15 @@ impl<'s> NetworkContext<'s> {
 		session: Option<SharedSession>,
 		sessions: Arc<RwLock<Slab<SharedSession>>>,
 		reserved_peers: &'s HashSet<NodeId>,
-	) -> NetworkContext<'s> {
-		let id = session.as_ref().map(|s| s.lock().token());
-		NetworkContext {
+	) -> Self {
+		let session_id = session.as_ref().map(|s| s.lock().token());
+		Self {
 			io,
 			protocol,
-			session_id: id,
+			session_id,
 			session,
 			sessions,
-			reserved_peers: reserved_peers,
+			reserved_peers,
 		}
 	}
 
@@ -188,7 +188,7 @@ impl<'s> NetworkContextTrait for NetworkContext<'s> {
 	}
 
 	fn peer_client_version(&self, peer: PeerId) -> ClientVersion {
-		self.resolve_session(peer).map_or(ClientVersion::from("unknown").to_owned(), |s| s.lock().info.client_version.clone())
+		self.resolve_session(peer).map_or(ClientVersion::from("unknown"), |s| s.lock().info.client_version.clone())
 	}
 
 	fn session_info(&self, peer: PeerId) -> Option<SessionInfo> {
@@ -205,8 +205,7 @@ impl<'s> NetworkContextTrait for NetworkContext<'s> {
 	fn is_reserved_peer(&self, peer: PeerId) -> bool {
 		self.session_info(peer)
 			.and_then(|info| info.id)
-			.map(|node| self.reserved_peers.contains(&node))
-			.unwrap_or(false)
+			.map_or(false, |node| self.reserved_peers.contains(&node))
 	}
 
 	fn payload_soft_limit(&self) -> usize {
@@ -261,7 +260,7 @@ struct ProtocolTimer {
 
 /// Root IO handler. Manages protocol handlers, IO timers and network connections.
 ///
-/// NOTE: must keep the lock in order of: reserved_nodes (rwlock) -> session (mutex, from sessions)
+/// NOTE: must keep the lock in order of: `reserved_nodes` (rwlock) -> `session` (mutex, from sessions)
 pub struct Host {
 	pub info: RwLock<HostInfo>,
 	udp_socket: Mutex<Option<UdpSocket>>,
@@ -279,13 +278,13 @@ pub struct Host {
 
 impl Host {
 	/// Create a new instance
-	pub fn new(mut config: NetworkConfiguration, filter: Option<Arc<dyn ConnectionFilter>>) -> Result<Host, Error> {
+	pub fn new(mut config: NetworkConfiguration, filter: Option<Arc<dyn ConnectionFilter>>) -> Result<Self, Error> {
 		let mut listen_address = match config.listen_address {
 			None => SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), DEFAULT_PORT)),
 			Some(addr) => addr,
 		};
 
-		let keys = if let Some(ref secret) = config.use_secret {
+		let keys = if let Some(secret) = &config.use_secret {
 			KeyPair::from_secret(secret.clone())?
 		} else {
 			config.config_path.clone().and_then(|ref p| load_key(Path::new(&p)))
@@ -310,7 +309,7 @@ impl Host {
 		let reserved_nodes = config.reserved_nodes.clone();
 		config.max_handshakes = min(config.max_handshakes, MAX_HANDSHAKES as u32);
 
-		let mut host = Host {
+		let mut host = Self {
 			info: RwLock::new(HostInfo {
 				keys,
 				config,
@@ -352,7 +351,7 @@ impl Host {
 				let entry = NodeEntry { endpoint: n.endpoint.clone(), id: n.id };
 
 				self.nodes.write().add_node(n);
-				if let Some(ref mut discovery) = *self.discovery.lock() {
+				if let Some(discovery) = self.discovery.lock().as_mut() {
 					discovery.add_node(entry);
 				}
 			}
@@ -366,7 +365,7 @@ impl Host {
 		self.reserved_nodes.write().insert(n.id);
 		self.nodes.write().add_node(Node::new(entry.id, entry.endpoint.clone()));
 
-		if let Some(ref mut discovery) = *self.discovery.lock() {
+		if let Some(discovery) = &mut *self.discovery.lock() {
 			discovery.add_node(entry);
 		}
 
@@ -523,8 +522,8 @@ impl Host {
 		let mut ingress = 0;
 		for s in self.sessions.read().iter() {
 			match s.try_lock() {
-				Some(ref s) if s.is_ready() && s.info.originated => egress += 1,
-				Some(ref s) if s.is_ready() && !s.info.originated => ingress += 1,
+				Some(s) if s.is_ready() && s.info.originated => egress += 1,
+				Some(s) if s.is_ready() && !s.info.originated => ingress += 1,
 				_ => handshakes +=1,
 			}
 		}
@@ -559,7 +558,7 @@ impl Host {
 		};
 		let (_, egress_count, ingress_count) = self.session_count();
 
-		return egress_count + ingress_count >= min_peers as usize;
+		egress_count + ingress_count >= min_peers as usize
 	}
 
 	fn connect_peers(&self, io: &IoContext<NetworkIoMessage>) {
@@ -592,10 +591,10 @@ impl Host {
 
 		// iterate over all nodes, reserved ones coming first.
 		// if we are pinned to only reserved nodes, ignore all others.
-		let nodes = reserved_nodes.iter().cloned().chain(if !pin {
-			self.nodes.read().nodes(&allow_ips)
-		} else {
+		let nodes = reserved_nodes.iter().cloned().chain(if pin {
 			Vec::new()
+		} else {
+			self.nodes.read().nodes(&allow_ips)
 		});
 
 		let max_handshakes_per_round = max_handshakes / 2;
@@ -604,7 +603,7 @@ impl Host {
 				!self.have_session(id) &&
 				!self.connecting_to(id) &&
 				*id != self_id &&
-				self.filter.as_ref().map_or(true, |f| f.connection_allowed(&self_id, &id, ConnectionDirection::Outbound))
+				self.filter.as_ref().map_or(true, |f| f.connection_allowed(&self_id, id, ConnectionDirection::Outbound))
 			).take(min(max_handshakes_per_round, max_handshakes - handshake_count)) {
 			self.connect_peer(&id, io);
 			started += 1;
@@ -639,7 +638,7 @@ impl Host {
 				},
 				Err(e) => {
 					debug!(target: "network", "{}: Can't connect to address {:?}: {:?}", id, address, e);
-					self.nodes.write().note_failure(&id);
+					self.nodes.write().note_failure(id);
 					return;
 				}
 			}
@@ -665,13 +664,13 @@ impl Host {
 			}
 		});
 
-		match token {
-			Some(t) => io.register_stream(t).map(|_| ()).map_err(Into::into),
-			None => {
-				debug!(target: "network", "Max sessions reached");
-				Ok(())
-			}
+		if let Some(t) = token {
+			io.register_stream(t)?;
+		} else {
+			debug!(target: "network", "Max sessions reached");
 		}
+
+		Ok(())
 	}
 
 	fn accept(&self, io: &IoContext<NetworkIoMessage>) {
@@ -717,7 +716,7 @@ impl Host {
 		let mut kill = false;
 		let session = { self.sessions.read().get(token).cloned() };
 		let mut ready_id = None;
-		if let Some(session) = session.clone() {
+		if let Some(session) = session {
 			{
 				loop {
 					let session_result = session.lock().readable(io, &self.info.read());
@@ -731,7 +730,7 @@ impl Host {
 									if let Some(id) = s.id() {
 										if !reserved_nodes.contains(id) {
 											let mut nodes = self.nodes.write();
-											nodes.note_failure(&id);
+											nodes.note_failure(id);
 											nodes.mark_as_useless(id);
 										}
 									}
@@ -765,16 +764,15 @@ impl Host {
 							// Outgoing connections are allowed as long as their count is <= min_peers
 							// Incoming connections are allowed to take all of the max_peers reserve, or at most half of the slots.
 							let max_ingress = max(max_peers - min_peers, min_peers / 2);
-							if reserved_only ||
+							if (reserved_only ||
 								(s.info.originated && egress_count > min_peers) ||
-								(!s.info.originated && ingress_count > max_ingress) {
-								if !reserved_nodes.contains(&id) {
-									// only proceed if the connecting peer is reserved.
-									trace!(target: "network", "Disconnecting non-reserved peer {:?}", id);
-									s.disconnect(io, DisconnectReason::TooManyPeers);
-									kill = true;
-									break;
-								}
+								(!s.info.originated && ingress_count > max_ingress)) &&
+								!reserved_nodes.contains(&id) {
+								// only proceed if the connecting peer is reserved.
+								trace!(target: "network", "Disconnecting non-reserved peer {:?}", id);
+								s.disconnect(io, DisconnectReason::TooManyPeers);
+								kill = true;
+								break;
 							}
 
 							if !self.filter.as_ref().map_or(true, |f| f.connection_allowed(&self_id, &id, ConnectionDirection::Inbound)) {
@@ -795,8 +793,7 @@ impl Host {
 									let mut nodes = self.nodes.write();
 									if !nodes.contains(&entry.id) {
 										nodes.add_node(Node::new(entry.id, entry.endpoint.clone()));
-										let mut discovery = self.discovery.lock();
-										if let Some(ref mut discovery) = *discovery {
+										if let Some(discovery) = self.discovery.lock().as_mut() {
 											discovery.add_node(entry);
 										}
 									}
@@ -848,7 +845,7 @@ impl Host {
 				for p in ready_data {
 					let reserved = self.reserved_nodes.read();
 					if let Some(h) = handlers.get(&p) {
-						h.connected(&NetworkContext::new(io, p, Some(session.clone()), self.sessions.clone(), &reserved), &token);
+						h.connected(&NetworkContext::new(io, p, Some(session.clone()), self.sessions.clone(), &reserved), token);
 						// accumulate pending packets.
 						let mut session = session.lock();
 						packet_data.extend(session.mark_connected(p));
@@ -859,7 +856,7 @@ impl Host {
 			for (p, packet_id, data) in packet_data {
 				let reserved = self.reserved_nodes.read();
 				if let Some(h) = handlers.get(&p) {
-					h.read(&NetworkContext::new(io, p, Some(session.clone()), self.sessions.clone(), &reserved), &token, packet_id, &data);
+					h.read(&NetworkContext::new(io, p, Some(session.clone()), self.sessions.clone(), &reserved), token, packet_id, &data);
 				}
 			}
 		}
@@ -868,7 +865,7 @@ impl Host {
 	fn discovery_readable(&self, io: &IoContext<NetworkIoMessage>) {
 		let node_changes = match (self.udp_socket.lock().as_ref(), self.discovery.lock().as_mut()) {
 			(Some(udp_socket), Some(discovery)) => {
-				let mut buf = [0u8; MAX_DATAGRAM_SIZE];
+				let mut buf = [0_u8; MAX_DATAGRAM_SIZE];
 				let writable = discovery.any_sends_queued();
 				let res = match udp_socket.recv_from(&mut buf) {
 					Ok(Some((len, address))) => discovery.on_packet(&buf[0..len], address).unwrap_or_else(|e| {
@@ -960,7 +957,7 @@ impl Host {
 		for p in to_disconnect {
 			let reserved = self.reserved_nodes.read();
 			if let Some(h) = self.handlers.read().get(&p) {
-				h.disconnected(&NetworkContext::new(io, p, expired_session.clone(), self.sessions.clone(), &reserved), &token);
+				h.disconnected(&NetworkContext::new(io, p, expired_session.clone(), self.sessions.clone(), &reserved), token);
 			}
 		}
 		if deregister {
@@ -1013,10 +1010,11 @@ impl IoHandler<NetworkIoMessage> for Host {
 
 	fn stream_hup(&self, io: &IoContext<NetworkIoMessage>, stream: StreamToken) {
 		trace!(target: "network", "Hup: {}", stream);
-		match stream {
-			FIRST_SESSION ..= LAST_SESSION => self.connection_closed(stream, io),
-			_ => warn!(target: "network", "Unexpected hup"),
-		};
+		if let FIRST_SESSION ..=LAST_SESSION = stream {
+			self.connection_closed(stream, io);
+		} else {
+			warn!(target: "network", "Unexpected hup");
+		}
 	}
 
 	fn stream_readable(&self, io: &IoContext<NetworkIoMessage>, stream: StreamToken) {
@@ -1054,7 +1052,7 @@ impl IoHandler<NetworkIoMessage> for Host {
 				if !self.has_enough_peers() {
 					return;
 				}
-				self.discovery.lock().as_mut().map(|d| d.refresh());
+				if let Some(d) = self.discovery.lock().as_mut() { d.refresh(); }
 				io.update_registration(DISCOVERY).unwrap_or_else(|e| debug!("Error updating discovery registration: {:?}", e));
 			},
 			FAST_DISCOVERY_REFRESH => {
@@ -1062,11 +1060,11 @@ impl IoHandler<NetworkIoMessage> for Host {
 				if self.has_enough_peers() {
 					return;
 				}
-				self.discovery.lock().as_mut().map(|d| d.refresh());
+				if let Some(d) = self.discovery.lock().as_mut() { d.refresh(); }
 				io.update_registration(DISCOVERY).unwrap_or_else(|e| debug!("Error updating discovery registration: {:?}", e));
 			},
 			DISCOVERY_ROUND => {
-				self.discovery.lock().as_mut().map(|d| d.round());
+				if let Some(d) = self.discovery.lock().as_mut() { d.round(); }
 				io.update_registration(DISCOVERY).unwrap_or_else(|e| debug!("Error updating discovery registration: {:?}", e));
 			},
 			NODE_TABLE => {
@@ -1075,15 +1073,17 @@ impl IoHandler<NetworkIoMessage> for Host {
 				nodes.clear_useless();
 				nodes.save();
 			},
-			_ => match self.timers.read().get(&token).cloned() {
-				Some(timer) => match self.handlers.read().get(&timer.protocol).cloned() {
-					None => { warn!(target: "network", "No handler found for protocol: {:?}", timer.protocol) },
-					Some(h) => {
+			_ => {
+				if let Some(timer) = self.timers.read().get(&token).cloned() {
+					if let Some(h) = self.handlers.read().get(&timer.protocol).cloned() {
 						let reserved = self.reserved_nodes.read();
 						h.timeout(&NetworkContext::new(io, timer.protocol, None, self.sessions.clone(), &reserved), timer.token);
+					} else {
+						warn!(target: "network", "No handler found for protocol: {:?}", timer.protocol);
 					}
-				},
-				None => { warn!("Unknown timer token: {}", token); } // timer is not registerd through us
+				} else {
+					warn!("Unknown timer token: {}", token);
+				} // timer is not registered through us
 			}
 		}
 	}
@@ -1092,7 +1092,7 @@ impl IoHandler<NetworkIoMessage> for Host {
 		if self.stopping.load(AtomicOrdering::Acquire) {
 			return;
 		}
-		match *message {
+		match message {
 			NetworkIoMessage::AddHandler {
 				ref handler,
 				ref protocol,
@@ -1128,7 +1128,7 @@ impl IoHandler<NetworkIoMessage> for Host {
 				self.timers.write().insert(handler_token, ProtocolTimer { protocol: *protocol, token: *token });
 				io.register_timer(handler_token, *delay).unwrap_or_else(|e| debug!("Error registering timer {}: {:?}", token, e));
 			},
-			NetworkIoMessage::Disconnect(ref peer) => {
+			NetworkIoMessage::Disconnect(peer) => {
 				let session = { self.sessions.read().get(*peer).cloned() };
 				if let Some(session) = session {
 					session.lock().disconnect(io, DisconnectReason::DisconnectRequested);
@@ -1136,13 +1136,13 @@ impl IoHandler<NetworkIoMessage> for Host {
 				trace!(target: "network", "Disconnect requested {}", peer);
 				self.kill_connection(*peer, io, false);
 			},
-			NetworkIoMessage::DisablePeer(ref peer) => {
+			NetworkIoMessage::DisablePeer(peer) => {
 				let session = { self.sessions.read().get(*peer).cloned() };
 				if let Some(session) = session {
 					session.lock().disconnect(io, DisconnectReason::DisconnectRequested);
 					if let Some(id) = session.lock().id() {
 						let mut nodes = self.nodes.write();
-						nodes.note_failure(&id);
+						nodes.note_failure(id);
 						nodes.mark_as_useless(id);
 					}
 				}

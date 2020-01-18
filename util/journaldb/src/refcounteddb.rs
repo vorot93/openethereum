@@ -68,16 +68,16 @@ pub struct RefCountedDB {
 
 impl RefCountedDB {
 	/// Create a new instance given a `backing` database.
-	pub fn new(backing: Arc<dyn KeyValueDB>, column: u32) -> RefCountedDB {
+	pub fn new(backing: Arc<dyn KeyValueDB>, column: u32) -> Self {
 		let latest_era = backing.get(column, &LATEST_ERA_KEY)
 			.expect("Low-level database error.")
 			.map(|v| decode::<u64>(&v).expect("decoding db value failed"));
 
-		RefCountedDB {
+		Self {
 			forward: OverlayDB::new(backing.clone(), column),
 			backing,
-			inserts: vec![],
-			removes: vec![],
+			inserts: Vec::new(),
+			removes: Vec::new(),
 			latest_era,
 			column,
 		}
@@ -94,13 +94,13 @@ impl HashDB<KeccakHasher, DBValue> for RefCountedDB {
 
 impl JournalDB for RefCountedDB {
 	fn boxed_clone(&self) -> Box<dyn JournalDB> {
-		Box::new(RefCountedDB {
+		Box::new(Self {
 			forward: self.forward.clone(),
 			backing: self.backing.clone(),
 			latest_era: self.latest_era,
 			inserts: self.inserts.clone(),
 			removes: self.removes.clone(),
-			column: self.column.clone(),
+			column: self.column,
 		})
 	}
 
@@ -120,14 +120,14 @@ impl JournalDB for RefCountedDB {
 	fn latest_era(&self) -> Option<u64> { self.latest_era }
 
 	fn state(&self, id: &H256) -> Option<Bytes> {
-		self.backing.get_by_prefix(self.column, &id[0..DB_PREFIX_LEN]).map(|b| b.into_vec())
+		self.backing.get_by_prefix(self.column, &id[0..DB_PREFIX_LEN]).map(<[u8]>::into_vec)
 	}
 
 	fn journal_under(&mut self, batch: &mut DBTransaction, now: u64, id: &H256) -> io::Result<u32> {
 		// record new commit's details.
 		let mut db_key = DatabaseKey {
 			era: now,
-			index: 0usize,
+			index: 0_usize,
 		};
 		let mut last;
 
@@ -167,7 +167,7 @@ impl JournalDB for RefCountedDB {
 		// apply old commits' details
 		let mut db_key = DatabaseKey {
 			era: end_era,
-			index: 0usize,
+			index: 0_usize,
 		};
 		let mut last;
 		while let Some(rlp_data) = {
@@ -225,7 +225,7 @@ mod tests {
 	use keccak_hash::keccak;
 	use hash_db::{HashDB, EMPTY_PREFIX};
 	use super::*;
-	use kvdb_memorydb;
+	
 	use crate::{JournalDB, inject_batch, commit_batch};
 
 	fn new_db() -> RefCountedDB {

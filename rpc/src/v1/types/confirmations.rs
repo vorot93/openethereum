@@ -40,7 +40,7 @@ pub struct ConfirmationRequest {
 
 impl From<helpers::ConfirmationRequest> for ConfirmationRequest {
 	fn from(c: helpers::ConfirmationRequest) -> Self {
-		ConfirmationRequest {
+		Self {
 			id: c.id,
 			payload: c.payload.into(),
 			origin: c.origin,
@@ -56,12 +56,12 @@ impl fmt::Display for ConfirmationRequest {
 
 impl fmt::Display for ConfirmationPayload {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match *self {
-			ConfirmationPayload::SendTransaction(ref transaction) => write!(f, "{}", transaction),
-			ConfirmationPayload::SignTransaction(ref transaction) => write!(f, "(Sign only) {}", transaction),
-			ConfirmationPayload::EthSignMessage(ref sign) => write!(f, "{}", sign),
-			ConfirmationPayload::EIP191SignMessage(ref sign) => write!(f, "{}", sign),
-			ConfirmationPayload::Decrypt(ref decrypt) => write!(f, "{}", decrypt),
+		match self {
+			Self::SendTransaction(transaction) => write!(f, "{}", transaction),
+			Self::SignTransaction(transaction) => write!(f, "(Sign only) {}", transaction),
+			Self::EthSignMessage(sign) => write!(f, "{}", sign),
+			Self::EIP191SignMessage(sign) => write!(f, "{}", sign),
+			Self::Decrypt(decrypt) => write!(f, "{}", decrypt),
 		}
 	}
 }
@@ -88,7 +88,7 @@ pub struct EIP191SignRequest {
 
 impl From<(H160, H256)> for EIP191SignRequest {
 	fn from(tuple: (H160, H256)) -> Self {
-		EIP191SignRequest {
+		Self {
 			address: tuple.0,
 			data: tuple.1,
 		}
@@ -108,7 +108,7 @@ impl fmt::Display for EIP191SignRequest {
 
 impl From<(H160, Bytes)> for EthSignRequest {
 	fn from(tuple: (H160, Bytes)) -> Self {
-		EthSignRequest {
+		Self {
 			address: tuple.0,
 			data: tuple.1,
 		}
@@ -138,7 +138,7 @@ pub struct DecryptRequest {
 
 impl From<(H160, Bytes)> for DecryptRequest {
 	fn from(tuple: (H160, Bytes)) -> Self {
-		DecryptRequest {
+		Self {
 			address: tuple.0,
 			msg: tuple.1,
 		}
@@ -172,11 +172,11 @@ impl Serialize for ConfirmationResponse {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 		where S: Serializer
 	{
-		match *self {
-			ConfirmationResponse::SendTransaction(ref hash) => hash.serialize(serializer),
-			ConfirmationResponse::SignTransaction(ref rlp) => rlp.serialize(serializer),
-			ConfirmationResponse::Signature(ref signature) => signature.serialize(serializer),
-			ConfirmationResponse::Decrypt(ref data) => data.serialize(serializer),
+		match self {
+			Self::SendTransaction(hash) => hash.serialize(serializer),
+			Self::SignTransaction(rlp) => rlp.serialize(serializer),
+			Self::Signature(signature) => signature.serialize(serializer),
+			Self::Decrypt(data) => data.serialize(serializer),
 		}
 	}
 }
@@ -211,17 +211,17 @@ pub enum ConfirmationPayload {
 impl From<helpers::ConfirmationPayload> for ConfirmationPayload {
 	fn from(c: helpers::ConfirmationPayload) -> Self {
 		match c {
-			helpers::ConfirmationPayload::SendTransaction(t) => ConfirmationPayload::SendTransaction(t.into()),
-			helpers::ConfirmationPayload::SignTransaction(t) => ConfirmationPayload::SignTransaction(t.into()),
-			helpers::ConfirmationPayload::EthSignMessage(address, data) => ConfirmationPayload::EthSignMessage(EthSignRequest {
+			helpers::ConfirmationPayload::SendTransaction(t) => Self::SendTransaction(t.into()),
+			helpers::ConfirmationPayload::SignTransaction(t) => Self::SignTransaction(t.into()),
+			helpers::ConfirmationPayload::EthSignMessage(address, data) => Self::EthSignMessage(EthSignRequest {
 				address,
 				data: data.into(),
 			}),
-			helpers::ConfirmationPayload::SignMessage(address, data) => ConfirmationPayload::EIP191SignMessage(EIP191SignRequest {
+			helpers::ConfirmationPayload::SignMessage(address, data) => Self::EIP191SignMessage(EIP191SignRequest {
 				address,
 				data,
 			}),
-			helpers::ConfirmationPayload::Decrypt(address, msg) => ConfirmationPayload::Decrypt(DecryptRequest {
+			helpers::ConfirmationPayload::Decrypt(address, msg) => Self::Decrypt(DecryptRequest {
 				address,
 				msg: msg.into(),
 			}),
@@ -231,12 +231,11 @@ impl From<helpers::ConfirmationPayload> for ConfirmationPayload {
 
 impl ConfirmationPayload {
 	pub fn sender(&self) -> Option<&H160> {
-		match *self {
-			ConfirmationPayload::SendTransaction(ref request) => request.from.as_ref(),
-			ConfirmationPayload::SignTransaction(ref request) => request.from.as_ref(),
-			ConfirmationPayload::EthSignMessage(ref request) => Some(&request.address),
-			ConfirmationPayload::EIP191SignMessage(ref request) => Some(&request.address),
-			ConfirmationPayload::Decrypt(ref request) => Some(&request.address),
+		match self {
+			Self::SendTransaction(request) | Self::SignTransaction(request) => request.from.as_ref(),
+			Self::EthSignMessage(request) => Some(&request.address),
+			Self::EIP191SignMessage(request) => Some(&request.address),
+			Self::Decrypt(request) => Some(&request.address),
 		}
 	}
 }
@@ -273,7 +272,7 @@ impl<A, B> From<A> for Either<A, B> where
 	B: fmt::Debug + Clone,
 {
 	fn from(a: A) -> Self {
-		Either::Either(a)
+		Self::Either(a)
 	}
 }
 
@@ -284,9 +283,9 @@ impl<A, B> Serialize for Either<A, B>  where
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 		where S: Serializer
 	{
-		match *self {
-			Either::Either(ref a) => a.serialize(serializer),
-			Either::Or(ref b) => b.serialize(serializer),
+		match self {
+			Self::Either(a) => a.serialize(serializer),
+			Self::Or(b) => b.serialize(serializer),
 		}
 	}
 }
@@ -305,7 +304,7 @@ mod tests {
 		// given
 		let request = helpers::ConfirmationRequest {
 			id: 15.into(),
-			payload: helpers::ConfirmationPayload::EthSignMessage(Address::from_low_u64_be(1), vec![5].into()),
+			payload: helpers::ConfirmationPayload::EthSignMessage(Address::from_low_u64_be(1), vec![5]),
 			origin: Origin::Rpc("test service".into()),
 		};
 
@@ -379,7 +378,7 @@ mod tests {
 		let request = helpers::ConfirmationRequest {
 			id: 15.into(),
 			payload: helpers::ConfirmationPayload::Decrypt(
-				Address::from_low_u64_be(10), vec![1, 2, 3].into(),
+				Address::from_low_u64_be(10), vec![1, 2, 3],
 			),
 			origin: Default::default(),
 		};

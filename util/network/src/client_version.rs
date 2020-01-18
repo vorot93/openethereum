@@ -25,14 +25,12 @@ use std::fmt;
 const LEGACY_CLIENT_ID_PREFIX: &str = "Parity";
 const PARITY_CLIENT_ID_PREFIX: &str = "Parity-Ethereum";
 
-lazy_static! {
 /// Parity versions starting from this will accept block bodies requests
 /// of 256 bodies
-	static ref PARITY_CLIENT_LARGE_REQUESTS_VERSION: Version = Version::parse("2.4.0").unwrap();
-}
+const PARITY_CLIENT_LARGE_REQUESTS_VERSION: Version = Version { major: 2, minor: 4, patch: 0, pre: Vec::new(), build: Vec::new() };
 
 /// Description of the software version running in a peer
-/// according to https://github.com/ethereum/wiki/wiki/Client-Version-Strings
+/// according to <https://github.com/ethereum/wiki/wiki/Client-Version-Strings>
 /// This structure as it is represents the format used by Parity clients. Other
 /// vendors may provide additional fields.
 #[derive(Clone,Debug,PartialEq,Eq,Serialize)]
@@ -47,7 +45,7 @@ pub struct ParityClientData {
 	can_handle_large_requests: bool,
 }
 
-/// Accessor methods for ParityClientData. This will probably
+/// Accessor methods for `ParityClientData`. This will probably
 /// need to be abstracted away into a trait.
 impl ParityClientData {
 	fn new(
@@ -58,17 +56,17 @@ impl ParityClientData {
 		compiler: String,
 	) -> Self {
 		// Flags logic
-		let can_handle_large_requests = &semver >= &PARITY_CLIENT_LARGE_REQUESTS_VERSION;
+		let can_handle_large_requests = semver >= PARITY_CLIENT_LARGE_REQUESTS_VERSION;
 
 		// Instantiate and return
-		ParityClientData {
-			name: name,
-			identity: identity,
-			semver: semver,
-			os: os,
-			compiler: compiler,
+		Self {
+			name,
+			identity,
+			semver,
+			os,
+			compiler,
 
-			can_handle_large_requests: can_handle_large_requests,
+			can_handle_large_requests,
 		}
 	}
 
@@ -77,10 +75,10 @@ impl ParityClientData {
 	}
 
 	fn identity(&self) -> Option<&str> {
-		self.identity.as_ref().map(String::as_str)
+		self.identity.as_deref()
 	}
 
-	fn semver(&self) -> &Version {
+	const fn semver(&self) -> &Version {
 		&self.semver
 	}
 
@@ -92,13 +90,13 @@ impl ParityClientData {
 		self.compiler.as_str()
 	}
 
-	fn can_handle_large_requests(&self) -> bool {
+	const fn can_handle_large_requests(&self) -> bool {
 		self.can_handle_large_requests
 	}
 }
 
 /// Enum describing the version of the software running on a peer.
-#[derive(Clone,Debug,Eq,PartialEq,Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub enum ClientVersion {
 	/// The peer runs software from parity and the string format is known
 	ParityClient(
@@ -114,16 +112,16 @@ pub enum ClientVersion {
 
 impl Default for ClientVersion {
 	fn default() -> Self {
-		ClientVersion::Other("".to_owned())
+		Self::Other("".to_owned())
 	}
 }
 
 /// Provide information about what a particular version of a
 /// peer software can do
 pub trait ClientCapabilities {
-	/// Parity versions before PARITY_CLIENT_LARGE_REQUESTS_VERSION would not
+	/// Parity versions before `PARITY_CLIENT_LARGE_REQUESTS_VERSION` would not
 	/// check the accumulated size of a packet when building a response to a
-	/// GET_BLOCK_BODIES request. If the packet was larger than a given limit,
+	/// `GET_BLOCK_BODIES` request. If the packet was larger than a given limit,
 	/// instead of sending fewer blocks no packet would get sent at all. Query
 	/// if this version can handle requests for a large number of block bodies.
 	fn can_handle_large_requests(&self) -> bool;
@@ -136,17 +134,17 @@ pub trait ClientCapabilities {
 impl ClientCapabilities for ClientVersion {
 	fn can_handle_large_requests(&self) -> bool {
 		match self {
-			ClientVersion::ParityClient(data) => data.can_handle_large_requests(),
-			ClientVersion::ParityUnknownFormat(_) => false, // Play it safe
-			ClientVersion::Other(_) => true // As far as we know
+			Self::ParityClient(data) => data.can_handle_large_requests(),
+			Self::ParityUnknownFormat(_) => false, // Play it safe
+			Self::Other(_) => true // As far as we know
 		}
 	}
 
 	fn accepts_service_transaction(&self) -> bool {
 		match self {
-			ClientVersion::ParityClient(_) => true,
-			ClientVersion::ParityUnknownFormat(_) => true,
-			ClientVersion::Other(_) => false
+			Self::ParityClient(_) => true,
+			Self::ParityUnknownFormat(_) => true,
+			Self::Other(_) => false
 		}
 	}
 
@@ -161,7 +159,7 @@ fn is_parity(client_id: &str) -> bool {
 fn parse_parity_format(client_version: &str) -> Result<ParityClientData, ()> {
 	const PARITY_ID_STRING_MINIMUM_TOKENS: usize = 4;
 
-	let tokens: Vec<&str> = client_version.split("/").collect();
+	let tokens: Vec<&str> = client_version.split('/').collect();
 
 	if tokens.len() < PARITY_ID_STRING_MINIMUM_TOKENS {
 		return Err(())
@@ -193,24 +191,24 @@ fn parse_parity_format(client_version: &str) -> Result<ParityClientData, ()> {
 }
 
 /// Parse a version string and return the corresponding
-/// ClientVersion. Only Parity clients are destructured right now, other
+/// `ClientVersion`. Only Parity clients are destructured right now, other
 /// strings will just get wrapped in a variant so that the information is
 /// not lost.
-/// The parsing for parity may still fail, in which case return a ParityUnknownFormat with
-/// the original version string. TryFrom would be a better trait to implement.
+/// The parsing for parity may still fail, in which case return a `ParityUnknownFormat` with
+/// the original version string. `TryFrom` would be a better trait to implement.
 impl<T> From<T> for ClientVersion
 where T: AsRef<str> {
 	fn from(client_version: T) -> Self {
 		let client_version_str: &str = client_version.as_ref();
 
 		if !is_parity(client_version_str) {
-			return ClientVersion::Other(client_version_str.to_owned());
+			return Self::Other(client_version_str.to_owned());
 		}
 
 		if let Ok(data) = parse_parity_format(client_version_str) {
-			ClientVersion::ParityClient(data)
+			Self::ParityClient(data)
 		} else {
-			ClientVersion::ParityUnknownFormat(client_version_str.to_owned())
+			Self::ParityUnknownFormat(client_version_str.to_owned())
 		}
 	}
 }
@@ -230,15 +228,14 @@ fn format_parity_version_string(client_version: &ParityClientData, f: &mut fmt::
 impl fmt::Display for ClientVersion {
 	fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
 		match self {
-			ClientVersion::ParityClient(data) => format_parity_version_string(data, f),
-			ClientVersion::ParityUnknownFormat(id) => write!(f, "{}", id),
-			ClientVersion::Other(id) => write!(f, "{}", id)
+			Self::ParityClient(data) => format_parity_version_string(data, f),
+			Self::ParityUnknownFormat(id) | Self::Other(id) => write!(f, "{}", id),
 		}
 	}
 }
 
 fn get_number_from_version(version: &str) -> Option<&str> {
-	if version.starts_with("v") {
+	if version.starts_with('v') {
 		return version.get(1..);
 	}
 
@@ -383,7 +380,7 @@ pub mod tests {
 
 		let client_version = ClientVersion::from(client_version_string.as_str());
 
-		let parity_unknown = ClientVersion::ParityUnknownFormat(client_version_string.to_string());
+		let parity_unknown = ClientVersion::ParityUnknownFormat(client_version_string);
 
 		assert_eq!(client_version, parity_unknown);
 	}
@@ -399,7 +396,7 @@ pub mod tests {
 
 		let client_version = ClientVersion::from(client_version_string.as_str());
 
-		let parity_unknown = ClientVersion::ParityUnknownFormat(client_version_string.to_string());
+		let parity_unknown = ClientVersion::ParityUnknownFormat(client_version_string);
 
 		assert_eq!(client_version, parity_unknown);
 	}
@@ -416,7 +413,7 @@ pub mod tests {
 
 		let client_version = ClientVersion::from(client_version_string.as_str());
 
-		let parity_unknown = ClientVersion::ParityUnknownFormat(client_version_string.to_string());
+		let parity_unknown = ClientVersion::ParityUnknownFormat(client_version_string);
 
 		assert_eq!(client_version, parity_unknown);
 	}
@@ -459,15 +456,9 @@ pub mod tests {
 
 	#[test]
 	pub fn client_capabilities_when_parity_beta_version_then_not_handles_large_requests_true() {
-		let client_version_string: String = format!(
-			"{}/v{}/{}/{}",
-			"Parity-Ethereum",
-			"2.4.0-beta",
-			"x86_64-linux-gnu",
-			"rustc1.31.1")
-			.to_string();
+		let client_version_string = "Parity-Ethereum/v2.4.0-beta/x86_64-linux-gnu/rustc1.31.1";
 
-		let client_version = ClientVersion::from(client_version_string.as_str());
+		let client_version = ClientVersion::from(client_version_string);
 
 		assert!(!client_version.can_handle_large_requests());
 	}
@@ -503,13 +494,13 @@ pub mod tests {
 	fn is_parity_when_empty_then_false() {
 		let client_id = "";
 
-		assert!(!is_parity(&client_id));
+		assert!(!is_parity(client_id));
 	}
 
 	#[test]
 	fn is_parity_when_other_then_false() {
 		let client_id = "other";
 
-		assert!(!is_parity(&client_id));
+		assert!(!is_parity(client_id));
 	}
 }

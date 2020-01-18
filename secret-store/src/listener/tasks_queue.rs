@@ -29,7 +29,7 @@ pub struct TasksQueue<Task: Clone> {
 impl<Task> TasksQueue<Task> where Task: Clone {
 	/// Create new tasks queue.
 	pub fn new() -> Self {
-		TasksQueue {
+		Self {
 			service_event: Condvar::new(),
 			service_tasks: Mutex::new(VecDeque::new()),
 		}

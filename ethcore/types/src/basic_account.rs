@@ -37,10 +37,7 @@ impl rlp::Encodable for BasicAccount {
 	fn rlp_append(&self, stream: &mut rlp::RlpStream) {
 		let use_short_version = self.code_version == U256::zero();
 
-		match use_short_version {
-			true => { stream.begin_list(4); }
-			false => { stream.begin_list(5); }
-		}
+		stream.begin_list(if use_short_version { 4 } else { 5 });
 
 		stream.append(&self.nonce);
 		stream.append(&self.balance);
@@ -61,7 +58,7 @@ impl rlp::Decodable for BasicAccount {
 			_ => return Err(rlp::DecoderError::RlpIncorrectListLen),
 		};
 
-		Ok(BasicAccount {
+		Ok(Self {
 			nonce: rlp.val_at(0)?,
 			balance: rlp.val_at(1)?,
 			storage_root: rlp.val_at(2)?,

@@ -89,14 +89,11 @@ fn create_unverifiable_block_header(order: u32, parent_hash: H256) -> Header {
 
 fn create_unverifiable_block_with_extra(order: u32, parent_hash: H256, extra: Option<Bytes>) -> Bytes {
 	let mut header = create_unverifiable_block_header(order, parent_hash);
-	header.set_extra_data(match extra {
-		Some(extra_data) => extra_data,
-		None => {
-			let base = (order & 0x000000ff) as u8;
-			let generated: Vec<u8> = vec![base + 1, base + 2, base + 3];
-			generated
-		}
-	});
+	header.set_extra_data(extra.unwrap_or_else(|| {
+		let base = (order & 0x0000_00ff) as u8;
+		let generated: Vec<u8> = vec![base + 1, base + 2, base + 3];
+		generated
+	}));
 	create_test_block(&header)
 }
 
@@ -112,7 +109,7 @@ pub fn create_test_block_with_data(header: &Header, transactions: &[SignedTransa
 	for t in transactions {
 		rlp.append_raw(&rlp::encode(t), 1);
 	}
-	rlp.append_list(&uncles);
+	rlp.append_list(uncles);
 	rlp.out()
 }
 
@@ -151,12 +148,12 @@ pub fn generate_dummy_client_with_spec_and_data<F>(
 	).unwrap();
 	let test_engine = &*test_spec.engine;
 
-	let mut db = test_spec.ensure_db_good(get_temp_state_db(), &Default::default()).unwrap();
+	let mut db = test_spec.ensure_db_good(get_temp_state_db(), &Factories::default()).unwrap();
 	let genesis_header = test_spec.genesis_header();
 
 	let mut rolling_timestamp = 40;
-	let mut last_hashes = vec![];
-	let mut last_header = genesis_header.clone();
+	let mut last_hashes = Vec::new();
+	let mut last_header = genesis_header;
 
 	let kp = KeyPair::from_secret_slice(keccak("").as_bytes()).unwrap();
 	let author = kp.address();
@@ -168,14 +165,14 @@ pub fn generate_dummy_client_with_spec_and_data<F>(
 		// forge block.
 		let mut b = OpenBlock::new(
 			test_engine,
-			Default::default(),
+			Factories::default(),
 			false,
 			db,
 			&last_header,
 			Arc::new(last_hashes.clone()),
-			author.clone(),
-			(3141562.into(), 31415620.into()),
-			vec![],
+			author,
+			(3_141_562.into(), 31_415_620.into()),
+			Vec::new(),
 			false,
 		).unwrap();
 		rolling_timestamp += 10;
@@ -186,15 +183,15 @@ pub fn generate_dummy_client_with_spec_and_data<F>(
 			b.push_transaction(Transaction {
 				nonce: n.into(),
 				gas_price: tx_gas_prices[n % tx_gas_prices.len()],
-				gas: 100000.into(),
+				gas: 100_000.into(),
 				action: Action::Create,
-				data: vec![],
+				data: Vec::new(),
 				value: U256::zero(),
 			}.sign(kp.secret(), Some(test_spec.chain_id())), None).unwrap();
 			n += 1;
 		}
 
-		let b = b.close_and_lock().unwrap().seal(test_engine, vec![]).unwrap();
+		let b = b.close_and_lock().unwrap().seal(test_engine, Vec::new()).unwrap();
 
 		if let Err(e) = client.import_block(Unverified::from_rlp(b.rlp_bytes()).unwrap()) {
 			panic!("error importing block which is valid by definition: {:?}", e);
@@ -210,8 +207,8 @@ pub fn generate_dummy_client_with_spec_and_data<F>(
 /// Adds blocks to the client
 pub fn push_blocks_to_client(client: &Arc<Client>, timestamp_salt: u64, starting_number: usize, block_number: usize) {
 	let test_spec = spec::new_test();
-	let state_root = test_spec.genesis_header().state_root().clone();
-	let genesis_gas = test_spec.genesis_header().gas_limit().clone();
+	let state_root = *test_spec.genesis_header().state_root();
+	let genesis_gas = *test_spec.genesis_header().gas_limit();
 
 	let mut rolling_hash = client.chain_info().best_block_hash;
 	let mut rolling_block_number = starting_number as u64;
@@ -228,8 +225,8 @@ pub fn push_blocks_to_client(client: &Arc<Client>, timestamp_salt: u64, starting
 		header.set_state_root(state_root);
 
 		rolling_hash = header.hash();
-		rolling_block_number = rolling_block_number + 1;
-		rolling_timestamp = rolling_timestamp + 10;
+		rolling_block_number += 1;
+		rolling_timestamp += 10;
 
 		if let Err(e) = client.import_block(Unverified::from_rlp(create_test_block(&header)).unwrap()) {
 			panic!("error importing block which is valid by definition: {:?}", e);
@@ -243,13 +240,13 @@ pub fn push_block_with_transactions(client: &Arc<Client>, transactions: &[Signed
 	let test_engine = &*test_spec.engine;
 	let block_number = client.chain_info().best_block_number as u64 + 1;
 
-	let mut b = client.prepare_open_block(Address::zero(), (0.into(), 5000000.into()), Bytes::new()).unwrap();
+	let mut b = client.prepare_open_block(Address::zero(), (0.into(), 5_000_000.into()), Bytes::new()).unwrap();
 	b.set_timestamp(block_number * 10);
 
 	for t in transactions {
 		b.push_transaction(t.clone(), None).unwrap();
 	}
-	let b = b.close_and_lock().unwrap().seal(test_engine, vec![]).unwrap();
+	let b = b.close_and_lock().unwrap().seal(test_engine, Vec::new()).unwrap();
 
 	if let Err(e) = client.import_block(Unverified::from_rlp(b.rlp_bytes()).unwrap()) {
 		panic!("error importing block which is valid by definition: {:?}", e);
@@ -338,7 +335,7 @@ pub fn new_temp_db(tempdir: &Path) -> Arc<dyn BlockChainDB> {
 	Arc::new(db)
 }
 
-/// Creates new instance of KeyValueDBHandler
+/// Creates new instance of `KeyValueDBHandler`
 pub fn restoration_db_handler(config: kvdb_rocksdb::DatabaseConfig) -> Box<dyn BlockChainDBHandler> {
 	struct RestorationDBHandler {
 		config: kvdb_rocksdb::DatabaseConfig,
@@ -393,7 +390,7 @@ pub fn generate_dummy_blockchain(block_number: u32) -> BlockChain {
 	let mut batch = db.key_value().transaction();
 	for block_order in 1..block_number {
 		// Total difficulty is always 0 here.
-		bc.insert_block(&mut batch, encoded::Block::new(create_unverifiable_block(block_order, bc.best_block_hash())), vec![], ExtrasInsert {
+		bc.insert_block(&mut batch, encoded::Block::new(create_unverifiable_block(block_order, bc.best_block_hash())), Vec::new(), ExtrasInsert {
 			fork_choice: ForkChoice::New,
 			is_finalized: false,
 		});
@@ -411,7 +408,7 @@ pub fn generate_dummy_blockchain_with_extra(block_number: u32) -> BlockChain {
 	let mut batch = db.key_value().transaction();
 	for block_order in 1..block_number {
 		// Total difficulty is always 0 here.
-		bc.insert_block(&mut batch, encoded::Block::new(create_unverifiable_block_with_extra(block_order, bc.best_block_hash(), None)), vec![], ExtrasInsert {
+		bc.insert_block(&mut batch, encoded::Block::new(create_unverifiable_block_with_extra(block_order, bc.best_block_hash(), None)), Vec::new(), ExtrasInsert {
 			fork_choice: ForkChoice::New,
 			is_finalized: false,
 		});
@@ -424,14 +421,13 @@ pub fn generate_dummy_blockchain_with_extra(block_number: u32) -> BlockChain {
 /// Returns empty dummy blockchain
 pub fn generate_dummy_empty_blockchain() -> BlockChain {
 	let db = new_db();
-	let bc = BlockChain::new(BlockChainConfig::default(), &create_unverifiable_block(0, H256::zero()), db.clone());
-	bc
+	BlockChain::new(BlockChainConfig::default(), &create_unverifiable_block(0, H256::zero()), db.clone())
 }
 
 /// Returns temp state
 pub fn get_temp_state() -> State<::state_db::StateDB> {
 	let journal_db = get_temp_state_db();
-	State::new(journal_db, U256::from(0), Default::default())
+	State::new(journal_db, U256::from(0), Factories::default())
 }
 
 /// Returns temp state using coresponding factory
@@ -458,11 +454,11 @@ pub fn get_good_dummy_block_seq(count: usize) -> Vec<Bytes> {
 /// Returns sequence of hashes of the dummy blocks beginning from corresponding parent
 pub fn get_good_dummy_block_fork_seq(start_number: usize, count: usize, parent_hash: &H256) -> Vec<Bytes> {
 	let test_spec = spec::new_test();
-	let genesis_gas = test_spec.genesis_header().gas_limit().clone();
+	let genesis_gas = *test_spec.genesis_header().gas_limit();
 	let mut rolling_timestamp = start_number as u64 * 10;
 	let mut parent = *parent_hash;
 	let mut r = Vec::new();
-	for i in start_number .. start_number + count + 1 {
+	for i in start_number..=start_number + count {
 		let mut block_header = Header::new();
 		block_header.set_gas_limit(genesis_gas);
 		block_header.set_difficulty(U256::from(i) * U256([0, 1, 0, 0]));
@@ -472,7 +468,7 @@ pub fn get_good_dummy_block_fork_seq(start_number: usize, count: usize, parent_h
 		block_header.set_state_root(test_spec.genesis_header().state_root().clone());
 
 		parent = block_header.hash();
-		rolling_timestamp = rolling_timestamp + 10;
+		rolling_timestamp += 10;
 
 		r.push(create_test_block(&block_header));
 	}
@@ -483,7 +479,7 @@ pub fn get_good_dummy_block_fork_seq(start_number: usize, count: usize, parent_h
 pub fn get_good_dummy_block_hash() -> (H256, Bytes) {
 	let mut block_header = Header::new();
 	let test_spec = spec::new_test();
-	let genesis_gas = test_spec.genesis_header().gas_limit().clone();
+	let genesis_gas = *test_spec.genesis_header().gas_limit();
 	block_header.set_gas_limit(genesis_gas);
 	block_header.set_difficulty(U256::from(0x20000));
 	block_header.set_timestamp(40);
@@ -504,7 +500,7 @@ pub fn get_good_dummy_block() -> Bytes {
 pub fn get_bad_state_dummy_block() -> Bytes {
 	let mut block_header = Header::new();
 	let test_spec = spec::new_test();
-	let genesis_gas = test_spec.genesis_header().gas_limit().clone();
+	let genesis_gas = *test_spec.genesis_header().gas_limit();
 
 	block_header.set_gas_limit(genesis_gas);
 	block_header.set_difficulty(U256::from(0x20000));
@@ -526,9 +522,7 @@ pub struct TestNotify {
 impl ChainNotify for TestNotify {
 	fn broadcast(&self, message: ChainMessageType) {
 		let data = match message {
-			ChainMessageType::Consensus(data) => data,
-			ChainMessageType::SignedPrivateTransaction(_, data) => data,
-			ChainMessageType::PrivateTransaction(_, data) => data,
+			ChainMessageType::Consensus(data) | ChainMessageType::SignedPrivateTransaction(_, data) | ChainMessageType::PrivateTransaction(_, data) => data,
 			ChainMessageType::PrivateStateRequest(_) => Vec::new(),
 		};
 		self.messages.write().push(data);

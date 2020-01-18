@@ -18,8 +18,7 @@ use std::time::Duration;
 use std::io::Read;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::path::PathBuf;
-use std::collections::{HashSet, BTreeMap};
-use std::iter::FromIterator;
+use std::collections::BTreeMap;
 use std::cmp;
 use cli::{Args, ArgsError};
 use hash::keccak;
@@ -99,6 +98,7 @@ pub struct Configuration {
 	pub args: Args,
 }
 
+#[allow(clippy::missing_const_for_fn)]
 impl Configuration {
 	/// Parses a configuration from a list of command line arguments.
 	///
@@ -108,7 +108,7 @@ impl Configuration {
 	/// let _cfg = parity_ethereum::Configuration::parse_cli(&["--light", "--chain", "kovan"]).unwrap();
 	/// ```
 	pub fn parse_cli<S: AsRef<str>>(command: &[S]) -> Result<Self, ArgsError> {
-		let config = Configuration {
+		let config = Self {
 			args: Args::parse(command)?,
 		};
 
@@ -122,7 +122,7 @@ impl Configuration {
 		let spec = self.chain()?;
 		let mode = match self.args.arg_mode.as_ref() {
 			"last" => None,
-			mode => Some(to_mode(&mode, self.args.arg_mode_timeout, self.args.arg_mode_alarm)?),
+			mode => Some(to_mode(mode, self.args.arg_mode_timeout, self.args.arg_mode_alarm)?),
 		};
 		let update_policy = self.update_policy()?;
 		let logger_config = self.logger_config();
@@ -161,20 +161,20 @@ impl Configuration {
 				});
 				Cmd::SignerSign {
 					id: self.args.arg_signer_sign_id,
-					pwfile: pwfile,
+					pwfile,
 					port: ws_conf.port,
-					authfile: authfile,
+					authfile,
 				}
 			} else if self.args.cmd_signer_reject {
 				Cmd::SignerReject {
 					id: self.args.arg_signer_reject_id,
 					port: ws_conf.port,
-					authfile: authfile,
+					authfile,
 				}
 			} else if self.args.cmd_signer_list {
 				Cmd::SignerList {
 					port: ws_conf.port,
-					authfile: authfile,
+					authfile,
 				}
 			} else {
 				unreachable!();
@@ -196,30 +196,30 @@ impl Configuration {
 			}))
 		} else if self.args.cmd_db && self.args.cmd_db_kill {
 			Cmd::Blockchain(BlockchainCmd::Kill(KillBlockchain {
-				spec: spec,
-				dirs: dirs,
-				pruning: pruning,
+				spec,
+				dirs,
+				pruning,
 			}))
 		} else if self.args.cmd_account {
 			let account_cmd = if self.args.cmd_account_new {
 				let new_acc = NewAccount {
 					iterations: key_iterations,
 					path: dirs.keys,
-					spec: spec,
-					password_file: self.accounts_config()?.password_files.first().map(|x| x.to_owned()),
+					spec,
+					password_file: self.accounts_config()?.password_files.first().map(ToOwned::to_owned),
 				};
 				AccountCmd::New(new_acc)
 			} else if self.args.cmd_account_list {
 				let list_acc = ListAccounts {
 					path: dirs.keys,
-					spec: spec,
+					spec,
 				};
 				AccountCmd::List(list_acc)
 			} else if self.args.cmd_account_import {
 				let import_acc = ImportAccounts {
-					from: self.args.arg_account_import_path.expect("CLI argument is required; qed").clone(),
+					from: self.args.arg_account_import_path.expect("CLI argument is required; qed"),
 					to: dirs.keys,
-					spec: spec,
+					spec,
 				};
 				AccountCmd::Import(import_acc)
 			} else {
@@ -229,7 +229,7 @@ impl Configuration {
 		} else if self.args.flag_import_geth_keys {
 				let account_cmd = AccountCmd::ImportFromGeth(
 				ImportFromGethAccounts {
-					spec: spec,
+					spec,
 					to: dirs.keys,
 					testnet: self.args.flag_testnet
 				}
@@ -239,24 +239,24 @@ impl Configuration {
 			let presale_cmd = ImportWallet {
 				iterations: key_iterations,
 				path: dirs.keys,
-				spec: spec,
+				spec,
 				wallet_path: self.args.arg_wallet_import_path.clone().unwrap(),
-				password_file: self.accounts_config()?.password_files.first().map(|x| x.to_owned()),
+				password_file: self.accounts_config()?.password_files.first().map(ToOwned::to_owned),
 			};
 			Cmd::ImportPresaleWallet(presale_cmd)
 		} else if self.args.cmd_import {
 			let import_cmd = ImportBlockchain {
-				spec: spec,
-				cache_config: cache_config,
-				dirs: dirs,
+				spec,
+				cache_config,
+				dirs,
 				file_path: self.args.arg_import_file.clone(),
-				format: format,
-				pruning: pruning,
-				pruning_history: pruning_history,
+				format,
+				pruning,
+				pruning_history,
 				pruning_memory: self.args.arg_pruning_memory,
-				compaction: compaction,
-				tracing: tracing,
-				fat_db: fat_db,
+				compaction,
+				tracing,
+				fat_db,
 				check_seal: !self.args.flag_no_seal_check,
 				with_color: logger_config.color,
 				verifier_settings: self.verifier_settings(),
@@ -267,17 +267,17 @@ impl Configuration {
 		} else if self.args.cmd_export {
 			if self.args.cmd_export_blocks {
 				let export_cmd = ExportBlockchain {
-					spec: spec,
-					cache_config: cache_config,
-					dirs: dirs,
+					spec,
+					cache_config,
+					dirs,
 					file_path: self.args.arg_export_blocks_file.clone(),
-					format: format,
-					pruning: pruning,
-					pruning_history: pruning_history,
+					format,
+					pruning,
+					pruning_history,
 					pruning_memory: self.args.arg_pruning_memory,
-					compaction: compaction,
-					tracing: tracing,
-					fat_db: fat_db,
+					compaction,
+					tracing,
+					fat_db,
 					from_block: to_block_id(&self.args.arg_export_blocks_from)?,
 					to_block: to_block_id(&self.args.arg_export_blocks_to)?,
 					check_seal: !self.args.flag_no_seal_check,
@@ -286,17 +286,17 @@ impl Configuration {
 				Cmd::Blockchain(BlockchainCmd::Export(export_cmd))
 			} else if self.args.cmd_export_state {
 				let export_cmd = ExportState {
-					spec: spec,
-					cache_config: cache_config,
-					dirs: dirs,
+					spec,
+					cache_config,
+					dirs,
 					file_path: self.args.arg_export_state_file.clone(),
-					format: format,
-					pruning: pruning,
-					pruning_history: pruning_history,
+					format,
+					pruning,
+					pruning_history,
 					pruning_memory: self.args.arg_pruning_memory,
-					compaction: compaction,
-					tracing: tracing,
-					fat_db: fat_db,
+					compaction,
+					tracing,
+					fat_db,
 					at: to_block_id(&self.args.arg_export_state_at)?,
 					storage: !self.args.flag_export_state_no_storage,
 					code: !self.args.flag_export_state_no_code,
@@ -310,47 +310,47 @@ impl Configuration {
 			}
 		} else if self.args.cmd_snapshot {
 			let snapshot_cmd = SnapshotCommand {
-				cache_config: cache_config,
-				dirs: dirs,
-				spec: spec,
-				pruning: pruning,
-				pruning_history: pruning_history,
+				cache_config,
+				dirs,
+				spec,
+				pruning,
+				pruning_history,
 				pruning_memory: self.args.arg_pruning_memory,
-				tracing: tracing,
-				fat_db: fat_db,
-				compaction: compaction,
+				tracing,
+				fat_db,
+				compaction,
 				file_path: self.args.arg_snapshot_file.clone(),
 				kind: snapshot_cmd::Kind::Take,
 				block_at: to_block_id(&self.args.arg_snapshot_at)?,
 				max_round_blocks_to_import: self.args.arg_max_round_blocks_to_import,
-				snapshot_conf: snapshot_conf,
+				snapshot_conf,
 			};
 			Cmd::Snapshot(snapshot_cmd)
 		} else if self.args.cmd_restore {
 			let restore_cmd = SnapshotCommand {
-				cache_config: cache_config,
-				dirs: dirs,
-				spec: spec,
-				pruning: pruning,
-				pruning_history: pruning_history,
+				cache_config,
+				dirs,
+				spec,
+				pruning,
+				pruning_history,
 				pruning_memory: self.args.arg_pruning_memory,
-				tracing: tracing,
-				fat_db: fat_db,
-				compaction: compaction,
+				tracing,
+				fat_db,
+				compaction,
 				file_path: self.args.arg_restore_file.clone(),
 				kind: snapshot_cmd::Kind::Restore,
 				block_at: to_block_id("latest")?, // unimportant.
 				max_round_blocks_to_import: self.args.arg_max_round_blocks_to_import,
-				snapshot_conf: snapshot_conf,
+				snapshot_conf,
 			};
 			Cmd::Snapshot(restore_cmd)
 		} else if self.args.cmd_export_hardcoded_sync {
 			let export_hs_cmd = ExportHsyncCmd {
-				cache_config: cache_config,
-				dirs: dirs,
-				spec: spec,
-				pruning: pruning,
-				compaction: compaction,
+				cache_config,
+				dirs,
+				spec,
+				pruning,
+				compaction,
 			};
 			Cmd::ExportHardcodedSync(export_hs_cmd)
 		} else {
@@ -435,14 +435,14 @@ impl Configuration {
 			gas_range_target: (floor, ceil),
 			engine_signer: self.engine_signer()?,
 			work_notify: self.work_notify(),
-			local_accounts: HashSet::from_iter(to_addresses(&self.args.arg_tx_queue_locals)?.into_iter()),
+			local_accounts: to_addresses(&self.args.arg_tx_queue_locals)?.into_iter().collect(),
 		};
 
 		Ok(extras)
 	}
 
 	fn author(&self) -> Result<Address, String> {
-		to_address(self.args.arg_etherbase.clone().or(self.args.arg_author.clone()))
+		to_address(self.args.arg_etherbase.clone().or_else(|| self.args.arg_author.clone()))
 	}
 
 	fn engine_signer(&self) -> Result<Address, String> {
@@ -450,10 +450,10 @@ impl Configuration {
 	}
 
 	fn format(&self) -> Result<Option<DataFormat>, String> {
-		match self.args.arg_import_format.clone()
-				.or(self.args.arg_export_blocks_format.clone())
-				.or(self.args.arg_export_state_format.clone()) {
-			Some(ref f) => Ok(Some(f.parse()?)),
+		match self.args.arg_import_format.as_ref()
+				.or_else(|| self.args.arg_export_blocks_format.as_ref())
+				.or_else(|| self.args.arg_export_state_format.as_ref()) {
+			Some(f) => Ok(Some(f.parse()?)),
 			None => Ok(None),
 		}
 	}
@@ -495,7 +495,7 @@ impl Configuration {
 
 	fn max_peers(&self) -> u32 {
 		self.args.arg_max_peers
-			.or(cmp::max(self.args.arg_min_peers, Some(DEFAULT_MAX_PEERS)))
+			.or_else(|| cmp::max(self.args.arg_min_peers, Some(DEFAULT_MAX_PEERS)))
 			.unwrap_or(DEFAULT_MAX_PEERS) as u32
 	}
 
@@ -508,7 +508,7 @@ impl Configuration {
 
 	fn min_peers(&self) -> u32 {
 		self.args.arg_min_peers
-			.or(cmp::min(self.args.arg_max_peers, Some(DEFAULT_MIN_PEERS)))
+			.or_else(|| cmp::min(self.args.arg_max_peers, Some(DEFAULT_MIN_PEERS)))
 			.unwrap_or(DEFAULT_MIN_PEERS) as u32
 	}
 
@@ -521,7 +521,7 @@ impl Configuration {
 	}
 
 	fn work_notify(&self) -> Vec<String> {
-		self.args.arg_notify_work.as_ref().map_or_else(Vec::new, |s| s.split(',').map(|s| s.to_owned()).collect())
+		self.args.arg_notify_work.as_ref().map_or_else(Vec::new, |s| s.split(',').map(ToOwned::to_owned).collect())
 	}
 
 	fn accounts_config(&self) -> Result<AccountsConfig, String> {
@@ -598,10 +598,10 @@ impl Configuration {
 	fn pool_verification_options(&self) -> Result<pool::verifier::Options, String>{
 		Ok(pool::verifier::Options {
 			// NOTE min_gas_price and block_gas_limit will be overwritten right after start.
-			minimal_gas_price: U256::from(20_000_000) * 1_000u32,
+			minimal_gas_price: U256::from(20_000_000) * 1_000_u32,
 			block_gas_limit: U256::max_value(),
-			tx_gas_limit: match self.args.arg_tx_gas_limit {
-				Some(ref d) => to_u256(d)?,
+			tx_gas_limit: match &self.args.arg_tx_gas_limit {
+				Some(d) => to_u256(d)?,
 				None => U256::max_value(),
 			},
 			no_early_reject: self.args.flag_tx_queue_no_early_reject,
@@ -662,7 +662,7 @@ impl Configuration {
 
 		if "auto" == self.args.arg_usd_per_eth {
 			Ok(GasPricerConfig::Calibrated {
-				usd_per_tx: usd_per_tx,
+				usd_per_tx,
 				recalibration_period: to_duration(self.args.arg_price_update_period.as_str())?,
 				api_endpoint: ETHERSCAN_ETH_PRICE_ENDPOINT.to_string(),
 			})
@@ -678,7 +678,7 @@ impl Configuration {
 			Ok(GasPricerConfig::Fixed(wei_per_gas))
 		} else {
 			Ok(GasPricerConfig::Calibrated {
-				usd_per_tx: usd_per_tx,
+				usd_per_tx,
 				recalibration_period: to_duration(self.args.arg_price_update_period.as_str())?,
 				api_endpoint: self.args.arg_usd_per_eth.clone(),
 			})
@@ -686,7 +686,7 @@ impl Configuration {
 	}
 
 	fn extra_data(&self) -> Result<Bytes, String> {
-		match self.args.arg_extradata.as_ref().or(self.args.arg_extra_data.as_ref()) {
+		match self.args.arg_extradata.as_ref().or_else(|| self.args.arg_extra_data.as_ref()) {
 			Some(x) if x.len() <= 32 => Ok(x.as_bytes().to_owned()),
 			None => Ok(version_data()),
 			Some(_) => Err("Extra data must be at most 32 characters".into()),
@@ -696,26 +696,25 @@ impl Configuration {
 	fn init_reserved_nodes(&self) -> Result<Vec<String>, String> {
 		use std::fs::File;
 
-		match self.args.arg_reserved_peers {
-			Some(ref path) => {
-				let path = replace_home(&self.directories().base, path);
+		if let Some(path) = &self.args.arg_reserved_peers {
+			let path = replace_home(&self.directories().base, path);
 
-				let mut buffer = String::new();
-				let mut node_file = File::open(&path).map_err(|e| format!("Error opening reserved nodes file: {}", e))?;
-				node_file.read_to_string(&mut buffer).map_err(|_| "Error reading reserved node file")?;
-				let lines = buffer.lines().map(|s| s.trim().to_owned()).filter(|s| !s.is_empty() && !s.starts_with("#")).collect::<Vec<_>>();
+			let mut buffer = String::new();
+			let mut node_file = File::open(&path).map_err(|e| format!("Error opening reserved nodes file: {}", e))?;
+			node_file.read_to_string(&mut buffer).map_err(|_| "Error reading reserved node file")?;
+			let lines = buffer.lines().map(|s| s.trim().to_owned()).filter(|s| !s.is_empty() && !s.starts_with('#')).collect::<Vec<_>>();
 
-				for line in &lines {
-					match validate_node_url(line).map(Into::into) {
-						None => continue,
-						Some(sync::Error::AddressResolve(_)) => return Err(format!("Failed to resolve hostname of a boot node: {}", line)),
-						Some(_) => return Err(format!("Invalid node address format given for a boot node: {}", line)),
-					}
+			for line in &lines {
+				match validate_node_url(line).map(Into::into) {
+					None => continue,
+					Some(sync::Error::AddressResolve(_)) => return Err(format!("Failed to resolve hostname of a boot node: {}", line)),
+					Some(_) => return Err(format!("Invalid node address format given for a boot node: {}", line)),
 				}
+			}
 
-				Ok(lines)
-			},
-			None => Ok(Vec::new())
+			Ok(lines)
+		} else {
+			Ok(Vec::new())
 		}
 	}
 
@@ -776,7 +775,7 @@ impl Configuration {
 			let mut client_version = version();
 			if !self.args.arg_identity.is_empty() {
 				// Insert name after the "Parity-Ethereum/" at the beginning of version string.
-				let idx = client_version.find('/').unwrap_or(client_version.len());
+				let idx = client_version.find('/').unwrap_or_else(|| client_version.len());
 				client_version.insert_str(idx, &format!("/{}", self.args.arg_identity));
 			}
 			client_version
@@ -792,7 +791,7 @@ impl Configuration {
 		let mut apis: Vec<&str> = self.args.arg_rpcapi
 			.as_ref()
 			.unwrap_or(&self.args.arg_jsonrpc_apis)
-			.split(",")
+			.split(',')
 			.collect();
 
 		if self.args.flag_geth {
@@ -869,7 +868,7 @@ impl Configuration {
 			enabled: !(self.args.flag_ipcdisable || self.args.flag_ipc_off || self.args.flag_no_ipc),
 			socket_addr: self.ipc_path(),
 			apis: {
-				let mut apis = self.args.arg_ipcapi.clone().unwrap_or(self.args.arg_ipc_apis.clone());
+				let mut apis = self.args.arg_ipcapi.clone().unwrap_or_else(|| self.args.arg_ipc_apis.clone());
 				if self.args.flag_geth {
 					if !apis.is_empty() {
  						apis.push_str(",");
@@ -927,9 +926,10 @@ impl Configuration {
 		let provider_conf = ProviderConfig {
 			validator_accounts: to_addresses(&self.args.arg_private_validators)?,
 			signer_account: self.args.arg_private_signer.clone().and_then(|account| to_address(Some(account)).ok()),
-			logs_path: match self.args.flag_private_enabled {
-				true => Some(dirs.base),
-				false => None,
+			logs_path: if self.args.flag_private_enabled {
+				Some(dirs.base)
+			} else {
+				None
 			},
 			use_offchain_storage: self.args.flag_private_state_offchain,
 		};
@@ -994,7 +994,7 @@ impl Configuration {
 
 	fn directories(&self) -> Directories {
 		let local_path = default_local_path();
-		let base_path = self.args.arg_base_path.as_ref().or_else(|| self.args.arg_datadir.as_ref()).map_or_else(|| default_data_path(), |s| s.clone());
+		let base_path = self.args.arg_base_path.as_ref().or_else(|| self.args.arg_datadir.as_ref()).map_or_else(default_data_path, Clone::clone);
 		let data_path = replace_home("", &base_path);
 		let is_using_base_path = self.args.arg_base_path.is_some();
 		// If base_path is set and db_path is not we default to base path subdir instead of LOCAL.
@@ -1005,13 +1005,13 @@ impl Configuration {
 				"$BASE/chains"
 			}
 		} else if self.args.flag_light {
-			self.args.arg_db_path.as_ref().map_or(dir::CHAINS_PATH_LIGHT, |s| &s)
+			self.args.arg_db_path.as_ref().map_or(dir::CHAINS_PATH_LIGHT, |s| s)
 		} else {
-			self.args.arg_db_path.as_ref().map_or(dir::CHAINS_PATH, |s| &s)
+			self.args.arg_db_path.as_ref().map_or(dir::CHAINS_PATH, |s| s)
 		};
 		let cache_path = if is_using_base_path { "$BASE/cache" } else { dir::CACHE_PATH };
 
-		let db_path = replace_home_and_local(&data_path, &local_path, &base_db_path);
+		let db_path = replace_home_and_local(&data_path, &local_path, base_db_path);
 		let cache_path = replace_home_and_local(&data_path, &local_path, cache_path);
 		let keys_path = replace_home(&data_path, &self.args.arg_keys_path);
 		let secretstore_path = replace_home(&data_path, &self.args.arg_secretstore_path);
@@ -1033,7 +1033,7 @@ impl Configuration {
 		} else {
 			parity_ipc_path(
 				&self.directories().base,
-				&self.args.arg_ipcpath.clone().unwrap_or(self.args.arg_ipc_path.clone()),
+				&self.args.arg_ipcpath.clone().unwrap_or_else(|| self.args.arg_ipc_path.clone()),
 				self.args.arg_ports_shift,
 			)
 		}
@@ -1052,7 +1052,7 @@ impl Configuration {
 	}
 
 	fn rpc_interface(&self) -> String {
-		let rpc_interface = self.args.arg_rpcaddr.clone().unwrap_or(self.args.arg_jsonrpc_interface.clone());
+		let rpc_interface = self.args.arg_rpcaddr.clone().unwrap_or_else(|| self.args.arg_jsonrpc_interface.clone());
 		self.interface(&rpc_interface)
 	}
 
@@ -1077,13 +1077,13 @@ impl Configuration {
 	}
 
 	fn secretstore_self_secret(&self) -> Result<Option<NodeSecretKey>, String> {
-		match self.args.arg_secretstore_secret {
-			Some(ref s) if s.len() == 64 => Ok(Some(NodeSecretKey::Plain(s.parse()
+		match &self.args.arg_secretstore_secret {
+			Some(s) if s.len() == 64 => Ok(Some(NodeSecretKey::Plain(s.parse()
 				.map_err(|e| format!("Invalid secret store secret: {}. Error: {:?}", s, e))?))),
 			#[cfg(feature = "accounts")]
-			Some(ref s) if s.len() == 40 => Ok(Some(NodeSecretKey::KeyStore(s.parse()
+			Some(s) if s.len() == 40 => Ok(Some(NodeSecretKey::KeyStore(s.parse()
 				.map_err(|e| format!("Invalid secret store secret address: {}. Error: {:?}", s, e))?))),
-			Some(_) => Err(format!("Invalid secret store secret. Must be either existing account address, or hex-encoded private key")),
+			Some(_) => Err("Invalid secret store secret. Must be either existing account address, or hex-encoded private key".to_string()),
 			None => Ok(None),
 		}
 	}
@@ -1391,7 +1391,7 @@ mod tests {
 			port: 8546,
 			apis: ApiSet::UnsafeContext,
 			origins: Some(vec!["parity://*".into(),"chrome-extension://*".into(), "moz-extension://*".into()]),
-			hosts: Some(vec![]),
+			hosts: Some(Vec::new()),
 			signer_path: expected.into(),
 			support_token_api: false,
 			max_connections: 100,
@@ -1409,7 +1409,7 @@ mod tests {
 
 		assert_eq!(conf.ws_config().unwrap(), WsConfiguration {
 			max_connections: 1,
-			..Default::default()
+			..WsConfiguration::default()
 		});
 	}
 
@@ -1420,14 +1420,14 @@ mod tests {
 		let mut expected = RunCmd {
 			allow_missing_blocks: false,
 			cache_config: Default::default(),
-			dirs: Default::default(),
+			dirs: dir::Directories::default(),
 			spec: Default::default(),
 			pruning: Default::default(),
 			pruning_history: 64,
 			pruning_memory: 32,
 			daemon: None,
-			logger_config: Default::default(),
-			miner_options: Default::default(),
+			logger_config: ethcore_logger::Config::default(),
+			miner_options: ethcore::miner::MinerOptions::default(),
 			gas_price_percentile: 50,
 			poll_lifetime: 60,
 			ws_conf: Default::default(),
@@ -1450,25 +1450,25 @@ mod tests {
 				max_delay: 100,
 				frequency: 20,
 			},
-			mode: Default::default(),
+			mode: None,
 			tracing: Default::default(),
-			compaction: Default::default(),
+			compaction: ethcore::client::DatabaseCompactionProfile::default(),
 			geth_compatibility: false,
 			experimental_rpcs: false,
-			net_settings: Default::default(),
-			ipfs_conf: Default::default(),
+			net_settings: parity_rpc::NetworkSettings::default(),
+			ipfs_conf: IpfsConfiguration::default(),
 			secretstore_conf: Default::default(),
-			private_provider_conf: Default::default(),
-			private_encryptor_conf: Default::default(),
+			private_provider_conf: ProviderConfig::default(),
+			private_encryptor_conf: EncryptorConfig::default(),
 			private_tx_enabled: false,
 			name: "".into(),
 			custom_bootnodes: false,
 			fat_db: Default::default(),
-			snapshot_conf: Default::default(),
+			snapshot_conf: SnapshotConfiguration::default(),
 			stratum: None,
 			check_seal: true,
 			download_old_blocks: true,
-			verifier_settings: Default::default(),
+			verifier_settings: VerifierSettings::default(),
 			serve_light: true,
 			light: false,
 			no_hardcoded_sync: false,
@@ -1643,7 +1643,7 @@ mod tests {
 		let conf2 = parse(&["parity", "--ipfs-api-cors", "http://parity.io,http://something.io"]);
 
 		// then
-		assert_eq!(conf0.ipfs_cors(), Some(vec![]));
+		assert_eq!(conf0.ipfs_cors(), Some(Vec::new()));
 		assert_eq!(conf1.ipfs_cors(), None);
 		assert_eq!(conf2.ipfs_cors(), Some(vec!["http://parity.io".into(),"http://something.io".into()]));
 	}
@@ -1901,19 +1901,19 @@ mod tests {
 
 		assert_eq!(all.ip_filter().unwrap(), IpFilter {
 			predefined: AllowIP::All,
-			custom_allow: vec![],
-			custom_block: vec![],
+			custom_allow: Vec::new(),
+			custom_block: Vec::new(),
 		});
 
 		assert_eq!(private.ip_filter().unwrap(), IpFilter {
 			predefined: AllowIP::Private,
-			custom_allow: vec![],
-			custom_block: vec![],
+			custom_allow: Vec::new(),
+			custom_block: Vec::new(),
 		});
 
 		assert_eq!(block_custom.ip_filter().unwrap(), IpFilter {
 			predefined: AllowIP::All,
-			custom_allow: vec![],
+			custom_allow: Vec::new(),
 			custom_block: vec![IpNetwork::from_str("10.0.0.0/8").unwrap()],
 		});
 
@@ -1926,12 +1926,12 @@ mod tests {
 		assert_eq!(ipv6_custom_public.ip_filter().unwrap(), IpFilter {
 			predefined: AllowIP::Public,
 			custom_allow: vec![IpNetwork::from_str("fc00::/7").unwrap()],
-			custom_block: vec![],
+			custom_block: Vec::new(),
 		});
 
 		assert_eq!(ipv6_custom_private.ip_filter().unwrap(), IpFilter {
 			predefined: AllowIP::Private,
-			custom_allow: vec![],
+			custom_allow: Vec::new(),
 			custom_block: vec![IpNetwork::from_str("fc00::/7").unwrap()],
 		});
 	}
@@ -2011,7 +2011,7 @@ mod tests {
 		let conf2 = parse(&["parity", "--secretstore-http-cors", "http://parity.io,http://something.io"]);
 
 		// then
-		assert_eq!(conf0.secretstore_cors(), Some(vec![]));
+		assert_eq!(conf0.secretstore_cors(), Some(Vec::new()));
 		assert_eq!(conf1.secretstore_cors(), None);
 		assert_eq!(conf2.secretstore_cors(), Some(vec!["http://parity.io".into(),"http://something.io".into()]));
 	}

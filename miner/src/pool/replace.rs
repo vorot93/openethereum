@@ -40,8 +40,8 @@ pub struct ReplaceByScoreAndReadiness<S, C> {
 
 impl<S, C> ReplaceByScoreAndReadiness<S, C> {
 	/// Create a new `ReplaceByScoreAndReadiness`
-	pub fn new(scoring: S, client: C) -> Self {
-		ReplaceByScoreAndReadiness { scoring, client }
+	pub const fn new(scoring: S, client: C) -> Self {
+		Self { scoring, client }
 	}
 }
 
@@ -60,7 +60,7 @@ where
 		if old.sender() == new.sender() {
 			// prefer earliest transaction
 			match new.nonce().cmp(&old.nonce()) {
-				cmp::Ordering::Equal => self.scoring.choose(&old, &new),
+				cmp::Ordering::Equal => self.scoring.choose(old, new),
 				_ if both_local => Choice::InsertNew,
 				cmp::Ordering::Less => Choice::ReplaceOld,
 				cmp::Ordering::Greater => Choice::RejectNew,
@@ -184,14 +184,14 @@ mod tests {
 		}, &sender2);
 
 		assert_eq!(should_replace(&replace, same_sender_tx1.clone(), same_sender_tx2.clone()), InsertNew);
-		assert_eq!(should_replace(&replace, same_sender_tx2.clone(), same_sender_tx1.clone()), InsertNew);
+		assert_eq!(should_replace(&replace, same_sender_tx2.clone(), same_sender_tx1), InsertNew);
 
 		assert_eq!(should_replace(&replace, different_sender_tx1.clone(), different_sender_tx2.clone()), InsertNew);
-		assert_eq!(should_replace(&replace, different_sender_tx2.clone(), different_sender_tx1.clone()), InsertNew);
+		assert_eq!(should_replace(&replace, different_sender_tx2, different_sender_tx1), InsertNew);
 
 		// txs with same sender and nonce
 		assert_eq!(should_replace(&replace, same_sender_tx2.clone(), same_sender_tx3.clone()), ReplaceOld);
-		assert_eq!(should_replace(&replace, same_sender_tx3.clone(), same_sender_tx2.clone()), RejectNew);
+		assert_eq!(should_replace(&replace, same_sender_tx3, same_sender_tx2), RejectNew);
 	}
 
 	#[test]
@@ -284,10 +284,10 @@ mod tests {
 		assert_eq!(should_replace(&replace, tx_regular_high_gas.clone(), tx_regular_low_gas.clone()), RejectNew);
 
 		assert_eq!(should_replace(&replace, tx_regular_high_gas.clone(), tx_local_low_gas.clone()), ReplaceOld);
-		assert_eq!(should_replace(&replace, tx_local_low_gas.clone(), tx_regular_high_gas.clone()), RejectNew);
+		assert_eq!(should_replace(&replace, tx_local_low_gas.clone(), tx_regular_high_gas), RejectNew);
 
-		assert_eq!(should_replace(&replace, tx_local_low_gas.clone(), tx_local_high_gas.clone()), InsertNew);
-		assert_eq!(should_replace(&replace, tx_local_high_gas.clone(), tx_regular_low_gas.clone()), RejectNew);
+		assert_eq!(should_replace(&replace, tx_local_low_gas, tx_local_high_gas.clone()), InsertNew);
+		assert_eq!(should_replace(&replace, tx_local_high_gas, tx_regular_low_gas), RejectNew);
 	}
 
 	#[test]
@@ -329,7 +329,7 @@ mod tests {
 				gas_price: 1,
 				..Default::default()
 			};
-			tx.unsigned().sign(&old_sender.secret(), None).verified()
+			tx.unsigned().sign(old_sender.secret(), None).verified()
 		};
 		let tx_old_ready_2 = {
 			let tx = Tx {
@@ -337,7 +337,7 @@ mod tests {
 				gas_price: 1,
 				..Default::default()
 			};
-			tx.unsigned().sign(&old_sender.secret(), None).verified()
+			tx.unsigned().sign(old_sender.secret(), None).verified()
 		};
 		let tx_old_ready_3 = {
 			let tx = Tx {
@@ -345,7 +345,7 @@ mod tests {
 				gas_price: 1,
 				..Default::default()
 			};
-			tx.unsigned().sign(&old_sender.secret(), None).verified()
+			tx.unsigned().sign(old_sender.secret(), None).verified()
 		};
 
 		let new_tx = {
@@ -394,7 +394,7 @@ mod tests {
 				gas_price: 1,
 				..Default::default()
 			};
-			tx.unsigned().sign(&new_sender.secret(), None).verified()
+			tx.unsigned().sign(new_sender.secret(), None).verified()
 		};
 		let tx_new_ready_2 = {
 			let tx = Tx {
@@ -402,7 +402,7 @@ mod tests {
 				gas_price: 1,
 				..Default::default()
 			};
-			tx.unsigned().sign(&new_sender.secret(), None).verified()
+			tx.unsigned().sign(new_sender.secret(), None).verified()
 		};
 		let tx_new_ready_3 = {
 			let tx = Tx {
@@ -410,7 +410,7 @@ mod tests {
 				gas_price: 10, // hi
 				..Default::default()
 			};
-			tx.unsigned().sign(&new_sender.secret(), None).verified()
+			tx.unsigned().sign(new_sender.secret(), None).verified()
 		};
 
 		let old_tx = txpool::Transaction { insertion_id: 0, transaction: Arc::new(old_tx) };

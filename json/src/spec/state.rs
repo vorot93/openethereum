@@ -25,7 +25,7 @@ use crate::{
 use serde::Deserialize;
 
 /// Recent JSON tests can be either a map or a hash (represented by a string).
-/// See https://github.com/ethereum/tests/issues/637
+/// See <https://github.com/ethereum/tests/issues/637>
 #[cfg_attr(any(test, feature = "test-helpers"), derive(Clone))]
 #[derive(Debug, PartialEq, Deserialize)]
 #[serde(untagged)]
@@ -49,8 +49,8 @@ impl State {
 		match &self.0 {
 			HashOrMap::Hash(_) => BTreeMap::default(),
 			HashOrMap::Map(map) => {
-				map.iter().filter_map(|(add, ref acc)| {
-					acc.builtin.clone().map(|b| (add.clone(), b.into()))
+				map.iter().filter_map(|(add, acc)| {
+					acc.builtin.clone().map(|b| (*add, b.into()))
 				}).collect()
 			}
 
@@ -62,8 +62,8 @@ impl State {
 		match &self.0 {
 			HashOrMap::Hash(_) => BTreeMap::default(),
 			HashOrMap::Map(map) => {
-				map.iter().filter_map(|(add, ref acc)| {
-					acc.constructor.clone().map(|b| (add.clone(), b))
+				map.iter().filter_map(|(add, acc)| {
+					acc.constructor.clone().map(|b| (*add, b))
 				}).collect()
 			}
 

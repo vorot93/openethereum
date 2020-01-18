@@ -28,20 +28,20 @@ use types::client_types::Mode as ClientMode;
 pub struct Seconds(Duration);
 
 impl Seconds {
-	pub fn value(&self) -> u64 {
+	pub const fn value(&self) -> u64 {
 		self.0.as_secs()
 	}
 }
 
 impl From<u64> for Seconds {
-	fn from(s: u64) -> Seconds {
-		Seconds(Duration::from_secs(s))
+	fn from(s: u64) -> Self {
+		Self(Duration::from_secs(s))
 	}
 }
 
 impl From<Duration> for Seconds {
-	fn from(d: Duration) -> Seconds {
-		Seconds(d)
+	fn from(d: Duration) -> Self {
+		Self(d)
 	}
 }
 
@@ -60,7 +60,7 @@ impl Serialize for Seconds {
 impl<'de> Deserialize<'de> for Seconds {
 	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
 		let secs = u64::deserialize(deserializer)?;
-		Ok(Seconds::from(secs))
+		Ok(Self::from(secs))
 	}
 }
 
@@ -81,24 +81,24 @@ pub enum Mode {
 	Offline,
 }
 
-impl Into<ClientMode> for Mode {
-	fn into(self) -> ClientMode {
-		match self {
-			Mode::Active => ClientMode::Active,
-			Mode::Passive { timeout, alarm } => ClientMode::Passive(timeout.into(), alarm.into()),
-			Mode::Dark { timeout } => ClientMode::Dark(timeout.into()),
-			Mode::Offline => ClientMode::Off,
+impl From<Mode> for ClientMode {
+	fn from(mode: Mode) -> Self {
+		match mode {
+			Mode::Active => Self::Active,
+			Mode::Passive { timeout, alarm } => Self::Passive(timeout.into(), alarm.into()),
+			Mode::Dark { timeout } => Self::Dark(timeout.into()),
+			Mode::Offline => Self::Off,
 		}
 	}
 }
 
 impl From<ClientMode> for Mode {
-	fn from(mode: ClientMode) -> Mode {
+	fn from(mode: ClientMode) -> Self {
 		match mode {
-			ClientMode::Active => Mode::Active,
-			ClientMode::Passive(timeout, alarm) => Mode::Passive { timeout: timeout.into(), alarm: alarm.into() },
-			ClientMode::Dark(timeout) => Mode::Dark { timeout: timeout.into() },
-			ClientMode::Off => Mode::Offline,
+			ClientMode::Active => Self::Active,
+			ClientMode::Passive(timeout, alarm) => Self::Passive { timeout: timeout.into(), alarm: alarm.into() },
+			ClientMode::Dark(timeout) => Self::Dark { timeout: timeout.into() },
+			ClientMode::Off => Self::Offline,
 		}
 	}
 }
@@ -129,6 +129,7 @@ mod algorithm_serde {
 	use serde::de::Error;
 	use journaldb::Algorithm;
 
+	#[allow(clippy::trivially_copy_pass_by_ref)]
 	pub fn serialize<S>(algorithm: &Algorithm, serializer: S) -> Result<S::Ok, S::Error>
 	where S: Serializer {
 		algorithm.as_str().serialize(serializer)
@@ -143,7 +144,7 @@ mod algorithm_serde {
 
 impl Default for UserDefaults {
 	fn default() -> Self {
-		UserDefaults {
+		Self {
 			is_first_launch: true,
 			pruning: Algorithm::OverlayRecent,
 			tracing: false,
@@ -160,10 +161,10 @@ impl UserDefaults {
 				Ok(defaults) => Ok(defaults),
 				Err(e) => {
 					warn!("Error loading user defaults file: {:?}", e);
-					Ok(UserDefaults::default())
+					Ok(Self::default())
 				},
 			},
-			_ => Ok(UserDefaults::default()),
+			_ => Ok(Self::default()),
 		}
 	}
 

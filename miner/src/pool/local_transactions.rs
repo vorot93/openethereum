@@ -54,8 +54,8 @@ pub enum Status {
 
 impl Status {
 	fn is_pending(&self) -> bool {
-		match *self {
-			Status::Pending(_) => true,
+		match self {
+			Self::Pending(_) => true,
 			_ => false,
 		}
 	}
@@ -89,9 +89,9 @@ impl Default for LocalTransactionsList {
 impl LocalTransactionsList {
 	/// Create a new list of local transactions.
 	pub fn new(max_old: usize) -> Self {
-		LocalTransactionsList {
+		Self {
 			max_old,
-			transactions: Default::default(),
+			transactions: LinkedHashMap::new(),
 			pending: 0,
 			in_chain: None,
 		}
@@ -113,12 +113,12 @@ impl LocalTransactionsList {
 	}
 
 	/// Return a map of all currently stored transactions.
-	pub fn all_transactions(&self) -> &LinkedHashMap<H256, Status> {
+	pub const fn all_transactions(&self) -> &LinkedHashMap<H256, Status> {
 		&self.transactions
 	}
 
 	/// Returns true if there are pending local transactions.
-	pub fn has_pending(&self) -> bool {
+	pub const fn has_pending(&self) -> bool {
 		self.pending > 0
 	}
 
@@ -130,8 +130,7 @@ impl LocalTransactionsList {
 
 		let to_remove: Vec<_> = self.transactions
 			.iter()
-			.filter(|&(_, status)| !status.is_pending())
-			.map(|(hash, _)| *hash)
+			.filter_map(|(hash, status)| if status.is_pending() { None } else { Some(*hash) })
 			.take(number_of_old - self.max_old)
 			.collect();
 
@@ -186,9 +185,10 @@ impl txpool::Listener<Transaction> for LocalTransactionsList {
 			return;
 		}
 
-		match new {
-			Some(new) => warn!(target: "own_tx", "Transaction pushed out because of limit (hash {:?}, replacement: {:?})", tx.hash(), new.hash()),
-			None => warn!(target: "own_tx", "Transaction dropped because of limit (hash: {:?})", tx.hash()),
+		if let Some(new) = new {
+			warn!(target: "own_tx", "Transaction pushed out because of limit (hash {:?}, replacement: {:?})", tx.hash(), new.hash());
+		} else {
+			warn!(target: "own_tx", "Transaction dropped because of limit (hash: {:?})", tx.hash());
 		}
 		self.insert(*tx.hash(), Status::Dropped(tx.clone()));
 		self.clear_old();
@@ -219,7 +219,7 @@ impl txpool::Listener<Transaction> for LocalTransactionsList {
 			return;
 		}
 
-		let is_in_chain = self.in_chain.as_ref().map(|checker| checker(tx.hash())).unwrap_or(false);
+		let is_in_chain = self.in_chain.as_ref().map_or(false, |checker| checker(tx.hash()));
 		if is_in_chain {
 			info!(target: "own_tx", "Transaction mined (hash {:?})", tx.hash());
 			self.insert(*tx.hash(), Status::Mined(tx.clone()));

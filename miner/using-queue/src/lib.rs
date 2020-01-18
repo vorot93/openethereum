@@ -16,6 +16,54 @@
 
 //! Queue-like data structure including notion of usage.
 
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
+
 /// Special queue-like data structure that includes the notion of
 /// usage to avoid items that were queued but never used from making it into
 /// the queue.
@@ -38,10 +86,10 @@ pub enum GetAction {
 
 impl<T> UsingQueue<T> {
 	/// Create a new struct with a maximum size of `max_size`.
-	pub fn new(max_size: usize) -> UsingQueue<T> {
-		UsingQueue {
+	pub const fn new(max_size: usize) -> Self {
+		Self {
 			pending: None,
-			in_use: vec![],
+			in_use: Vec::new(),
 			max_size,
 		}
 	}
@@ -49,7 +97,7 @@ impl<T> UsingQueue<T> {
 	/// Return a reference to the item at the top of the queue (or `None` if the queue is empty);
 	/// it doesn't constitute noting that the item is used.
 	pub fn peek_last_ref(&self) -> Option<&T> {
-		self.pending.as_ref().or(self.in_use.last())
+		self.pending.as_ref().or_else(|| self.in_use.last())
 	}
 
 	/// Return a reference to the item at the top of the queue (or `None` if the queue is empty);
@@ -72,7 +120,7 @@ impl<T> UsingQueue<T> {
 	}
 
 	/// Is there anything in the queue currently?
-	pub fn is_in_use(&self) -> bool { self.in_use.len() > 0 }
+	pub fn is_in_use(&self) -> bool { !self.in_use.is_empty() }
 
 	/// Clears everything; the queue is entirely reset.
 	pub fn reset(&mut self) {
@@ -106,14 +154,14 @@ impl<T> UsingQueue<T> {
 	/// If pending block is not available will clone the first of the used blocks that match the predicate.
 	pub fn get_pending_if<P>(&mut self, predicate: P) -> Option<T> where P: Fn(&T) -> bool, T: Clone {
 		// a bit clumsy - TODO: think about a nicer way of expressing this.
-		if let Some(ref x) = self.pending {
+		if let Some(x) = &self.pending {
 			if predicate(x) {
 				Some(x.clone())
 			} else {
 				None
 			}
 		} else {
-			self.in_use.last().into_iter().filter(|x| predicate(x)).next().cloned()
+			self.in_use.last().into_iter().find(|x| predicate(x)).cloned()
 		}
 	}
 }

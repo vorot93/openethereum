@@ -16,6 +16,54 @@
 
 //! Parity version specific information.
 
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
+
 extern crate target_info;
 extern crate parity_bytes as bytes;
 extern crate rlp;
@@ -33,17 +81,18 @@ const THIS_TRACK: &'static str = generated::TRACK;
 // ^^^ should be reset in Cargo.toml to "stable" according to the release branch.
 
 #[cfg(not(feature = "final"))]
-const THIS_TRACK: &'static str = "unstable";
+const THIS_TRACK: &str = "unstable";
 // ^^^ This gets used when we're not building a final release; should stay as "unstable".
 
 /// Get the platform identifier.
 pub fn platform() -> String {
-	format!("{}", env!("VERGEN_TARGET_TRIPLE"))
+	env!("VERGEN_TARGET_TRIPLE").to_string()
 }
 
 /// Get the standard version string for this software.
+// TODO: OnceCell
 pub fn version() -> String {
-	let commit_date = format!("{}", env!("VERGEN_COMMIT_DATE")).replace("-", "");
+	let commit_date = env!("VERGEN_COMMIT_DATE").to_string().replace('-', "");
 	format!(
 		"Parity-Ethereum/v{}-{}-{}-{}/{}/rustc{}",
 		env!("CARGO_PKG_VERSION"),
@@ -70,6 +119,6 @@ pub fn version_data() -> Bytes {
 }
 
 /// Provide raw information on the package.
-pub fn raw_package_info() -> (&'static str, &'static str, &'static str) {
+pub const fn raw_package_info() -> (&'static str, &'static str, &'static str) {
 	(THIS_TRACK, env!["CARGO_PKG_VERSION"], env!["VERGEN_SHA"])
 }

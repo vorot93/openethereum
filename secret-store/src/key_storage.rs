@@ -183,8 +183,7 @@ impl DocumentKeyShare {
 	/// Get last version reference.
 	#[cfg(test)]
 	pub fn last_version(&self) -> Result<&DocumentKeyShareVersion, Error> {
-		self.versions.iter().rev()
-			.nth(0)
+		self.versions.iter().rev().next()
 			.ok_or_else(|| Error::Database("key version is not found".into()))
 	}
 
@@ -199,10 +198,10 @@ impl DocumentKeyShare {
 impl DocumentKeyShareVersion {
 	/// Create new version
 	pub fn new(id_numbers: BTreeMap<NodeId, Secret>, secret_share: Secret) -> Self {
-		DocumentKeyShareVersion {
+		Self {
 			hash: Self::data_hash(id_numbers.iter().map(|(k, v)| (k.as_bytes(), v.as_bytes()))),
-			id_numbers: id_numbers,
-			secret_share: secret_share,
+			id_numbers,
+			secret_share,
 		}
 	}
 
@@ -215,7 +214,7 @@ impl DocumentKeyShareVersion {
 			nodes_keccak.update(node_number);
 		}
 
-		let mut nodes_keccak_value = [0u8; 32];
+		let mut nodes_keccak_value = [0_u8; 32];
 		nodes_keccak.finalize(&mut nodes_keccak_value);
 
 		nodes_keccak_value.into()
@@ -224,7 +223,7 @@ impl DocumentKeyShareVersion {
 
 impl From<DocumentKeyShare> for SerializableDocumentKeyShareV3 {
 	fn from(key: DocumentKeyShare) -> Self {
-		SerializableDocumentKeyShareV3 {
+		Self {
 			author: key.author.into(),
 			threshold: key.threshold,
 			public: key.public.into(),
@@ -237,7 +236,7 @@ impl From<DocumentKeyShare> for SerializableDocumentKeyShareV3 {
 
 impl From<DocumentKeyShareVersion> for SerializableDocumentKeyShareVersionV3 {
 	fn from(version: DocumentKeyShareVersion) -> Self {
-		SerializableDocumentKeyShareVersionV3 {
+		Self {
 			hash: version.hash.into(),
 			id_numbers: version.id_numbers.into_iter().map(|(k, v)| (k.into(), v.into())).collect(),
 			secret_share: version.secret_share.into(),
@@ -247,7 +246,7 @@ impl From<DocumentKeyShareVersion> for SerializableDocumentKeyShareVersionV3 {
 
 impl From<SerializableDocumentKeyShareV3> for DocumentKeyShare {
 	fn from(key: SerializableDocumentKeyShareV3) -> Self {
-		DocumentKeyShare {
+		Self {
 			author: key.author.into(),
 			threshold: key.threshold,
 			public: key.public.into(),
@@ -323,12 +322,12 @@ pub mod tests {
 			author: Default::default(),
 			threshold: 100,
 			public: Public::default(),
-			common_point: Some(Random.generate().unwrap().public().clone()),
-			encrypted_point: Some(Random.generate().unwrap().public().clone()),
+			common_point: Some(*Random.generate().unwrap().public()),
+			encrypted_point: Some(*Random.generate().unwrap().public()),
 			versions: vec![DocumentKeyShareVersion {
 				hash: Default::default(),
 				id_numbers: vec![
-					(Random.generate().unwrap().public().clone(), Random.generate().unwrap().secret().clone())
+					(*Random.generate().unwrap().public(), Random.generate().unwrap().secret().clone())
 				].into_iter().collect(),
 				secret_share: Random.generate().unwrap().secret().clone(),
 			}],
@@ -338,12 +337,12 @@ pub mod tests {
 			author: Default::default(),
 			threshold: 200,
 			public: Public::default(),
-			common_point: Some(Random.generate().unwrap().public().clone()),
-			encrypted_point: Some(Random.generate().unwrap().public().clone()),
+			common_point: Some(*Random.generate().unwrap().public()),
+			encrypted_point: Some(*Random.generate().unwrap().public()),
 			versions: vec![DocumentKeyShareVersion {
 				hash: Default::default(),
 				id_numbers: vec![
-					(Random.generate().unwrap().public().clone(), Random.generate().unwrap().secret().clone())
+					(*Random.generate().unwrap().public(), Random.generate().unwrap().secret().clone())
 				].into_iter().collect(),
 				secret_share: Random.generate().unwrap().secret().clone(),
 			}],

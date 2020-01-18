@@ -60,9 +60,9 @@ impl FilterOptions {
 	}
 	fn value_matcher(filter: &FilterOperator<U256>, tx_value: &U256) -> bool {
 		match filter {
-			FilterOperator::Eq(ref value) => tx_value == value,
-			FilterOperator::GreaterThan(ref value) => tx_value > value,
-			FilterOperator::LessThan(ref value) => tx_value < value,
+			FilterOperator::Eq(value) => tx_value == value,
+			FilterOperator::GreaterThan(value) => tx_value > value,
+			FilterOperator::LessThan(value) => tx_value < value,
 			FilterOperator::Any => true,
 		}
 	}
@@ -80,7 +80,7 @@ impl FilterOptions {
 
 impl Default for FilterOptions {
 	fn default() -> Self {
-		FilterOptions {
+		Self {
 			from: FilterOperator::Any,
 			to: FilterOperator::Any,
 			gas: FilterOperator::Any,
@@ -91,8 +91,8 @@ impl Default for FilterOptions {
 	}
 }
 
-/// The highly generic use of implementing Deserialize for FilterOperator
-/// will result in a compiler error if the type FilterOperator::Eq(None)
+/// The highly generic use of implementing Deserialize for `FilterOperator`
+/// will result in a compiler error if the type `FilterOperator::Eq(None)`
 /// gets returned explicitly. Therefore this Wrapper will be used for
 /// deserialization, directly identifying the contract creation.
 enum Wrapper<T> {
@@ -119,7 +119,7 @@ pub enum FilterOperator<T> {
 
 /// Since there are multiple operators which are not supported equally by all filters,
 /// this trait will validate each of those operators. The corresponding method is called
-/// inside the `Deserialize` -> `Visitor` implementation for FilterOperator. In case new
+/// inside the `Deserialize` -> `Visitor` implementation for `FilterOperator`. In case new
 /// operators get introduced, a whitelist instead of a blacklist is used.
 ///
 /// The `from` filter validates with `validate_from`
@@ -135,7 +135,7 @@ impl<'de, T, M> Validate<'de, T, M> for M
 where
 	T: Deserialize<'de>, M: MapAccess<'de>
 {
-	fn validate_from(&mut self) -> Result<FilterOperator<T>, M::Error> {
+	fn validate_from(&mut self) -> Result<FilterOperator<T>, <Self as MapAccess<'de>>::Error> {
 		use self::Wrapper as W;
 		use self::FilterOperator::*;
 		let wrapper = self.next_value()?;
@@ -144,20 +144,20 @@ where
 				match val {
 					Any | Eq(_) => Ok(val),
 					_ => {
-						Err(M::Error::custom(
+						Err(<Self as MapAccess<'de>>::Error::custom(
 							"the `from` filter only supports the `eq` operator",
 						))
 					}
 				}
 			},
 			W::CC => {
-				Err(M::Error::custom(
+				Err(<Self as MapAccess<'de>>::Error::custom(
 					"the `from` filter only supports the `eq` operator",
 				))
 			}
 		}
 	}
-	fn validate_to(&mut self) -> Result<FilterOperator<Option<Address>>, M::Error> {
+	fn validate_to(&mut self) -> Result<FilterOperator<Option<Address>>, <Self as MapAccess<'de>>::Error> {
 		use self::Wrapper as W;
 		use self::FilterOperator::*;
 		let wrapper = self.next_value()?;
@@ -167,7 +167,7 @@ where
 					Any => Ok(Any),
 					Eq(address) => Ok(Eq(Some(address))),
 					_ => {
-						Err(M::Error::custom(
+						Err(<Self as MapAccess<'de>>::Error::custom(
 							"the `to` filter only supports the `eq` or `action` operator",
 						))
 					}
@@ -176,13 +176,13 @@ where
 			W::CC => Ok(FilterOperator::Eq(None)),
 		}
 	}
-	fn validate_value(&mut self) -> Result<FilterOperator<T>, M::Error> {
+	fn validate_value(&mut self) -> Result<FilterOperator<T>, <Self as MapAccess<'de>>::Error> {
 		use self::Wrapper as W;
 		let wrapper = self.next_value()?;
 		match wrapper {
 			W::O(val) => Ok(val),
 			W::CC => {
-				Err(M::Error::custom(
+				Err(<Self as MapAccess<'de>>::Error::custom(
 					"the operator `action` is only supported by the `to` filter",
 				))
 			}
@@ -589,7 +589,7 @@ mod tests {
 		let res = serde_json::from_str::<FilterOptions>(json).unwrap();
 		assert_eq!(res, FilterOptions {
 			gas: FilterOperator::Eq(U256::from(300_000)),
-			..default.clone()
+			..default
 		});
 
 		// Gt
@@ -604,7 +604,7 @@ mod tests {
 		let res = serde_json::from_str::<FilterOptions>(json).unwrap();
 		assert_eq!(res, FilterOptions {
 			gas: FilterOperator::GreaterThan(U256::from(300_000)),
-			..default.clone()
+			..default
 		});
 
 		// Lt
@@ -674,7 +674,7 @@ mod tests {
 		let res = serde_json::from_str::<FilterOptions>(json).unwrap();
 		assert_eq!(res, FilterOptions {
 			gas_price: FilterOperator::Eq(U256::from(5_000_000_000 as i64)),
-			..default.clone()
+			..default
 		});
 
 		// Gt
@@ -689,7 +689,7 @@ mod tests {
 		let res = serde_json::from_str::<FilterOptions>(json).unwrap();
 		assert_eq!(res, FilterOptions {
 			gas_price: FilterOperator::GreaterThan(U256::from(5_000_000_000 as i64)),
-			..default.clone()
+			..default
 		});
 
 		// Lt
@@ -759,7 +759,7 @@ mod tests {
 		let res = serde_json::from_str::<FilterOptions>(json).unwrap();
 		assert_eq!(res, FilterOptions {
 			value: FilterOperator::Eq(U256::from(0)),
-			..default.clone()
+			..default
 		});
 
 		// Gt
@@ -774,7 +774,7 @@ mod tests {
 		let res = serde_json::from_str::<FilterOptions>(json).unwrap();
 		assert_eq!(res, FilterOptions {
 			value: FilterOperator::GreaterThan(U256::from(0)),
-			..default.clone()
+			..default
 		});
 
 		// Lt
@@ -844,7 +844,7 @@ mod tests {
 		let res = serde_json::from_str::<FilterOptions>(json).unwrap();
 		assert_eq!(res, FilterOptions {
 			nonce: FilterOperator::Eq(U256::from(1399)),
-			..default.clone()
+			..default
 		});
 
 		// Gt
@@ -859,7 +859,7 @@ mod tests {
 		let res = serde_json::from_str::<FilterOptions>(json).unwrap();
 		assert_eq!(res, FilterOptions {
 			nonce: FilterOperator::GreaterThan(U256::from(1399)),
-			..default.clone()
+			..default
 		});
 
 		// Lt

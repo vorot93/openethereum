@@ -23,7 +23,6 @@
 //! wire.
 
 use crate::api::{ETH_PROTOCOL, WARP_SYNC_PROTOCOL_ID};
-use self::SyncPacket::*;
 
 use enum_primitive::{enum_from_primitive, enum_from_primitive_impl, enum_from_primitive_impl_ty};
 use network::{PacketId, ProtocolId};
@@ -78,6 +77,7 @@ pub trait PacketInfo {
 // through some macro magic, but for now this works.
 impl PacketInfo for SyncPacket {
 	fn protocol(&self) -> ProtocolId {
+		use self::SyncPacket::*;
 		match self {
 			StatusPacket |
 			NewBlockHashesPacket |
@@ -122,12 +122,12 @@ mod tests {
 
 	#[test]
 	fn packet_ids_from_u8_when_from_primitive_zero_then_equals_status_packet() {
-		assert_eq!(SyncPacket::from_u8(0x00), Some(StatusPacket));
+		assert_eq!(SyncPacket::from_u8(0x00), Some(SyncPacket::StatusPacket));
 	}
 
 	#[test]
 	fn packet_ids_from_u8_when_from_primitive_eleven_then_equals_get_snapshot_manifest_packet() {
-		assert_eq!(SyncPacket::from_u8(0x11), Some(GetSnapshotManifestPacket));
+		assert_eq!(SyncPacket::from_u8(0x11), Some(SyncPacket::GetSnapshotManifestPacket));
 	}
 
 	#[test]
@@ -137,13 +137,13 @@ mod tests {
 
 	#[test]
 	fn when_status_packet_then_id_and_protocol_match() {
-		assert_eq!(StatusPacket.id(), StatusPacket as PacketId);
-		assert_eq!(StatusPacket.protocol(), ETH_PROTOCOL);
+		assert_eq!(SyncPacket::StatusPacket.id(), SyncPacket::StatusPacket as PacketId);
+		assert_eq!(SyncPacket::StatusPacket.protocol(), ETH_PROTOCOL);
 	}
 
 	#[test]
 	fn when_consensus_data_packet_then_id_and_protocol_match() {
-		assert_eq!(ConsensusDataPacket.id(), ConsensusDataPacket as PacketId);
-		assert_eq!(ConsensusDataPacket.protocol(), WARP_SYNC_PROTOCOL_ID);
+		assert_eq!(SyncPacket::ConsensusDataPacket.id(), SyncPacket::ConsensusDataPacket as PacketId);
+		assert_eq!(SyncPacket::ConsensusDataPacket.protocol(), WARP_SYNC_PROTOCOL_ID);
 	}
 }

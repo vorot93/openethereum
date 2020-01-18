@@ -38,16 +38,16 @@ pub struct SecretStoreClient {
 }
 
 impl SecretStoreClient {
-	/// Creates new SecretStoreClient
+	/// Creates new `SecretStoreClient`
 	pub fn new(store: &Arc<AccountProvider>) -> Self {
-		SecretStoreClient {
+		Self {
 			accounts: store.clone(),
 		}
 	}
 
 	/// Decrypt public key using account' private key
 	fn decrypt_key(&self, address: H160, password: Password, key: Bytes) -> Result<Vec<u8>> {
-		self.accounts.decrypt(address.into(), Some(password), &DEFAULT_MAC, &key.0)
+		self.accounts.decrypt(address, Some(password), &DEFAULT_MAC, &key.0)
 			.map_err(|e| errors::account("Could not decrypt key.", e))
 	}
 
@@ -60,9 +60,9 @@ impl SecretStoreClient {
 
 impl SecretStore for SecretStoreClient {
 	fn generate_document_key(&self, address: H160, password: Password, server_key_public: H512) -> Result<EncryptedDocumentKey> {
-		let account_public = self.accounts.account_public(address.into(), &password)
+		let account_public = self.accounts.account_public(address, &password)
 			.map_err(|e| errors::account("Could not read account public.", e))?;
-		generate_document_key(account_public, server_key_public.into())
+		generate_document_key(account_public, server_key_public)
 	}
 
 	fn encrypt(&self, address: H160, password: Password, key: Bytes, data: Bytes) -> Result<Bytes> {
@@ -81,7 +81,7 @@ impl SecretStore for SecretStoreClient {
 			shadows.push(self.decrypt_secret(address.clone(), password.clone(), decrypt_shadow)?);
 		}
 
-		decrypt_document_with_shadow(decrypted_secret.into(), common_point.into(), shadows, data.0)
+		decrypt_document_with_shadow(decrypted_secret, common_point, shadows, data.0)
 			.map(Into::into)
 	}
 
@@ -91,7 +91,7 @@ impl SecretStore for SecretStoreClient {
 
 	fn sign_raw_hash(&self, address: H160, password: Password, raw_hash: H256) -> Result<Bytes> {
 		self.accounts
-			.sign(address.into(), Some(password), raw_hash.into())
+			.sign(address, Some(password), raw_hash)
 			.map(|s| Bytes::new((*s).to_vec()))
 			.map_err(|e| errors::account("Could not sign raw hash.", e))
 	}

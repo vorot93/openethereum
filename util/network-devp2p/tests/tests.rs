@@ -14,6 +14,54 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
+
 use std::sync::{
 	Arc,
 	atomic::{AtomicBool, Ordering as AtomicOrdering}
@@ -38,7 +86,7 @@ pub struct TestProtocol {
 
 impl TestProtocol {
 	pub fn new(drop_session: bool) -> Self {
-		TestProtocol {
+		Self {
 			packet: Mutex::new(Vec::new()),
 			got_timeout: AtomicBool::new(false),
 			got_disconnect: AtomicBool::new(false),
@@ -46,9 +94,9 @@ impl TestProtocol {
 		}
 	}
 	/// Creates and register protocol with the network service
-	pub fn register(service: &mut NetworkService, drop_session: bool) -> Arc<TestProtocol> {
-		let handler = Arc::new(TestProtocol::new(drop_session));
-		service.register_protocol(handler.clone(), *b"tst", &[(42u8, 1u8), (43u8, 1u8)]).expect("Error registering test protocol handler");
+	pub fn register(service: &mut NetworkService, drop_session: bool) -> Arc<Self> {
+		let handler = Arc::new(Self::new(drop_session));
+		service.register_protocol(handler.clone(), *b"tst", &[(42_u8, 1_u8), (43_u8, 1_u8)]).expect("Error registering test protocol handler");
 		handler
 	}
 
@@ -70,21 +118,21 @@ impl NetworkProtocolHandler for TestProtocol {
 		io.register_timer(0, Duration::from_millis(10)).unwrap();
 	}
 
-	fn read(&self, _io: &dyn NetworkContext, _peer: &PeerId, packet_id: u8, data: &[u8]) {
+	fn read(&self, _io: &dyn NetworkContext, _peer: PeerId, packet_id: u8, data: &[u8]) {
 		assert_eq!(packet_id, 33);
 		self.packet.lock().extend(data);
 	}
 
-	fn connected(&self, io: &dyn NetworkContext, peer: &PeerId) {
-		assert!(io.peer_client_version(*peer).to_string().contains("Parity"));
+	fn connected(&self, io: &dyn NetworkContext, peer: PeerId) {
+		assert!(io.peer_client_version(peer).to_string().contains("Parity"));
 		if self.drop_session {
-			io.disconnect_peer(*peer)
+			io.disconnect_peer(peer)
 		} else {
 			io.respond(33, "hello".to_owned().into_bytes()).unwrap();
 		}
 	}
 
-	fn disconnected(&self, _io: &dyn NetworkContext, _peer: &PeerId) {
+	fn disconnected(&self, _io: &dyn NetworkContext, _peer: PeerId) {
 		self.got_disconnect.store(true, AtomicOrdering::Relaxed);
 	}
 
@@ -99,7 +147,7 @@ impl NetworkProtocolHandler for TestProtocol {
 fn net_service() {
 	let service = NetworkService::new(NetworkConfiguration::new_local(), None).expect("Error creating network service");
 	service.start().unwrap();
-	service.register_protocol(Arc::new(TestProtocol::new(false)), *b"myp", &[(1u8, 1u8)]).unwrap();
+	service.register_protocol(Arc::new(TestProtocol::new(false)), *b"myp", &[(1_u8, 1_u8)]).unwrap();
 }
 
 #[test]

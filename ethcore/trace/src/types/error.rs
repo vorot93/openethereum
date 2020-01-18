@@ -51,32 +51,32 @@ pub enum Error {
 
 impl<'a> From<&'a VmError> for Error {
 	fn from(e: &'a VmError) -> Self {
-		match *e {
-			VmError::OutOfGas => Error::OutOfGas,
-			VmError::BadJumpDestination { .. } => Error::BadJumpDestination,
-			VmError::BadInstruction { .. } => Error::BadInstruction,
-			VmError::StackUnderflow { .. } => Error::StackUnderflow,
-			VmError::OutOfStack { .. } => Error::OutOfStack,
-			VmError::BuiltIn { .. } => Error::BuiltIn,
-			VmError::Wasm { .. } => Error::Wasm,
-			VmError::Internal(_) => Error::Internal,
-			VmError::MutableCallInStaticContext => Error::MutableCallInStaticContext,
-			VmError::OutOfBounds => Error::OutOfBounds,
-			VmError::Reverted => Error::Reverted,
+		match e {
+			VmError::OutOfGas => Self::OutOfGas,
+			VmError::BadJumpDestination { .. } => Self::BadJumpDestination,
+			VmError::BadInstruction { .. } => Self::BadInstruction,
+			VmError::StackUnderflow { .. } => Self::StackUnderflow,
+			VmError::OutOfStack { .. } => Self::OutOfStack,
+			VmError::BuiltIn { .. } => Self::BuiltIn,
+			VmError::Wasm { .. } => Self::Wasm,
+			VmError::Internal(_) => Self::Internal,
+			VmError::MutableCallInStaticContext => Self::MutableCallInStaticContext,
+			VmError::OutOfBounds => Self::OutOfBounds,
+			VmError::Reverted => Self::Reverted,
 		}
 	}
 }
 
 impl From<VmError> for Error {
 	fn from(e: VmError) -> Self {
-		Error::from(&e)
+		Self::from(&e)
 	}
 }
 
 impl fmt::Display for Error {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		use self::Error::*;
-		let message = match *self {
+		let message = match self {
 			OutOfGas => "Out of gas",
 			BadJumpDestination => "Bad jump destination",
 			BadInstruction => "Bad instruction",
@@ -96,8 +96,8 @@ impl fmt::Display for Error {
 impl Encodable for Error {
 	fn rlp_append(&self, s: &mut RlpStream) {
 		use self::Error::*;
-		let value = match *self {
-			OutOfGas => 0u8,
+		let value = match self {
+			OutOfGas => 0_u8,
 			BadJumpDestination => 1,
 			BadInstruction => 2,
 			StackUnderflow => 3,

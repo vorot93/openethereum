@@ -37,7 +37,7 @@ pub struct TestClient {
 
 impl Default for TestClient {
 	fn default() -> Self {
-		TestClient {
+		Self {
 			verification_invoked: Default::default(),
 			account_details: AccountDetails {
 				nonce: 123.into(),
@@ -54,30 +54,42 @@ impl Default for TestClient {
 
 impl TestClient {
 	pub fn new() -> Self {
-		TestClient::default()
+		Self::default()
 	}
 
-	pub fn with_balance<T: Into<U256>>(mut self, balance: T) -> Self {
+	#[allow(clippy::missing_const_for_fn)]
+	pub fn with_balance<T>(mut self, balance: T) -> Self
+	where
+		U256: From<T>,
+	{
 		self.account_details.balance = balance.into();
 		self
 	}
 
-	pub fn with_nonce<T: Into<U256>>(mut self, nonce: T) -> Self {
+	#[allow(clippy::missing_const_for_fn)]
+	pub fn with_nonce<T>(mut self, nonce: T) -> Self
+	where
+		U256: From<T>,
+	{
 		self.account_details.nonce = nonce.into();
 		self
 	}
 
-	pub fn with_gas_required<T: Into<U256>>(mut self, gas_required: T) -> Self {
+	#[allow(clippy::missing_const_for_fn)]
+	pub fn with_gas_required<T>(mut self, gas_required: T) -> Self
+	where
+		U256: From<T>,
+	{
 		self.gas_required = gas_required.into();
 		self
 	}
 
-	pub fn with_local(mut self, address: &Address) -> Self {
+	pub const fn with_local(mut self, address: &Address) -> Self {
 		self.local_address = *address;
 		self
 	}
 
-	pub fn with_service_transaction(mut self) -> Self {
+	pub const fn with_service_transaction(mut self) -> Self {
 		self.is_service_transaction = true;
 		self
 	}
@@ -138,7 +150,7 @@ impl pool::client::Client for TestClient {
 	}
 
 	fn decode_transaction(&self, transaction: &[u8]) -> Result<UnverifiedTransaction, transaction::Error> {
-		let rlp = Rlp::new(&transaction);
+		let rlp = Rlp::new(transaction);
 		if rlp.as_raw().len() > self.max_transaction_size {
 			return Err(transaction::Error::TooBig)
 		}

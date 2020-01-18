@@ -30,7 +30,7 @@ pub struct Ethereum {
 	pub mix_hash: H256,
 }
 
-/// AuthorityRound seal.
+/// `AuthorityRound` seal.
 #[derive(Debug, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct AuthorityRoundSeal {

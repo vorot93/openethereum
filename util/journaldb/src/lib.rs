@@ -16,6 +16,54 @@
 
 //! `JournalDB` interface and implementation.
 
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
+
 use std::{
 	fmt, str, io,
 	sync::Arc,
@@ -95,7 +143,7 @@ pub trait JournalDB: HashDB<KeccakHasher, DBValue> {
 	fn keys(&self) -> HashMap<H256, i32>;
 }
 
-/// Alias to ethereum MemoryDB
+/// Alias to Ethereum `MemoryDB`
 type MemoryDB = memory_db::MemoryDB<
 	keccak_hasher::KeccakHasher,
 	memory_db::HashKey<keccak_hasher::KeccakHasher>,
@@ -134,10 +182,10 @@ impl str::FromStr for Algorithm {
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		match s {
-			"archive" => Ok(Algorithm::Archive),
-			"light" => Ok(Algorithm::EarlyMerge),
-			"fast" => Ok(Algorithm::OverlayRecent),
-			"basic" => Ok(Algorithm::RefCounted),
+			"archive" => Ok(Self::Archive),
+			"light" => Ok(Self::EarlyMerge),
+			"fast" => Ok(Self::OverlayRecent),
+			"basic" => Ok(Self::RefCounted),
 			e => Err(format!("Invalid algorithm: {}", e)),
 		}
 	}
@@ -145,36 +193,36 @@ impl str::FromStr for Algorithm {
 
 impl Algorithm {
 	/// Returns static str describing journal database algorithm.
-	pub fn as_str(&self) -> &'static str {
-		match *self {
-			Algorithm::Archive => "archive",
-			Algorithm::EarlyMerge => "light",
-			Algorithm::OverlayRecent => "fast",
-			Algorithm::RefCounted => "basic",
+	pub fn as_str(self) -> &'static str {
+		match self {
+			Self::Archive => "archive",
+			Self::EarlyMerge => "light",
+			Self::OverlayRecent => "fast",
+			Self::RefCounted => "basic",
 		}
 	}
 
 	/// Returns static str describing journal database algorithm.
-	pub fn as_internal_name_str(&self) -> &'static str {
-		match *self {
-			Algorithm::Archive => "archive",
-			Algorithm::EarlyMerge => "earlymerge",
-			Algorithm::OverlayRecent => "overlayrecent",
-			Algorithm::RefCounted => "refcounted",
+	pub fn as_internal_name_str(self) -> &'static str {
+		match self {
+			Self::Archive => "archive",
+			Self::EarlyMerge => "earlymerge",
+			Self::OverlayRecent => "overlayrecent",
+			Self::RefCounted => "refcounted",
 		}
 	}
 
 	/// Returns true if pruning strategy is stable
-	pub fn is_stable(&self) -> bool {
-		match *self {
-			Algorithm::Archive | Algorithm::OverlayRecent => true,
+	pub fn is_stable(self) -> bool {
+		match self {
+			Self::Archive | Self::OverlayRecent => true,
 			_ => false,
 		}
 	}
 
 	/// Returns all algorithm types.
-	pub fn all_types() -> Vec<Algorithm> {
-		vec![Algorithm::Archive, Algorithm::EarlyMerge, Algorithm::OverlayRecent, Algorithm::RefCounted]
+	pub fn all_types() -> Vec<Self> {
+		vec![Self::Archive, Self::EarlyMerge, Self::OverlayRecent, Self::RefCounted]
 	}
 }
 
@@ -270,7 +318,7 @@ mod tests {
 		let mut refcounted = 0;
 
 		for a in &Algorithm::all_types() {
-			match *a {
+			match a {
 				Algorithm::Archive => archive += 1,
 				Algorithm::EarlyMerge => earlymerge += 1,
 				Algorithm::OverlayRecent => overlayrecent += 1,

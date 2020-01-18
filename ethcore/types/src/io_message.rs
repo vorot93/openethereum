@@ -44,7 +44,7 @@ pub enum ClientIoMessage<C> {
 impl<C> ClientIoMessage<C> {
 	/// Create new `ClientIoMessage` that executes given procedure.
 	pub fn execute<F: Fn(&C) + Send + Sync + 'static>(fun: F) -> Self {
-		ClientIoMessage::Execute(Callback(Box::new(fun)))
+		Self::Execute(Callback(Box::new(fun)))
 	}
 }
 

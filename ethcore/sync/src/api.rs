@@ -89,10 +89,10 @@ pub enum WarpSync {
 impl WarpSync {
 	/// Returns true if warp sync is enabled.
 	pub fn is_enabled(&self) -> bool {
-		match *self {
-			WarpSync::Enabled => true,
-			WarpSync::OnlyAndAfter(_) => true,
-			WarpSync::Disabled => false,
+		match self {
+			Self::Enabled => true,
+			Self::OnlyAndAfter(_) => true,
+			Self::Disabled => false,
 		}
 	}
 
@@ -102,7 +102,7 @@ impl WarpSync {
 	/// until given block number is reached by
 	/// successfuly finding and restoring from a snapshot.
 	pub fn is_warp_only(&self) -> bool {
-		if let WarpSync::OnlyAndAfter(_) = *self {
+		if let Self::OnlyAndAfter(_) = *self {
 			true
 		} else {
 			false
@@ -132,8 +132,8 @@ pub struct SyncConfig {
 }
 
 impl Default for SyncConfig {
-	fn default() -> SyncConfig {
-		SyncConfig {
+	fn default() -> Self {
+		Self {
 			max_download_ahead_blocks: 20000,
 			download_old_blocks: true,
 			network_id: 1,
@@ -146,7 +146,7 @@ impl Default for SyncConfig {
 	}
 }
 
-/// receiving end of a futures::mpsc channel
+/// receiving end of a `futures::mpsc` channel
 pub type Notification<T> = futures_mpsc::UnboundedReceiver<T>;
 
 /// Current sync status
@@ -222,7 +222,7 @@ pub struct PipProtocolInfo {
 
 impl From<light_net::Status> for PipProtocolInfo {
 	fn from(status: light_net::Status) -> Self {
-		PipProtocolInfo {
+		Self {
 			version: status.protocol_version,
 			head: status.head_hash,
 			difficulty: status.head_td,
@@ -254,14 +254,13 @@ pub enum PriorityTask {
 impl PriorityTask {
 	/// Mark the task as being processed, right after it's retrieved from the queue.
 	pub fn starting(&self) {
-		match *self {
-			PriorityTask::PropagateTransactions(_, ref is_ready) => is_ready.store(true, atomic::Ordering::SeqCst),
-			_ => {},
+		if let Self::PropagateTransactions(_, is_ready) = self {
+			is_ready.store(true, atomic::Ordering::SeqCst);
 		}
 	}
 }
 
-/// EthSync initialization parameters.
+/// `EthSync` initialization parameters.
 pub struct Params {
 	/// Configuration.
 	pub config: SyncConfig,
@@ -306,7 +305,7 @@ fn light_params(
 	sample_store: Option<Box<dyn SampleStore>>,
 ) -> LightParams {
 	let mut light_params = LightParams {
-		network_id: network_id,
+		network_id,
 		config: Default::default(),
 		capabilities: Capabilities {
 			serve_headers: true,
@@ -314,7 +313,7 @@ fn light_params(
 			serve_state_since: Some(pruning_info.earliest_state),
 			tx_relay: true,
 		},
-		sample_store: sample_store,
+		sample_store,
 	};
 
 	light_params.config.median_peers = median_peers;
@@ -323,11 +322,12 @@ fn light_params(
 
 impl EthSync {
 	/// Creates and register protocol with the network service
-	pub fn new(params: Params, connection_filter: Option<Arc<dyn ConnectionFilter>>) -> Result<Arc<EthSync>, Error> {
+	pub fn new(params: Params, connection_filter: Option<Arc<dyn ConnectionFilter>>) -> Result<Arc<Self>, Error> {
 		let pruning_info = params.chain.pruning_info();
-		let light_proto = match params.config.serve_light {
-			false => None,
-			true => Some({
+		let light_proto = if !params.config.serve_light {
+			None
+		} else {
+			Some({
 				let sample_store = params.network_config.net_config_path
 					.clone()
 					.map(::std::path::PathBuf::from)
@@ -377,12 +377,12 @@ impl EthSync {
 				}
 
 				// client has been dropped
-				return Err(())
+				Err(())
 			}));
 		}
 		let service = NetworkService::new(params.network_config.clone().into_basic()?, connection_filter)?;
 
-		let sync = Arc::new(EthSync {
+		let sync = Arc::new(Self {
 			network: service,
 			eth_handler: Arc::new(SyncProtocolHandler {
 				sync,
@@ -391,7 +391,7 @@ impl EthSync {
 				overlay: RwLock::new(HashMap::new()),
 				private_state: params.private_state,
 			}),
-			light_proto: light_proto,
+			light_proto,
 			subprotocol_name: params.config.subprotocol_name,
 			light_subprotocol_name: params.config.light_subprotocol_name,
 			priority_tasks: Mutex::new(priority_tasks_tx),
@@ -489,19 +489,19 @@ impl NetworkProtocolHandler for SyncProtocolHandler {
 		}
 	}
 
-	fn read(&self, io: &dyn NetworkContext, peer: &PeerId, packet_id: u8, data: &[u8]) {
+	fn read(&self, io: &dyn NetworkContext, peer: PeerId, packet_id: u8, data: &[u8]) {
 		self.sync.dispatch_packet(&mut NetSyncIo::new(io,
 			&*self.chain,
 			&*self.snapshot_service,
 			&self.overlay,
 			self.private_state.clone()),
-			*peer, packet_id, data);
+			peer, packet_id, data);
 	}
 
-	fn connected(&self, io: &dyn NetworkContext, peer: &PeerId) {
+	fn connected(&self, io: &dyn NetworkContext, peer: PeerId) {
 		trace_time!("sync::connected");
 		// If warp protocol is supported only allow warp handshake
-		let warp_protocol = io.protocol_version(WARP_SYNC_PROTOCOL_ID, *peer).unwrap_or(0) != 0;
+		let warp_protocol = io.protocol_version(WARP_SYNC_PROTOCOL_ID, peer).unwrap_or(0) != 0;
 		let warp_context = io.subprotocol_name() == WARP_SYNC_PROTOCOL_ID;
 		if warp_protocol == warp_context {
 			self.sync.write().on_peer_connected(&mut NetSyncIo::new(io,
@@ -509,11 +509,11 @@ impl NetworkProtocolHandler for SyncProtocolHandler {
 			&*self.snapshot_service,
 			&self.overlay,
 			self.private_state.clone()),
-			*peer);
+			peer);
 		}
 	}
 
-	fn disconnected(&self, io: &dyn NetworkContext, peer: &PeerId) {
+	fn disconnected(&self, io: &dyn NetworkContext, peer: PeerId) {
 		trace_time!("sync::disconnected");
 		if io.subprotocol_name() != WARP_SYNC_PROTOCOL_ID {
 			self.sync.write().on_peer_aborting(&mut NetSyncIo::new(io,
@@ -521,7 +521,7 @@ impl NetworkProtocolHandler for SyncProtocolHandler {
 				&*self.snapshot_service,
 				&self.overlay,
 				self.private_state.clone()),
-				*peer);
+				peer);
 		}
 	}
 
@@ -540,10 +540,10 @@ impl NetworkProtocolHandler for SyncProtocolHandler {
 }
 
 impl ChainNotify for EthSync {
-	fn block_pre_import(&self, bytes: &Bytes, hash: &H256, difficulty: &U256) {
+	fn block_pre_import(&self, bytes: &[u8], hash: &H256, difficulty: &U256) {
 		let task = PriorityTask::PropagateBlock {
 			started: ::std::time::Instant::now(),
-			block: bytes.clone(),
+			block: bytes.into(),
 			hash: *hash,
 			difficulty: *difficulty,
 		};
@@ -552,10 +552,10 @@ impl ChainNotify for EthSync {
 		}
 	}
 
-	fn new_blocks(&self, new_blocks: NewBlocks)
-	{
-		if new_blocks.has_more_blocks_to_import { return }
+	fn new_blocks(&self, new_blocks: NewBlocks)	{
 		use light::net::Announcement;
+
+		if new_blocks.has_more_blocks_to_import { return }
 
 		self.network.with_context(self.subprotocol_name, |context| {
 			let mut sync_io = NetSyncIo::new(context,
@@ -594,16 +594,13 @@ impl ChainNotify for EthSync {
 	}
 
 	fn start(&self) {
-		match self.network.start() {
-			Err((err, listen_address)) => {
-				match err.into() {
-					Error::Io(ref e) if e.kind() == io::ErrorKind::AddrInUse => {
-						warn!("Network port {:?} is already in use, make sure that another instance of an Ethereum client is not running or change the port using the --port option.", listen_address.expect("Listen address is not set."))
-					},
-					err => warn!("Error starting network: {}", err),
-				}
-			},
-			_ => {},
+		if let Err((err, listen_address)) = self.network.start() {
+			match err {
+				Error::Io(e) if e.kind() == io::ErrorKind::AddrInUse => {
+					warn!("Network port {:?} is already in use, make sure that another instance of an Ethereum client is not running or change the port using the --port option.", listen_address.expect("Listen address is not set."))
+				},
+				err => warn!("Error starting network: {}", err),
+			}
 		}
 
 		self.network.register_protocol(self.eth_handler.clone(), self.subprotocol_name, &[ETH_PROTOCOL_VERSION_62, ETH_PROTOCOL_VERSION_63])
@@ -613,7 +610,7 @@ impl ChainNotify for EthSync {
 			.unwrap_or_else(|e| warn!("Error registering snapshot sync protocol: {:?}", e));
 
 		// register the light protocol.
-		if let Some(light_proto) = self.light_proto.as_ref().map(|x| x.clone()) {
+		if let Some(light_proto) = self.light_proto.as_ref().cloned() {
 			self.network.register_protocol(light_proto, self.light_subprotocol_name, ::light::net::PROTOCOL_VERSIONS)
 				.unwrap_or_else(|e| warn!("Error registering light client protocol: {:?}", e));
 		}
@@ -768,18 +765,24 @@ pub struct NetworkConfiguration {
 	pub client_version: String,
 }
 
+impl Default for NetworkConfiguration {
+	fn default() -> Self {
+		BasicNetworkConfiguration::new().into()
+	}
+}
+
 impl NetworkConfiguration {
 	/// Create a new default config.
 	pub fn new() -> Self {
-		From::from(BasicNetworkConfiguration::new())
+		Self::default()
 	}
 
 	/// Create a new local config.
 	pub fn new_local() -> Self {
-		From::from(BasicNetworkConfiguration::new_local())
+		BasicNetworkConfiguration::new_local().into()
 	}
 
-	/// Attempt to convert this config into a BasicNetworkConfiguration.
+	/// Attempt to convert this config into a `BasicNetworkConfiguration`.
 	pub fn into_basic(self) -> Result<BasicNetworkConfiguration, AddrParseError> {
 		Ok(BasicNetworkConfiguration {
 			config_path: self.config_path,
@@ -806,11 +809,11 @@ impl NetworkConfiguration {
 
 impl From<BasicNetworkConfiguration> for NetworkConfiguration {
 	fn from(other: BasicNetworkConfiguration) -> Self {
-		NetworkConfiguration {
+		Self {
 			config_path: other.config_path,
 			net_config_path: other.net_config_path,
-			listen_address: other.listen_address.and_then(|addr| Some(format!("{}", addr))),
-			public_address: other.public_address.and_then(|addr| Some(format!("{}", addr))),
+			listen_address: other.listen_address.map(|addr| format!("{}", addr)),
+			public_address: other.public_address.map(|addr| format!("{}", addr)),
 			udp_port: other.udp_port,
 			nat_enabled: other.nat_enabled,
 			nat_type: other.nat_type,
@@ -946,9 +949,9 @@ impl LightSync {
 
 		let service = NetworkService::new(params.network_config, None)?;
 
-		Ok(LightSync {
+		Ok(Self {
 			proto: light_proto,
-			sync: sync,
+			sync,
 			network: service,
 			subprotocol_name: params.subprotocol_name,
 			network_id: params.network_id,
@@ -991,16 +994,13 @@ impl ManageNetwork for LightSync {
 	}
 
 	fn start_network(&self) {
-		match self.network.start() {
-			Err((err, listen_address)) => {
-				match err.into() {
-					Error::Io(ref e) if e.kind() == io::ErrorKind::AddrInUse => {
-						warn!("Network port {:?} is already in use, make sure that another instance of an Ethereum client is not running or change the port using the --port option.", listen_address.expect("Listen address is not set."))
-					},
-					err => warn!("Error starting network: {}", err),
-				}
-			},
-			_ => {},
+		if let Err((err, listen_address)) = self.network.start() {
+			match err {
+				Error::Io(e) if e.kind() == io::ErrorKind::AddrInUse => {
+					warn!("Network port {:?} is already in use, make sure that another instance of an Ethereum client is not running or change the port using the --port option.", listen_address.expect("Listen address is not set."))
+				},
+				other => warn!("Error starting network: {}", other),
+			}
 		}
 
 		let light_proto = self.proto.clone();
@@ -1029,8 +1029,8 @@ impl LightSyncProvider for LightSync {
 		let peers_range = self.num_peers_range();
 		debug_assert!(peers_range.end() >= peers_range.start());
 		PeerNumbers {
-			connected: connected,
-			active: active,
+			connected,
+			active,
 			max: *peers_range.end() as usize,
 			min: *peers_range.start() as usize,
 		}
@@ -1068,7 +1068,7 @@ impl LightSyncProvider for LightSync {
 	}
 
 	fn transactions_stats(&self) -> BTreeMap<H256, TransactionStats> {
-		Default::default() // TODO
+		BTreeMap::new() // TODO
 	}
 }
 

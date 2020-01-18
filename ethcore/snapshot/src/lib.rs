@@ -17,7 +17,55 @@
 //! Snapshot creation, restoration, and network service.
 //!
 //! Documentation of the format can be found at
-//! https://wiki.parity.io/Warp-Sync-Snapshot-Format
+//! <https://wiki.parity.io/Warp-Sync-Snapshot-Format>
+
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
 
 use std::collections::{HashMap, HashSet};
 use std::cmp;
@@ -47,10 +95,10 @@ use keccak_hasher::KeccakHasher;
 use parking_lot::{Mutex, RwLock};
 use kvdb::{KeyValueDB, DBValue};
 use log::{debug, info, trace};
-use num_cpus;
+
 use rand::{Rng, rngs::OsRng};
 use rlp::{RlpStream, Rlp};
-use snappy;
+
 use state_db::StateDB;
 use trie_db::{Trie, TrieMut};
 
@@ -107,7 +155,7 @@ pub struct SnapshotConfiguration {
 
 impl Default for SnapshotConfiguration {
 	fn default() -> Self {
-		SnapshotConfiguration {
+		Self {
 			no_periodic: false,
 			processing_threads: ::std::cmp::max(1, num_cpus::get_physical() / 2),
 		}
@@ -284,7 +332,7 @@ impl<'a> StateChunker<'a> {
 	}
 
 	// Get current chunk size.
-	fn chunk_size(&self) -> usize {
+	const fn chunk_size(&self) -> usize {
 		self.cur_size
 	}
 }
@@ -304,7 +352,7 @@ pub fn chunk_state<'a>(
 	part: Option<usize>,
 	thread_idx: usize,
 ) -> Result<Vec<H256>, Error> {
-	let account_trie = TrieDB::new(&db, &root)?;
+	let account_trie = TrieDB::new(&db, root)?;
 
 	let mut chunker = StateChunker {
 		hashes: Vec::new(),
@@ -385,7 +433,7 @@ pub struct StateRebuilder {
 impl StateRebuilder {
 	/// Create a new state rebuilder to write into the given backing DB.
 	pub fn new(db: Arc<dyn KeyValueDB>, pruning: Algorithm) -> Self {
-		StateRebuilder {
+		Self {
 			db: journaldb::new(db.clone(), pruning, ethcore_db::COL_STATE),
 			state_root: KECCAK_NULL_RLP,
 			known_code: HashMap::new(),
@@ -440,7 +488,7 @@ impl StateRebuilder {
 			for (hash, thin_rlp) in pairs {
 				if !flag.load(Ordering::SeqCst) { return Err(Error::RestorationAborted.into()) }
 
-				if &thin_rlp[..] != &empty_rlp[..] {
+				if thin_rlp[..] != empty_rlp[..] {
 					self.bloom.set(hash.as_bytes());
 				}
 				account_trie.insert(hash.as_bytes(), &thin_rlp)?;
@@ -470,7 +518,7 @@ impl StateRebuilder {
 	}
 
 	/// Get the state root of the rebuilder.
-	pub fn state_root(&self) -> H256 { self.state_root }
+	pub const fn state_root(&self) -> H256 { self.state_root }
 }
 
 #[derive(Default)]
@@ -506,7 +554,7 @@ fn rebuild_accounts(
 				account::from_fat_rlp(&mut acct_db, fat_rlp, storage_root)?
 			};
 
-			let code_hash = acc.code_hash.clone();
+			let code_hash = acc.code_hash;
 			match maybe_code {
 				// new inline code
 				Some(code) => status.new_code.push((code_hash, code, hash)),
@@ -535,10 +583,10 @@ fn rebuild_accounts(
 
 		*out = (hash, thin_rlp);
 	}
-	if let Some(&(ref hash, ref rlp)) = out_chunk.iter().last() {
+	if let Some((hash, rlp)) = out_chunk.iter().last() {
 		known_storage_roots.insert(*hash, ::rlp::decode::<BasicAccount>(rlp)?.storage_root);
 	}
-	if let Some(&(ref hash, ref rlp)) = out_chunk.iter().next() {
+	if let Some((hash, rlp)) = out_chunk.iter().next() {
 		known_storage_roots.insert(*hash, ::rlp::decode::<BasicAccount>(rlp)?.storage_root);
 	}
 	Ok(status)

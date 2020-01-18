@@ -32,10 +32,10 @@ pub enum ReleaseTrack {
 
 impl fmt::Display for ReleaseTrack {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "{}", match *self {
-			ReleaseTrack::Stable => "stable",
-			ReleaseTrack::Nightly => "nightly",
-			ReleaseTrack::Unknown => "unknown",
+		write!(f, "{}", match self {
+			Self::Stable => "stable",
+			Self::Nightly => "nightly",
+			Self::Unknown => "unknown",
 		})
 	}
 }
@@ -43,9 +43,9 @@ impl fmt::Display for ReleaseTrack {
 impl<'a> From<&'a str> for ReleaseTrack {
 	fn from(s: &'a str) -> Self {
 		match s {
-			"stable" => ReleaseTrack::Stable,
-			"nightly" => ReleaseTrack::Nightly,
-			_ => ReleaseTrack::Unknown,
+			"stable" => Self::Stable,
+			"nightly" => Self::Nightly,
+			_ => Self::Unknown,
 		}
 	}
 }
@@ -53,16 +53,16 @@ impl<'a> From<&'a str> for ReleaseTrack {
 impl From<u8> for ReleaseTrack {
 	fn from(i: u8) -> Self {
 		match i {
-			1 => ReleaseTrack::Stable,
-			2 => ReleaseTrack::Nightly,
-			_ => ReleaseTrack::Unknown,
+			1 => Self::Stable,
+			2 => Self::Nightly,
+			_ => Self::Unknown,
 		}
 	}
 }
 
 impl From<ReleaseTrack> for u8 {
 	fn from(rt: ReleaseTrack) -> Self {
-		rt as u8
+		rt as Self
 	}
 }
 
@@ -72,16 +72,16 @@ mod tests {
 
 	#[test]
 	fn test_release_track_from() {
-		assert_eq!(ReleaseTrack::Stable, 1u8.into());
-		assert_eq!(ReleaseTrack::Nightly, 2u8.into());
-		assert_eq!(ReleaseTrack::Unknown, 0u8.into());
+		assert_eq!(ReleaseTrack::Stable, 1_u8.into());
+		assert_eq!(ReleaseTrack::Nightly, 2_u8.into());
+		assert_eq!(ReleaseTrack::Unknown, 0_u8.into());
 	}
 
 	#[test]
 	fn test_release_track_into() {
-		assert_eq!(1u8, u8::from(ReleaseTrack::Stable));
-		assert_eq!(2u8, u8::from(ReleaseTrack::Nightly));
-		assert_eq!(0u8, u8::from(ReleaseTrack::Unknown));
+		assert_eq!(1_u8, u8::from(ReleaseTrack::Stable));
+		assert_eq!(2_u8, u8::from(ReleaseTrack::Nightly));
+		assert_eq!(0_u8, u8::from(ReleaseTrack::Unknown));
 	}
 
 	#[test]

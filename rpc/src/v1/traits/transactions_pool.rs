@@ -8,6 +8,7 @@ use miner::pool::TxStatus;
 use ethereum_types::H256;
 
 /// Transactions Pool PUB-SUB rpc interface.
+#[allow(clippy::needless_return)]
 #[rpc(server)]
 pub trait TransactionsPool {
 	/// Pub/Sub Metadata

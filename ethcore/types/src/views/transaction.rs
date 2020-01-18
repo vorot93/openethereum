@@ -37,19 +37,15 @@ impl<'a> TransactionView<'a> {
 	///
 	/// use types::views::{TransactionView};
 	///
-	/// fn main() {
 	/// let bytes : &[u8] = &[];
 	/// let tx_view = view!(TransactionView, bytes);
-	/// }
 	/// ```
-	pub fn new(rlp: ViewRlp<'a>) -> TransactionView<'a> {
-		TransactionView {
-			rlp: rlp
-		}
+	pub const fn new(rlp: ViewRlp<'a>) -> Self {
+		Self { rlp }
 	}
 
 	/// Return reference to underlaying rlp.
-	pub fn rlp(&self) -> &ViewRlp<'a> {
+	pub const fn rlp(&self) -> &ViewRlp<'a> {
 		&self.rlp
 	}
 
@@ -58,28 +54,28 @@ impl<'a> TransactionView<'a> {
 		keccak(self.rlp.as_raw())
 	}
 
-	/// Get the nonce field of the transaction.
+	/// Get the `nonce` field of the transaction.
 	pub fn nonce(&self) -> U256 { self.rlp.val_at(0) }
 
-	/// Get the gas_price field of the transaction.
+	/// Get the `gas_price` field of the transaction.
 	pub fn gas_price(&self) -> U256 { self.rlp.val_at(1) }
 
-	/// Get the gas field of the transaction.
+	/// Get the `gas` field of the transaction.
 	pub fn gas(&self) -> U256 { self.rlp.val_at(2) }
 
-	/// Get the value field of the transaction.
+	/// Get the `value` field of the transaction.
 	pub fn value(&self) -> U256 { self.rlp.val_at(4) }
 
-	/// Get the data field of the transaction.
+	/// Get the `data` field of the transaction.
 	pub fn data(&self) -> Bytes { self.rlp.val_at(5) }
 
-	/// Get the v field of the transaction.
+	/// Get the `v` field of the transaction.
 	pub fn v(&self) -> u8 { let r: u16 = self.rlp.val_at(6); r as u8 }
 
-	/// Get the r field of the transaction.
+	/// Get the `r` field of the transaction.
 	pub fn r(&self) -> U256 { self.rlp.val_at(7) }
 
-	/// Get the s field of the transaction.
+	/// Get the `s` field of the transaction.
 	pub fn s(&self) -> U256 { self.rlp.val_at(8) }
 }
 

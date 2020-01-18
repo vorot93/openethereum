@@ -37,16 +37,16 @@ impl<T> Diff<T> {
 	/// Construct new object with given `pre` and `post`.
 	pub fn new(pre: T, post: T) -> Self where T: Eq {
 		if pre == post {
-			Diff::Same
+			Self::Same
 		} else {
-			Diff::Changed(pre, post)
+			Self::Changed(pre, post)
 		}
 	}
 
 	/// Determine whether there was a change or not.
 	pub fn is_same(&self) -> bool {
-		match *self {
-			Diff::Same => true,
+		match self {
+			Self::Same => true,
 			_ => false
 		}
 	}

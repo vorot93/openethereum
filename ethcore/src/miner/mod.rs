@@ -129,12 +129,12 @@ pub trait MinerService : Send + Sync {
 	/// Set the lower and upper bound of gas limit we wish to target when sealing a new block.
 	fn set_gas_range_target(&self, gas_range_target: (U256, U256));
 
-	/// Set the extra_data that we will seal blocks with.
+	/// Set the `extra_data` that we will seal blocks with.
 	fn set_extra_data(&self, extra_data: Bytes);
 
 	/// Set info necessary to sign consensus messages and block authoring.
 	///
-	/// On chains where sealing is done externally (e.g. PoW) we provide only reward beneficiary.
+	/// On chains where sealing is done externally (e.g. proof-of-work) we provide only reward beneficiary.
 	fn set_author<T: Into<Option<Author>>>(&self, author: T);
 
 	// Transaction Pool

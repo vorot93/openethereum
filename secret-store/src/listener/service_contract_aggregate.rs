@@ -32,8 +32,8 @@ impl OnChainServiceContractAggregate {
 	/// Create new aggregated service contract listener.
 	pub fn new(contracts: Vec<Arc<dyn ServiceContract>>) -> Self {
 		debug_assert!(contracts.len() > 1);
-		OnChainServiceContractAggregate {
-			contracts: contracts,
+		Self {
+			contracts,
 		}
 	}
 }

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-//! PoW block chunker and rebuilder tests.
+//! Proof-of-work block chunker and rebuilder tests.
 
 use std::sync::atomic::AtomicBool;
 use tempdir::TempDir;
@@ -32,11 +32,11 @@ use snapshot::{
 	PowSnapshot,
 };
 use parking_lot::{Mutex, RwLock};
-use snappy;
+
 use keccak_hash::KECCAK_NULL_RLP;
 use kvdb::DBTransaction;
 use ethcore::test_helpers;
-use spec;
+
 
 const SNAPSHOT_MODE: PowSnapshot = PowSnapshot { blocks: 30000, max_restore_blocks: 30000 };
 
@@ -56,7 +56,7 @@ fn chunk_and_restore(amount: u64) {
 	// build the blockchain.
 	let mut batch = DBTransaction::new();
 	for block in generator {
-		bc.insert_block(&mut batch, block.encoded(), vec![], ExtrasInsert {
+		bc.insert_block(&mut batch, block.encoded(), Vec::new(), ExtrasInsert {
 			fork_choice: ForkChoice::New,
 			is_finalized: false,
 		});
@@ -126,9 +126,9 @@ fn checks_flag() {
 
 	let mut stream = RlpStream::new_list(5);
 
-	stream.append(&100u64)
+	stream.append(&100_u64)
 		.append(&H256::zero())
-		.append(&(!0u64));
+		.append(&(!0_u64));
 
 	stream.append_empty_data().append_empty_data();
 

@@ -85,7 +85,7 @@ impl ProofCheck {
 	pub fn new(proof: &[DBValue]) -> Self {
 		let mut db = journaldb::new_memory_db();
 		for item in proof { db.insert(EMPTY_PREFIX, item); }
-		ProofCheck(db)
+		Self(db)
 	}
 }
 
@@ -203,7 +203,7 @@ impl<H: AsHashDB<KeccakHasher, DBValue>> Proving<H> {
 	/// Create a new `Proving` over a base database.
 	/// This will store all values ever fetched from that base.
 	pub fn new(base: H) -> Self {
-		Proving {
+		Self {
 			base,
 			changed: journaldb::new_memory_db(),
 			proof: Mutex::new(HashSet::new()),
@@ -219,7 +219,7 @@ impl<H: AsHashDB<KeccakHasher, DBValue>> Proving<H> {
 
 impl<H: AsHashDB<KeccakHasher, DBValue> + Clone> Clone for Proving<H> {
 	fn clone(&self) -> Self {
-		Proving {
+		Self {
 			base: self.base.clone(),
 			changed: self.changed.clone(),
 			proof: Mutex::new(self.proof.lock().clone()),

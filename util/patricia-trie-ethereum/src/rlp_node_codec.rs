@@ -37,7 +37,7 @@ const HASHED_NULL_NODE : H256 = H256( HASHED_NULL_NODE_BYTES );
 
 /// Encode a partial value with a partial tuple as input.
 fn encode_partial_iter<'a>(partial: Partial<'a>, is_leaf: bool) -> impl Iterator<Item = u8> + 'a {
-	encode_partial_inner_iter((partial.0).1, partial.1.iter().map(|v| *v), (partial.0).0 > 0, is_leaf)
+	encode_partial_inner_iter((partial.0).1, partial.1.iter().copied(), (partial.0).0 > 0, is_leaf)
 }
 
 /// Encode a partial value with an iterator as input.
@@ -251,7 +251,7 @@ mod tests {
 	#[test]
 	fn decode_ext() {
 		let mut stream = RlpStream::new_list(2);
-		let payload = vec![0x1, 0x2, 0x3u8];
+		let payload = vec![0x1, 0x2, 0x3_u8];
 		stream.append(&"").append(&payload);
 		let data = stream.out();
 		let decoded = RlpNodeCodec::decode(&data);

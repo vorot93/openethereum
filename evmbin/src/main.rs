@@ -32,7 +32,53 @@
 //! ./target/release/parity-evm --help
 //! ```
 
-#![warn(missing_docs)]
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
 
 use std::sync::Arc;
 use std::{fmt, fs};
@@ -43,7 +89,7 @@ use docopt::Docopt;
 use rustc_hex::FromHex;
 use ethereum_types::{U256, Address};
 use ethcore::{json_tests, test_helpers::TrieSpec};
-use spec;
+
 use serde::Deserialize;
 use vm::{ActionParams, CallType};
 
@@ -52,7 +98,7 @@ mod display;
 
 use crate::info::{Informant, TxInput};
 
-const USAGE: &'static str = r#"
+const USAGE: &str = r#"
 EVM implementation for Parity.
   Copyright 2015-2020 Parity Technologies (UK) Ltd.
 
@@ -287,10 +333,10 @@ fn run_stats_jsontests_vm(args: Args) {
 				},
 			}
 		};
-		if !file.is_file() {
-			json_tests::run_executive_test_path(&file, &[], &mut record_time);
-		} else {
+		if file.is_file() {
 			json_tests::run_executive_test_file(&file, &mut record_time);
+		} else {
+			json_tests::run_executive_test_path(&file, &[], &mut record_time);
 		}
 	}
 
@@ -358,46 +404,61 @@ impl Args {
 	// CLI option `--code CODE`
 	/// Set the contract code in hex. Only send to either a contract code or a recipient address.
 	pub fn code(&self) -> Result<Option<Bytes>, String> {
-		match self.flag_code {
-			Some(ref code) => code.from_hex().map(Some).map_err(to_string),
-			None => Ok(None),
-		}
+		Ok({
+			if let Some(code) = &self.flag_code {
+				Some(code.from_hex().map_err(to_string)?)
+			} else {
+				None
+			}
+		})
 	}
 
 	// CLI option `--to ADDRESS`
 	/// Set the recipient address in hex. Only send to either a contract code or a recipient address.
 	pub fn to(&self) -> Result<Address, String> {
-		match self.flag_to {
-			Some(ref to) => to.parse().map_err(to_string),
-			None => Ok(Address::zero()),
-		}
+		Ok({
+			if let Some(to) = &self.flag_to {
+				to.parse().map_err(to_string)?
+			} else {
+				Address::zero()
+			}
+		})
 	}
 
 	// CLI option `--from ADDRESS`
 	/// Set the sender address.
 	pub fn from(&self) -> Result<Address, String> {
-		match self.flag_from {
-			Some(ref from) => from.parse().map_err(to_string),
-			None => Ok(Address::zero()),
-		}
+		Ok({
+			if let Some(from) = &self.flag_from {
+				from.parse().map_err(to_string)?
+			} else {
+				Address::zero()
+			}
+		})
 	}
 
 	// CLI option `--input DATA`
 	/// Set the input data in hex.
 	pub fn data(&self) -> Result<Option<Bytes>, String> {
-		match self.flag_input {
-			Some(ref input) => input.from_hex().map_err(to_string).map(Some),
-			None => Ok(None),
-		}
+		Ok({
+			if let Some(input) = &self.flag_input {
+				Some(input.from_hex().map_err(to_string)?)
+			} else {
+				None
+			}
+		})
 	}
 
 	// CLI option `--gas GAS`
 	/// Set the gas limit in units of gas. Defaults to max value to allow code to run for whatever time is required.
 	pub fn gas(&self) -> Result<U256, String> {
-		match self.flag_gas {
-			Some(ref gas) => gas.parse().map_err(to_string),
-			None => Ok(U256::from(u64::max_value())),
-		}
+		Ok({
+			if let Some(gas) = &self.flag_gas {
+				gas.parse().map_err(to_string)?
+			} else {
+				u64::max_value().into()
+			}
+		})
 	}
 
 	// CLI option `--gas-price WEI`
@@ -405,23 +466,25 @@ impl Args {
 	/// is used, otherwise such accounts would not have sufficient funds to pay the transaction fee.
 	/// Defaulting to zero also makes testing easier since it is not necessary to specify a special configuration file.
 	pub fn gas_price(&self) -> Result<U256, String> {
-		match self.flag_gas_price {
-			Some(ref gas_price) => gas_price.parse().map_err(to_string),
-			None => Ok(U256::zero()),
-		}
+		Ok({
+			if let Some(gas_price) = &self.flag_gas_price {
+				gas_price.parse().map_err(to_string)?
+			} else {
+				U256::zero()
+			}
+		})
 	}
 
 	// CLI option `--chain PATH`
 	/// Set the path of the chain specification JSON file.
 	pub fn spec(&self) -> Result<spec::Spec, String> {
-		Ok(match self.flag_chain {
-			Some(ref filename) => {
+		Ok({
+			if let Some(filename) = &self.flag_chain {
 				let file = fs::File::open(filename).map_err(|e| e.to_string())?;
 				spec::Spec::load(&::std::env::temp_dir(), file).map_err(|e| e.to_string())?
-			},
-			None => {
+			} else {
 				spec::new_foundation(&::std::env::temp_dir())
-			},
+			}
 		})
 	}
 }
@@ -466,7 +529,7 @@ mod tests {
 	}
 
 	fn run<T: AsRef<str>>(args: &[T]) -> Args {
-		Docopt::new(USAGE).and_then(|d| d.argv(args.into_iter()).deserialize()).unwrap()
+		Docopt::new(USAGE).and_then(|d| d.argv(args.iter()).deserialize()).unwrap()
 	}
 
 	#[test]
@@ -487,10 +550,10 @@ mod tests {
 			"--std-out-only",
 		]);
 
-		assert_eq!(args.code(), Ok(Some(vec![05])));
+		assert_eq!(args.code(), Ok(Some(vec![5])));
 		assert_eq!(args.to(), Ok(Address::from_low_u64_be(4)));
 		assert_eq!(args.from(), Ok(Address::from_low_u64_be(3)));
-		assert_eq!(args.data(), Ok(Some(vec![06]))); // input data
+		assert_eq!(args.data(), Ok(Some(vec![6]))); // input data
 		assert_eq!(args.gas(), Ok(1.into()));
 		assert_eq!(args.gas_price(), Ok(2.into()));
 		assert_eq!(args.flag_chain, Some("./testfile.json".to_owned()));
@@ -565,15 +628,15 @@ mod tests {
 		let env_info = deserialized_state_tests.add11.env.into();
 		let multitransaction = deserialized_state_tests.add11.transaction;
 
-		for (fork_spec_name, tx_states) in deserialized_state_tests.add11.post_states.iter() {
-			for (tx_index, tx_state) in tx_states.into_iter().enumerate() {
+		for (fork_spec_name, tx_states) in &deserialized_state_tests.add11.post_states {
+			for (tx_index, tx_state) in tx_states.iter().enumerate() {
 				let (informant, _, res) = informant();
 				let trie_spec = TrieSpec::Secure;
 				let transaction: transaction::SignedTransaction = multitransaction.select(&tx_state.indexes).into();
 				let tx_input = TxInput {
-					state_test_name: &state_test_name,
+					state_test_name,
 					tx_index,
-					fork_spec_name: &fork_spec_name,
+					fork_spec_name,
 					pre_state: &pre,
 					post_root: tx_states[tx_index].hash.0,
 					env_info: &env_info,
@@ -601,15 +664,15 @@ mod tests {
 		let pre = deserialized_state_tests.create2call_precompiles.pre_state.into();
 		let env_info = deserialized_state_tests.create2call_precompiles.env.into();
 		let multitransaction = deserialized_state_tests.create2call_precompiles.transaction;
-		for (fork_spec_name, tx_states) in deserialized_state_tests.create2call_precompiles.post_states.iter() {
-			for (tx_index, tx_state) in tx_states.into_iter().enumerate() {
+		for (fork_spec_name, tx_states) in &deserialized_state_tests.create2call_precompiles.post_states {
+			for (tx_index, tx_state) in tx_states.iter().enumerate() {
 				let (informant, _, _) = informant();
 				let trie_spec = TrieSpec::Secure; // TrieSpec::Fat for --std_dump_json
 				let transaction: transaction::SignedTransaction = multitransaction.select(&tx_state.indexes).into();
 				let tx_input = TxInput {
-					state_test_name: &state_test_name,
+					state_test_name,
 					tx_index,
-					fork_spec_name: &fork_spec_name,
+					fork_spec_name,
 					pre_state: &pre,
 					post_root: tx_states[tx_index].hash.0,
 					env_info: &env_info,

@@ -71,8 +71,8 @@ pub struct Config {
 }
 
 impl Default for Config {
-	fn default() -> Config {
-		Config {
+	fn default() -> Self {
+		Self {
 			queue: Default::default(),
 			chain_column: 0,
 			verify_full: true,
@@ -193,12 +193,12 @@ impl<T: ChainDataFetcher> Client<T> {
 			engine: spec.engine.clone(),
 			chain: {
 				let hs_cfg = if config.no_hardcoded_sync { HardcodedSync::Deny } else { HardcodedSync::Allow };
-				HeaderChain::new(db.clone(), chain_col, &spec, cache, hs_cfg)?
+				HeaderChain::new(db.clone(), chain_col, spec, cache, hs_cfg)?
 			},
 			report: RwLock::new(ClientReport::default()),
 			import_lock: Mutex::new(()),
 			db,
-			listeners: RwLock::new(vec![]),
+			listeners: RwLock::new(Vec::new()),
 			fetcher,
 			verify_full: config.verify_full,
 			exit_handler: Mutex::new(None),
@@ -434,9 +434,10 @@ impl<T: ChainDataFetcher> Client<T> {
 	// should skip.
 	fn check_header(&self, bad: &mut Vec<H256>, verified_header: &Header) -> bool {
 		let hash = verified_header.hash();
-		let parent_header = match self.chain.block_header(BlockId::Hash(*verified_header.parent_hash())) {
-			Some(header) => header,
-			None => {
+		let parent_header = {
+			if let Some(header) = self.chain.block_header(BlockId::Hash(*verified_header.parent_hash())) {
+				header
+			} else {
 				trace!(target: "client", "No parent for block ({}, {})",
 					verified_header.number(), hash);
 				return false // skip import of block with missing parent.
@@ -449,7 +450,7 @@ impl<T: ChainDataFetcher> Client<T> {
 			parent_header.decode()
 				.map_err(|dec_err| dec_err.into())
 				.and_then(|decoded| {
-					self.engine.verify_block_family(&verified_header, &decoded)
+					self.engine.verify_block_family(verified_header, &decoded)
 				})
 
 		};
@@ -461,7 +462,7 @@ impl<T: ChainDataFetcher> Client<T> {
 		};
 
 		// "external" verification.
-		let verify_external_result = self.engine.verify_block_external(&verified_header);
+		let verify_external_result = self.engine.verify_block_external(verified_header);
 		if let Err(e) = verify_external_result {
 			warn!(target: "client", "Stage 4 block verification failed for #{} ({})\nError: {:?}",
 				verified_header.number(), verified_header.hash(), e);
@@ -543,10 +544,10 @@ impl<T: ChainDataFetcher> Client<T> {
 
 impl<T: ChainDataFetcher> LightChainClient for Client<T> {
 	fn add_listener(&self, listener: Weak<dyn LightChainNotify>) {
-		Client::add_listener(self, listener)
+		Self::add_listener(self, listener)
 	}
 
-	fn chain_info(&self) -> BlockChainInfo { Client::chain_info(self) }
+	fn chain_info(&self) -> BlockChainInfo { Self::chain_info(self) }
 
 	fn queue_info(&self) -> BlockQueueInfo {
 		self.queue.queue_info()
@@ -557,40 +558,40 @@ impl<T: ChainDataFetcher> LightChainClient for Client<T> {
 	}
 
 	fn block_hash(&self, id: BlockId) -> Option<H256> {
-		Client::block_hash(self, id)
+		Self::block_hash(self, id)
 	}
 
 	fn block_header(&self, id: BlockId) -> Option<encoded::Header> {
-		Client::block_header(self, id)
+		Self::block_header(self, id)
 	}
 
 	fn best_block_header(&self) -> encoded::Header {
-		Client::best_block_header(self)
+		Self::best_block_header(self)
 	}
 
 	fn score(&self, id: BlockId) -> Option<U256> {
-		Client::score(self, id)
+		Self::score(self, id)
 	}
 
 	fn ancestry_iter<'a>(&'a self, start: BlockId) -> Box<dyn Iterator<Item=encoded::Header> + 'a> {
-		Box::new(Client::ancestry_iter(self, start))
+		Box::new(Self::ancestry_iter(self, start))
 	}
 
 	fn signing_chain_id(&self) -> Option<u64> {
-		Client::signing_chain_id(self)
+		Self::signing_chain_id(self)
 	}
 
 	fn env_info(&self, id: BlockId) -> Option<EnvInfo> {
-		Client::env_info(self, id)
+		Self::env_info(self, id)
 	}
 
 	fn engine(&self) -> &Arc<dyn Engine> {
-		Client::engine(self)
+		Self::engine(self)
 	}
 
 	fn set_spec_name(&self, new_spec_name: String) -> Result<(), ()> {
 		trace!(target: "mode", "Client::set_spec_name({:?})", new_spec_name);
-		if let Some(ref h) = *self.exit_handler.lock() {
+		if let Some(h) = self.exit_handler.lock().as_ref() {
 			(*h)(new_spec_name);
 			Ok(())
 		} else {
@@ -608,21 +609,21 @@ impl<T: ChainDataFetcher> LightChainClient for Client<T> {
 	}
 
 	fn flush_queue(&self) {
-		Client::flush_queue(self);
+		Self::flush_queue(self);
 	}
 
 	fn cht_root(&self, i: usize) -> Option<H256> {
-		Client::cht_root(self, i)
+		Self::cht_root(self, i)
 	}
 
 	fn report(&self) -> ClientReport {
-		Client::report(self)
+		Self::report(self)
 	}
 }
 
 impl<T: ChainDataFetcher> client_traits::ChainInfo for Client<T> {
 	fn chain_info(&self) -> BlockChainInfo {
-		Client::chain_info(self)
+		Self::chain_info(self)
 	}
 }
 
@@ -648,7 +649,7 @@ impl<T: ChainDataFetcher> client_traits::EngineClient for Client<T> {
 	}
 
 	fn block_header(&self, id: BlockId) -> Option<encoded::Header> {
-		Client::block_header(self, id)
+		Self::block_header(self, id)
 	}
 }
 

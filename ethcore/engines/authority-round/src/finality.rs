@@ -43,7 +43,7 @@ impl RollingFinality {
 	/// Create a blank finality checker under the given validator set.
 	pub fn blank(signers: Vec<Address>, two_thirds_majority_transition: BlockNumber) -> Self {
 		trace!(target: "finality", "Instantiating blank RollingFinality with {} signers: {:?}", signers.len(), signers);
-		RollingFinality {
+		Self {
 			headers: VecDeque::new(),
 			signers: SimpleList::new(signers),
 			sign_count: HashMap::new(),
@@ -86,7 +86,7 @@ impl RollingFinality {
 	}
 
 	/// Returns the last pushed hash.
-	pub fn subchain_head(&self) -> Option<H256> {
+	pub const fn subchain_head(&self) -> Option<H256> {
 		self.last_pushed
 	}
 
@@ -97,7 +97,7 @@ impl RollingFinality {
 	}
 
 	/// Get the validator set.
-	pub fn validators(&self) -> &SimpleList { &self.signers }
+	pub const fn validators(&self) -> &SimpleList { &self.signers }
 
 	/// Push a hash onto the rolling finality checker (implying `subchain_head` == head.parent)
 	///
@@ -107,7 +107,7 @@ impl RollingFinality {
 	pub fn push_hash(&mut self, head: H256, number: BlockNumber, signers: Vec<Address>)
 		-> Result<Vec<H256>, UnknownValidator>
 	{
-		for their_signer in signers.iter() {
+		for their_signer in &signers {
 			if !self.signers.contains(their_signer) {
 				warn!(target: "finality",  "Unknown validator: {}", their_signer);
 				return Err(UnknownValidator)
@@ -133,7 +133,7 @@ impl RollingFinality {
 	}
 
 	/// Returns the first block for which a 2/3 quorum (instead of 1/2) is required.
-	pub fn two_thirds_majority_transition(&self) -> BlockNumber {
+	pub const fn two_thirds_majority_transition(&self) -> BlockNumber {
 		self.two_thirds_majority_transition
 	}
 
@@ -200,7 +200,7 @@ mod tests {
 		// 3 / 6 signers is < 51% so no finality.
 		for (i, hash) in hashes.iter().take(6).cloned().enumerate() {
 			let i = i % 3;
-			assert!(finality.push_hash(hash, i as u64, vec![signers[i]]).unwrap().len() == 0);
+			assert!(finality.push_hash(hash, i as u64, vec![signers[i]]).unwrap().is_empty());
 		}
 
 		// after pushing a block signed by a fourth validator, the first four
@@ -224,7 +224,7 @@ mod tests {
 		let signers: Vec<_> = (0..6).map(|_| Address::random()).collect();
 		let hashes: Vec<_> = (0..12).map(|i| (H256::random(), i as u64, vec![signers[i % 6]])).collect();
 
-		let mut finality = RollingFinality::blank(signers.clone(), BlockNumber::max_value());
+		let mut finality = RollingFinality::blank(signers, BlockNumber::max_value());
 		finality.build_ancestry_subchain(hashes.iter().rev().cloned()).unwrap();
 
 		assert_eq!(finality.unfinalized_hashes().count(), 3);
@@ -238,7 +238,7 @@ mod tests {
 			(H256::random(), i as u64, vec![signers[i % 6], signers[(i + 1) % 6], signers[(i + 2) % 6]])
 		}).collect();
 
-		let mut finality = RollingFinality::blank(signers.clone(), BlockNumber::max_value());
+		let mut finality = RollingFinality::blank(signers, BlockNumber::max_value());
 		finality.build_ancestry_subchain(hashes.iter().rev().cloned()).unwrap();
 
 		// only the last hash has < 51% of authorities' signatures
@@ -264,7 +264,7 @@ mod tests {
 		// 4 / 7 signers is < 67% so no finality.
 		for (i, hash) in hashes.iter().take(8).cloned().enumerate() {
 			let i = i % 4;
-			assert!(finality.push_hash(hash, i as u64, vec![signers[i]]).unwrap().len() == 0);
+			assert!(finality.push_hash(hash, i as u64, vec![signers[i]]).unwrap().is_empty());
 		}
 
 		// after pushing a block signed by a fifth validator, the first five
@@ -304,7 +304,7 @@ mod tests {
 			(H256::random(), i as u64, hash_signers)
 		}).collect();
 
-		let mut finality = RollingFinality::blank(signers.clone(), 0);
+		let mut finality = RollingFinality::blank(signers, 0);
 		finality.build_ancestry_subchain(hashes.iter().rev().cloned()).unwrap();
 
 		// only the last hash has < 67% of authorities' signatures

@@ -46,7 +46,7 @@ impl KeyServerImpl {
 	pub fn new(config: &ClusterConfiguration, key_server_set: Arc<dyn KeyServerSet>, self_key_pair: Arc<dyn SigningKeyPair>,
 		acl_storage: Arc<dyn AclStorage>, key_storage: Arc<dyn KeyStorage>, executor: Executor) -> Result<Self, Error>
 	{
-		Ok(KeyServerImpl {
+		Ok(Self {
 			data: Arc::new(Mutex::new(KeyServerCore::new(config, key_server_set, self_key_pair, acl_storage, key_storage, executor)?)),
 		})
 	}
@@ -125,7 +125,7 @@ impl DocumentKeyServer for KeyServerImpl {
 	) -> Box<dyn Future<Item=(), Error=Error> + Send> {
 		// store encrypted key
 		return_session(self.data.lock().cluster.new_encryption_session(key_id,
-			author.clone(), common_point, encrypted_document_key))
+			author, common_point, encrypted_document_key))
 	}
 
 	fn generate_document_key(
@@ -203,7 +203,7 @@ impl DocumentKeyServer for KeyServerImpl {
 		requester: Requester,
 	) -> Box<dyn Future<Item=EncryptedDocumentKeyShadow, Error=Error> + Send> {
 		return_session(self.data.lock().cluster.new_decryption_session(key_id,
-			None, requester.clone(), None, true, false))
+			None, requester, None, true, false))
 	}
 }
 
@@ -221,7 +221,7 @@ impl MessageSigner for KeyServerImpl {
 		let data = self.data.clone();
 		let signature = public.and_then(move |public| {
 			let data = data.lock();
-			let session = data.cluster.new_schnorr_signing_session(key_id, requester.clone().into(), None, message);
+			let session = data.cluster.new_schnorr_signing_session(key_id, requester.clone(), None, message);
 			result(session.map(|session| (public, session)))
 		})
 		.and_then(|(public, session)| session.into_wait_future().map(move |signature| (public, signature)));
@@ -229,8 +229,8 @@ impl MessageSigner for KeyServerImpl {
 		// compose two message signature components into single one
 		let combined_signature = signature.map(|(public, signature)| {
 			let mut combined_signature = [0; 64];
-			combined_signature[..32].clone_from_slice(signature.0.as_bytes());
-			combined_signature[32..].clone_from_slice(signature.1.as_bytes());
+			combined_signature[..32].copy_from_slice(signature.0.as_bytes());
+			combined_signature[32..].copy_from_slice(signature.1.as_bytes());
 			(public, combined_signature)
 		});
 
@@ -255,7 +255,7 @@ impl MessageSigner for KeyServerImpl {
 		let data = self.data.clone();
 		let signature = public.and_then(move |public| {
 			let data = data.lock();
-			let session = data.cluster.new_ecdsa_signing_session(key_id, requester.clone().into(), None, message);
+			let session = data.cluster.new_ecdsa_signing_session(key_id, requester.clone(), None, message);
 			result(session.map(|session| (public, session)))
 		})
 		.and_then(|(public, session)| session.into_wait_future().map(move |signature| (public, signature)));
@@ -275,9 +275,9 @@ impl KeyServerCore {
 	{
 		let cconfig = NetClusterConfiguration {
 			self_key_pair: self_key_pair.clone(),
-			key_server_set: key_server_set,
-			acl_storage: acl_storage,
-			key_storage: key_storage,
+			key_server_set,
+			acl_storage,
+			key_storage,
 			admin_public: config.admin_public,
 			preserve_sessions: false,
 		};
@@ -291,7 +291,7 @@ impl KeyServerCore {
 		let cluster = core.client();
 		core.run()?;
 
-		Ok(KeyServerCore {
+		Ok(Self {
 			cluster,
 		})
 	}
@@ -429,7 +429,7 @@ pub mod tests {
 					address: "127.0.0.1".into(),
 					port: start_port + (i as u16),
 				},
-				nodes: key_pairs.iter().enumerate().map(|(j, kp)| (kp.public().clone(),
+				nodes: key_pairs.iter().enumerate().map(|(j, kp)| (*kp.public(),
 					NodeAddress {
 						address: "127.0.0.1".into(),
 						port: start_port + (j as u16),
@@ -440,7 +440,7 @@ pub mod tests {
 				auto_migrate_enabled: false,
 			}).collect();
 		let key_servers_set: BTreeMap<Public, SocketAddr> = configs[0].nodes.iter()
-			.map(|(k, a)| (k.clone(), format!("{}:{}", a.address, a.port).parse().unwrap()))
+			.map(|(k, a)| (*k, format!("{}:{}", a.address, a.port).parse().unwrap()))
 			.collect();
 		let key_storages = (0..num_nodes).map(|_| Arc::new(DummyKeyStorage::default())).collect::<Vec<_>>();
 		let runtime = Runtime::with_thread_count(4);
@@ -499,7 +499,7 @@ pub mod tests {
 		let generated_key = crypto::publickey::ecies::decrypt(&secret, &DEFAULT_MAC, &generated_key).unwrap();
 
 		// now let's try to retrieve key back
-		for key_server in key_servers.iter() {
+		for key_server in &key_servers {
 			let retrieved_key = key_server.restore_document_key(
 				*document,
 				signature.clone(),
@@ -563,7 +563,7 @@ pub mod tests {
 			).wait().unwrap();
 
 			// generate document key (this is done by KS client so that document key is unknown to any KS)
-			let generated_key = Random.generate().unwrap().public().clone();
+			let generated_key = *Random.generate().unwrap().public();
 			let encrypted_document_key = math::encrypt_secret(&generated_key, &server_public).unwrap();
 
 			// store document key
@@ -571,7 +571,7 @@ pub mod tests {
 				encrypted_document_key.common_point, encrypted_document_key.encrypted_point).wait().unwrap();
 
 			// now let's try to retrieve key back
-			for key_server in key_servers.iter() {
+			for key_server in &key_servers {
 				let retrieved_key = key_server.restore_document_key(*server_key_id, signature.clone()).wait().unwrap();
 				let retrieved_key = crypto::publickey::ecies::decrypt(&requestor_secret, &DEFAULT_MAC, &retrieved_key).unwrap();
 				let retrieved_key = Public::from_slice(&retrieved_key);
@@ -696,7 +696,7 @@ pub mod tests {
 		let message_hash = H256::random();
 		let signature = key_servers[0].sign_message_ecdsa(
 			*server_key_id,
-			signature.clone().into(),
+			signature.into(),
 			message_hash,
 		).wait().unwrap();
 		let signature = crypto::publickey::ecies::decrypt(&requestor_secret, &DEFAULT_MAC, &signature).unwrap();
@@ -705,10 +705,5 @@ pub mod tests {
 		// check signature
 		assert!(verify_public(&server_public, &signature.into(), &message_hash).unwrap());
 		drop(runtime);
-	}
-
-	#[test]
-	fn servers_set_change_session_works_over_network() {
-		// TODO [Test]
 	}
 }

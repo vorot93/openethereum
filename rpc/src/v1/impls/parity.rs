@@ -33,6 +33,7 @@ use jsonrpc_core::futures::future;
 use jsonrpc_core::{BoxFuture, Result};
 use sync::{SyncProvider, ManageNetwork};
 use types::{
+	call_analytics::CallAnalytics,
 	ids::BlockId,
 	verification::Unverified,
 	snapshot::RestorationStatus,
@@ -85,7 +86,7 @@ impl<C, M, U> ParityClient<C, M, U> where
 		ws_address: Option<Host>,
 		snapshot: Option<Arc<dyn SnapshotService>>,
 	) -> Self {
-		ParityClient {
+		Self {
 			client,
 			miner,
 			sync,
@@ -194,9 +195,10 @@ impl<C, M, U, S> Parity for ParityClient<C, M, U> where
 	}
 
 	fn unsigned_transactions_count(&self) -> Result<usize> {
-		match self.signer {
-			None => Err(errors::signer_disabled()),
-			Some(ref signer) => Ok(signer.len()),
+		if let Some(signer) = &self.signer {
+			Ok(signer.len())
+		} else {
+			Err(errors::signer_disabled())
 		}
 	}
 
@@ -405,7 +407,7 @@ impl<C, M, U, S> Parity for ParityClient<C, M, U> where
 			.into_iter()
 			.map(|request| Ok((
 				fake_sign::sign_call(request.into())?,
-				Default::default()
+				CallAnalytics::default()
 			)))
 			.collect::<Result<Vec<_>>>()?;
 

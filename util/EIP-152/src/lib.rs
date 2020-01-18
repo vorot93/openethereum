@@ -14,11 +14,59 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
+
 pub mod portable;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 pub mod avx2;
 
-/// The precomputed values for BLAKE2b [from the spec](https://tools.ietf.org/html/rfc7693#section-2.7)
+/// The precomputed values for `BLAKE2b` [from the spec](https://tools.ietf.org/html/rfc7693#section-2.7)
 /// There are 10 16-byte arrays - one for each round
 /// the entries are calculated from the sigma constants.
 const SIGMA: [[usize; 16]; 10] = [
@@ -35,11 +83,11 @@ const SIGMA: [[usize; 16]; 10] = [
 ];
 
 
-/// IV is the initialization vector for BLAKE2b. See https://tools.ietf.org/html/rfc7693#section-2.6
+/// IV is the initialization vector for `BLAKE2b`. See <https://tools.ietf.org/html/rfc7693#section-2.6>
 /// for details.
 const IV: [u64; 8] = [
-	0x6a09e667f3bcc908, 0xbb67ae8584caa73b, 0x3c6ef372fe94f82b, 0xa54ff53a5f1d36f1,
-	0x510e527fade682d1, 0x9b05688c2b3e6c1f, 0x1f83d9abfb41bd6b, 0x5be0cd19137e2179,
+	0x6a09_e667_f3bc_c908, 0xbb67_ae85_84ca_a73b, 0x3c6e_f372_fe94_f82b, 0xa54f_f53a_5f1d_36f1,
+	0x510e_527f_ade6_82d1, 0x9b05_688c_2b3e_6c1f, 0x1f83_d9ab_fb41_bd6b, 0x5be0_cd19_137e_2179,
 ];
 
 /// blake2b compression function
@@ -48,10 +96,10 @@ pub fn compress(state: &mut [u64; 8], message: [u64; 16], count: [u64; 2], f: bo
 	{
 		if is_x86_feature_detected!("avx2") {
 			unsafe {
-				return avx2::compress(state, message, count, f, rounds)
+				avx2::compress(state, message, count, f, rounds)
 			}
 		} else {
-			return portable::compress(state, message, count, f, rounds)
+			portable::compress(state, message, count, f, rounds)
 		};
 	}
 
@@ -72,27 +120,27 @@ mod tests {
 	fn test_blake2_f() {
 		// test from https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md#example-usage-in-solidity
 		let mut h_in = [
-			0x6a09e667f2bdc948_u64, 0xbb67ae8584caa73b_u64,
-			0x3c6ef372fe94f82b_u64, 0xa54ff53a5f1d36f1_u64,
-			0x510e527fade682d1_u64, 0x9b05688c2b3e6c1f_u64,
-			0x1f83d9abfb41bd6b_u64, 0x5be0cd19137e2179_u64,
+			0x6a09_e667_f2bd_c948_u64, 0xbb67_ae85_84ca_a73b_u64,
+			0x3c6e_f372_fe94_f82b_u64, 0xa54f_f53a_5f1d_36f1_u64,
+			0x510e_527f_ade6_82d1_u64, 0x9b05_688c_2b3e_6c1f_u64,
+			0x1f83_d9ab_fb41_bd6b_u64, 0x5be0_cd19_137e_2179_u64,
 		];
 
 		let m = [
-			0x0000000000636261_u64, 0x0000000000000000_u64, 0x0000000000000000_u64,
-			0x0000000000000000_u64, 0x0000000000000000_u64, 0x0000000000000000_u64,
-			0x0000000000000000_u64, 0x0000000000000000_u64, 0x0000000000000000_u64,
-			0x0000000000000000_u64, 0x0000000000000000_u64, 0x0000000000000000_u64,
-			0x0000000000000000_u64, 0x0000000000000000_u64, 0x0000000000000000_u64,
-			0x0000000000000000_u64,
+			0x0000_0000_0063_6261_u64, 0x0000_0000_0000_0000_u64, 0x0000_0000_0000_0000_u64,
+			0x0000_0000_0000_0000_u64, 0x0000_0000_0000_0000_u64, 0x0000_0000_0000_0000_u64,
+			0x0000_0000_0000_0000_u64, 0x0000_0000_0000_0000_u64, 0x0000_0000_0000_0000_u64,
+			0x0000_0000_0000_0000_u64, 0x0000_0000_0000_0000_u64, 0x0000_0000_0000_0000_u64,
+			0x0000_0000_0000_0000_u64, 0x0000_0000_0000_0000_u64, 0x0000_0000_0000_0000_u64,
+			0x0000_0000_0000_0000_u64,
 		];
 		let c = [3, 0];
 		let f = true;
 		let rounds = 12;
 		let h_out: [u64; 8] = [
-			0x0D4D1C983FA580BA_u64, 0xE9F6129FB697276A_u64, 0xB7C45A68142F214C_u64,
-			0xD1A2FFDB6FBB124B_u64, 0x2D79AB2A39C5877D_u64, 0x95CC3345DED552C2_u64,
-			0x5A92F1DBA88AD318_u64, 0x239900D4ED8623B9_u64,
+			0x0D4D_1C98_3FA5_80BA_u64, 0xE9F6_129F_B697_276A_u64, 0xB7C4_5A68_142F_214C_u64,
+			0xD1A2_FFDB_6FBB_124B_u64, 0x2D79_AB2A_39C5_877D_u64, 0x95CC_3345_DED5_52C2_u64,
+			0x5A92_F1DB_A88A_D318_u64, 0x2399_00D4_ED86_23B9_u64,
 		];
 
 		// portable
@@ -100,10 +148,10 @@ mod tests {
 		assert_eq!(h_in, h_out);
 
 		let mut h_in = [
-			0x6a09e667f2bdc948_u64, 0xbb67ae8584caa73b_u64,
-			0x3c6ef372fe94f82b_u64, 0xa54ff53a5f1d36f1_u64,
-			0x510e527fade682d1_u64, 0x9b05688c2b3e6c1f_u64,
-			0x1f83d9abfb41bd6b_u64, 0x5be0cd19137e2179_u64,
+			0x6a09_e667_f2bd_c948_u64, 0xbb67_ae85_84ca_a73b_u64,
+			0x3c6e_f372_fe94_f82b_u64, 0xa54f_f53a_5f1d_36f1_u64,
+			0x510e_527f_ade6_82d1_u64, 0x9b05_688c_2b3e_6c1f_u64,
+			0x1f83_d9ab_fb41_bd6b_u64, 0x5be0_cd19_137e_2179_u64,
 		];
 
 		// avx
@@ -159,9 +207,9 @@ mod tests {
 
 			assert_eq!(bytes.len(), 213);
 
-			let mut h = [0u64; 8];
-			let mut m = [0u64; 16];
-			let mut t = [0u64; 2];
+			let mut h = [0_u64; 8];
+			let mut m = [0_u64; 16];
+			let mut t = [0_u64; 2];
 
 			let rounds = u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
 			let f = match bytes[212] {
@@ -174,7 +222,7 @@ mod tests {
 			to_u64_slice(&bytes[68..196], &mut m);
 			to_u64_slice(&bytes[196..212], &mut t);
 			let output: Vec<u8> = output.from_hex().unwrap();
-			let mut out = [0u64; 8];
+			let mut out = [0_u64; 8];
 			to_u64_slice(&output[..], &mut out);
 
 			#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]

@@ -21,7 +21,7 @@ use instructions;
 pub trait Stack<T> {
 	/// Returns `Stack[len(Stack) - no_from_top]`
 	fn peek(&self, no_from_top: usize) -> &T;
-	/// Swaps Stack[len(Stack)] and Stack[len(Stack) - no_from_top]
+	/// Swaps Stack[len(Stack)] and Stack[len(Stack) - `no_from_top`]
 	fn swap_with_top(&mut self, no_from_top: usize);
 	/// Returns true if Stack has at least `no_of_elems` elements
 	fn has(&self, no_of_elems: usize) -> bool;
@@ -42,16 +42,16 @@ pub struct VecStack<S> {
 	logs: [S; instructions::MAX_NO_OF_TOPICS]
 }
 
-impl<S : Copy> VecStack<S> {
+impl<S: Copy> VecStack<S> {
 	pub fn with_capacity(capacity: usize, zero: S) -> Self {
-		VecStack {
+		Self {
 			stack: Vec::with_capacity(capacity),
 			logs: [zero; instructions::MAX_NO_OF_TOPICS]
 		}
 	}
 }
 
-impl<S : fmt::Display> Stack<S> for VecStack<S> {
+impl<S: fmt::Display> Stack<S> for VecStack<S> {
 	fn peek(&self, no_from_top: usize) -> &S {
 		&self.stack[self.stack.len() - no_from_top - 1]
 	}

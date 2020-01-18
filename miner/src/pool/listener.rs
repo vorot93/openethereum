@@ -55,9 +55,10 @@ impl txpool::Listener<Transaction> for Logger {
 	}
 
 	fn dropped(&mut self, tx: &Arc<Transaction>, new: Option<&Transaction>) {
-		match new {
-			Some(new) => debug!(target: "txqueue", "[{:?}] Pushed out by [{:?}]", tx.hash(), new.hash()),
-			None => debug!(target: "txqueue", "[{:?}] Dropped.", tx.hash()),
+		if let Some(new) = new {
+			debug!(target: "txqueue", "[{:?}] Pushed out by [{:?}]", tx.hash(), new.hash());
+		} else {
+			debug!(target: "txqueue", "[{:?}] Dropped.", tx.hash());
 		}
 	}
 
@@ -130,27 +131,27 @@ impl fmt::Debug for TransactionsPoolNotifier {
 
 impl txpool::Listener<Transaction> for TransactionsPoolNotifier {
 	fn added(&mut self, tx: &Arc<Transaction>, _old: Option<&Arc<Transaction>>) {
-		self.tx_statuses.push((tx.hash.clone(), TxStatus::Added));
+		self.tx_statuses.push((tx.hash, TxStatus::Added));
 	}
 
 	fn rejected<H: fmt::Debug + fmt::LowerHex>(&mut self, tx: &Arc<Transaction>, _reason: &txpool::Error<H>) {
-		self.tx_statuses.push((tx.hash.clone(), TxStatus::Rejected));
+		self.tx_statuses.push((tx.hash, TxStatus::Rejected));
 	}
 
 	fn dropped(&mut self, tx: &Arc<Transaction>, _new: Option<&Transaction>) {
-		self.tx_statuses.push((tx.hash.clone(), TxStatus::Dropped));
+		self.tx_statuses.push((tx.hash, TxStatus::Dropped));
 	}
 
 	fn invalid(&mut self, tx: &Arc<Transaction>) {
-		self.tx_statuses.push((tx.hash.clone(), TxStatus::Invalid));
+		self.tx_statuses.push((tx.hash, TxStatus::Invalid));
 	}
 
 	fn canceled(&mut self, tx: &Arc<Transaction>) {
-		self.tx_statuses.push((tx.hash.clone(), TxStatus::Canceled));
+		self.tx_statuses.push((tx.hash, TxStatus::Canceled));
 	}
 
 	fn culled(&mut self, tx: &Arc<Transaction>) {
-		self.tx_statuses.push((tx.hash.clone(), TxStatus::Culled));
+		self.tx_statuses.push((tx.hash, TxStatus::Culled));
 	}
 }
 

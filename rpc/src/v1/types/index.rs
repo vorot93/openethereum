@@ -24,13 +24,13 @@ pub struct Index(usize);
 
 impl Index {
 	/// Convert to usize
-	pub fn value(&self) -> usize {
+	pub const fn value(&self) -> usize {
 		self.0
 	}
 }
 
 impl<'a> Deserialize<'a> for Index {
-	fn deserialize<D>(deserializer: D) -> Result<Index, D::Error>
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
 	where D: Deserializer<'a> {
 		deserializer.deserialize_any(IndexVisitor)
 	}

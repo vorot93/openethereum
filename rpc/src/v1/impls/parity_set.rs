@@ -24,7 +24,7 @@ use types::client_types::Mode;
 use ethcore::miner::{self, MinerService};
 use ethereum_types::{H160, H256, U256};
 use crypto::publickey::KeyPair;
-use fetch::{self, Fetch};
+use fetch::{self, Abort, Fetch};
 use hash::keccak_buffer;
 use sync::ManageNetwork;
 use updater::{Service as UpdateService};
@@ -51,15 +51,15 @@ pub mod accounts {
 	}
 
 	impl<M> ParitySetAccountsClient<M> {
-		/// Creates new ParitySetAccountsClient
+		/// Creates new `ParitySetAccountsClient`
 		pub fn new(
 			accounts: &Arc<AccountProvider>,
 			miner: &Arc<M>,
 		) -> Self {
-			ParitySetAccountsClient {
+			Self {
 				accounts: accounts.clone(),
 				miner: miner.clone(),
-				deprecation_notice: Default::default(),
+				deprecation_notice: DeprecationNotice::default(),
 			}
 		}
 	}
@@ -73,7 +73,7 @@ pub mod accounts {
 
 			let signer = Box::new(EngineSigner::new(
 				self.accounts.clone(),
-				address.clone().into(),
+				address,
 				password.into(),
 			));
 			self.miner.set_author(miner::Author::Sealer(signer));
@@ -102,7 +102,7 @@ impl<C, M, U, F> ParitySetClient<C, M, U, F>
 		net: &Arc<dyn ManageNetwork>,
 		fetch: F,
 	) -> Self {
-		ParitySetClient {
+		Self {
 			client: client.clone(),
 			miner: miner.clone(),
 			updater: updater.clone(),
@@ -221,7 +221,7 @@ impl<C, M, U, F> ParitySet for ParitySetClient<C, M, U, F> where
 	}
 
 	fn hash_content(&self, url: String) -> BoxFuture<H256> {
-		let future = self.fetch.get(&url, Default::default()).then(move |result| {
+		let future = self.fetch.get(&url, Abort::default()).then(move |result| {
 			result
 				.map_err(errors::fetch)
 				.and_then(move |response| {

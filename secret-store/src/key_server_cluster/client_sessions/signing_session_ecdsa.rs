@@ -178,7 +178,7 @@ impl SessionImpl {
 		debug_assert_eq!(params.meta.threshold, params.key_share.as_ref().map(|ks| ks.threshold).unwrap_or_default());
 
 		let consensus_transport = SigningConsensusTransport {
-			id: params.meta.id.clone(),
+			id: params.meta.id,
 			access_key: params.access_key.clone(),
 			nonce: params.nonce,
 			version: None,
@@ -195,14 +195,14 @@ impl SessionImpl {
 				connected_nodes_count: params.meta.connected_nodes_count,
 			},
 			consensus_executor: match requester {
-				Some(requester) => KeyAccessJob::new_on_master(params.meta.id.clone(), params.acl_storage.clone(), requester),
-				None => KeyAccessJob::new_on_slave(params.meta.id.clone(), params.acl_storage.clone()),
+				Some(requester) => KeyAccessJob::new_on_master(params.meta.id, params.acl_storage.clone(), requester),
+				None => KeyAccessJob::new_on_slave(params.meta.id, params.acl_storage.clone()),
 			},
-			consensus_transport: consensus_transport,
+			consensus_transport,
 		})?;
 
 		let (completed, oneshot) = CompletionSignal::new();
-		Ok((SessionImpl {
+		Ok((Self {
 			core: SessionCore {
 				meta: params.meta,
 				access_key: params.access_key,
@@ -215,7 +215,7 @@ impl SessionImpl {
 				state: SessionState::ConsensusEstablishing,
 				message_hash: None,
 				version: None,
-				consensus_session: consensus_session,
+				consensus_session,
 				sig_nonce_generation_session: None,
 				inv_nonce_generation_session: None,
 				inv_zero_generation_session: None,
@@ -275,15 +275,15 @@ impl SessionImpl {
 		let mut consensus_nodes: BTreeSet<_> = key_version.id_numbers.keys()
 			.filter(|n| non_isolated_nodes.contains(*n))
 			.cloned()
-			.chain(::std::iter::once(self.core.meta.self_node_id.clone()))
+			.chain(std::iter::once(self.core.meta.self_node_id))
 			.collect();
 		if let Some(&DelegationStatus::DelegatedFrom(delegation_master, _)) = data.delegation_status.as_ref() {
 			consensus_nodes.remove(&delegation_master);
 		}
 
 		// start consensus establish sesssion
-		data.consensus_session.consensus_job_mut().transport_mut().version = Some(version.clone());
-		data.version = Some(version.clone());
+		data.consensus_session.consensus_job_mut().transport_mut().version = Some(version);
+		data.version = Some(version);
 		data.message_hash = Some(message_hash);
 		data.consensus_session.initialize(consensus_nodes)?;
 
@@ -304,27 +304,27 @@ impl SessionImpl {
 		}
 
 		match message {
-			&EcdsaSigningMessage::EcdsaSigningConsensusMessage(ref message) =>
+			EcdsaSigningMessage::EcdsaSigningConsensusMessage(message) =>
 				self.on_consensus_message(sender, message),
-			&EcdsaSigningMessage::EcdsaSignatureNonceGenerationMessage(ref message) =>
+			EcdsaSigningMessage::EcdsaSignatureNonceGenerationMessage(message) =>
 				self.on_signature_nonce_generation_message(sender, message),
-			&EcdsaSigningMessage::EcdsaInversionNonceGenerationMessage(ref message) =>
+			EcdsaSigningMessage::EcdsaInversionNonceGenerationMessage(message) =>
 				self.on_inversion_nonce_generation_message(sender, message),
-			&EcdsaSigningMessage::EcdsaInversionZeroGenerationMessage(ref message) =>
+			EcdsaSigningMessage::EcdsaInversionZeroGenerationMessage(message) =>
 				self.on_inversion_zero_generation_message(sender, message),
-			&EcdsaSigningMessage::EcdsaSigningInversedNonceCoeffShare(ref message) =>
+			EcdsaSigningMessage::EcdsaSigningInversedNonceCoeffShare(message) =>
 				self.on_inversed_nonce_coeff_share(sender, message),
-			&EcdsaSigningMessage::EcdsaRequestPartialSignature(ref message) =>
+			EcdsaSigningMessage::EcdsaRequestPartialSignature(message) =>
 				self.on_partial_signature_requested(sender, message),
-			&EcdsaSigningMessage::EcdsaPartialSignature(ref message) =>
+			EcdsaSigningMessage::EcdsaPartialSignature(message) =>
 				self.on_partial_signature(sender, message),
-			&EcdsaSigningMessage::EcdsaSigningSessionError(ref message) =>
-				self.process_node_error(Some(&sender), message.error.clone()),
-			&EcdsaSigningMessage::EcdsaSigningSessionCompleted(ref message) =>
+			EcdsaSigningMessage::EcdsaSigningSessionError(message) =>
+				self.process_node_error(Some(sender), message.error.clone()),
+			EcdsaSigningMessage::EcdsaSigningSessionCompleted(message) =>
 				self.on_session_completed(sender, message),
-			&EcdsaSigningMessage::EcdsaSigningSessionDelegation(ref message) =>
+			EcdsaSigningMessage::EcdsaSigningSessionDelegation(message) =>
 				self.on_session_delegated(sender, message),
-			&EcdsaSigningMessage::EcdsaSigningSessionDelegationCompleted(ref message) =>
+			EcdsaSigningMessage::EcdsaSigningSessionDelegationCompleted(message) =>
 				self.on_session_delegation_completed(sender, message),
 		}
 	}
@@ -341,7 +341,7 @@ impl SessionImpl {
 			}
 
 			data.consensus_session.consensus_job_mut().executor_mut().set_requester(message.requester.clone().into());
-			data.delegation_status = Some(DelegationStatus::DelegatedFrom(sender.clone(), message.session_nonce));
+			data.delegation_status = Some(DelegationStatus::DelegatedFrom(*sender, message.session_nonce));
 		}
 
 		self.initialize(message.version.clone().into(), message.message_hash.clone().into())
@@ -358,7 +358,7 @@ impl SessionImpl {
 
 		let mut data = self.data.lock();
 		match data.delegation_status.as_ref() {
-			Some(&DelegationStatus::DelegatedTo(ref node)) if node == sender => (),
+			Some(DelegationStatus::DelegatedTo(node)) if node == sender => (),
 			_ => return Err(Error::InvalidMessage),
 		}
 
@@ -376,15 +376,14 @@ impl SessionImpl {
 		let mut data = self.data.lock();
 		let is_establishing_consensus = data.consensus_session.state() == ConsensusSessionState::EstablishingConsensus;
 
-		if let &ConsensusMessage::InitializeConsensusSession(ref msg) = &message.message {
+		if let ConsensusMessage::InitializeConsensusSession(msg) = &message.message {
 			let version = msg.version.clone().into();
 			let has_key_share = self.core.key_share.as_ref()
-				.map(|ks| ks.version(&version).is_ok())
-				.unwrap_or(false);
+				.map_or(false, |ks| ks.version(&version).is_ok());
 			data.consensus_session.consensus_job_mut().executor_mut().set_has_key_share(has_key_share);
 			data.version = Some(version);
 		}
-		data.consensus_session.on_consensus_message(&sender, &message.message)?;
+		data.consensus_session.on_consensus_message(sender, &message.message)?;
 
 		let is_consensus_established = data.consensus_session.state() == ConsensusSessionState::ConsensusEstablished;
 		if self.core.meta.self_node_id != self.core.meta.master_node_id || !is_establishing_consensus || !is_consensus_established {
@@ -399,7 +398,7 @@ impl SessionImpl {
 		let consensus_group = data.consensus_session.select_consensus_group()?.clone();
 		let mut other_consensus_group_nodes = consensus_group.clone();
 		other_consensus_group_nodes.remove(&self.core.meta.self_node_id);
-		let consensus_group_map: BTreeMap<_, _> = consensus_group.iter().map(|n| (n.clone(), key_version.id_numbers[n].clone())).collect();
+		let consensus_group_map: BTreeMap<_, _> = consensus_group.iter().map(|n| (*n, key_version.id_numbers[n].clone())).collect();
 
 		// start generation of signature nonce
 		let sig_nonce_generation_session = Self::start_generation_session(&self.core, &other_consensus_group_nodes,
@@ -434,7 +433,7 @@ impl SessionImpl {
 					session_nonce: n,
 					message: m,
 				}));
-		inv_zero_generation_session.initialize(Default::default(), Default::default(), true, key_share.threshold * 2, consensus_group_map.clone().into())?;
+		inv_zero_generation_session.initialize(Default::default(), Default::default(), true, key_share.threshold * 2, consensus_group_map.into())?;
 		data.inv_zero_generation_session = Some(inv_zero_generation_session);
 
 		data.state = SessionState::NoncesGenerating;
@@ -450,16 +449,15 @@ impl SessionImpl {
 
 		let mut data = self.data.lock();
 
-		if let &GenerationMessage::InitializeSession(ref message) = &message.message {
-			if &self.core.meta.master_node_id != sender {
+		if let GenerationMessage::InitializeSession(message) = &message.message {
+			if self.core.meta.master_node_id != *sender {
 				match data.delegation_status.as_ref() {
 					Some(&DelegationStatus::DelegatedTo(s)) if s == *sender => (),
 					_ => return Err(Error::InvalidMessage),
 				}
 			}
 
-			let consensus_group: BTreeSet<NodeId> = message.nodes.keys().cloned().map(Into::into).collect();
-			let mut other_consensus_group_nodes = consensus_group.clone();
+			let mut other_consensus_group_nodes = message.nodes.keys().cloned().map(Into::into).collect::<BTreeSet<_>>();
 			other_consensus_group_nodes.remove(&self.core.meta.self_node_id);
 
 			data.sig_nonce_generation_session = Some(Self::start_generation_session(&self.core, &other_consensus_group_nodes,
@@ -490,10 +488,10 @@ impl SessionImpl {
 		}
 
 		Self::send_inversed_nonce_coeff_share(&self.core, &mut*data)?;
-		data.state = if self.core.meta.master_node_id != self.core.meta.self_node_id {
-			SessionState::SignatureComputing
-		} else {
+		data.state = if self.core.meta.master_node_id == self.core.meta.self_node_id {
 			SessionState::WaitingForInversedNonceShares
+		} else {
+			SessionState::SignatureComputing
 		};
 
 		Ok(())
@@ -507,16 +505,15 @@ impl SessionImpl {
 
 		let mut data = self.data.lock();
 
-		if let &GenerationMessage::InitializeSession(ref message) = &message.message {
-			if &self.core.meta.master_node_id != sender {
+		if let GenerationMessage::InitializeSession(message) = &message.message {
+			if self.core.meta.master_node_id != *sender {
 				match data.delegation_status.as_ref() {
 					Some(&DelegationStatus::DelegatedTo(s)) if s == *sender => (),
 					_ => return Err(Error::InvalidMessage),
 				}
 			}
 
-			let consensus_group: BTreeSet<NodeId> = message.nodes.keys().cloned().map(Into::into).collect();
-			let mut other_consensus_group_nodes = consensus_group.clone();
+			let mut other_consensus_group_nodes = message.nodes.keys().cloned().map(Into::into).collect::<BTreeSet<_>>();
 			other_consensus_group_nodes.remove(&self.core.meta.self_node_id);
 
 			data.inv_nonce_generation_session = Some(Self::start_generation_session(&self.core, &other_consensus_group_nodes,
@@ -547,10 +544,10 @@ impl SessionImpl {
 		}
 
 		Self::send_inversed_nonce_coeff_share(&self.core, &mut*data)?;
-		data.state = if self.core.meta.master_node_id != self.core.meta.self_node_id {
-			SessionState::SignatureComputing
-		} else {
+		data.state = if self.core.meta.master_node_id == self.core.meta.self_node_id {
 			SessionState::WaitingForInversedNonceShares
+		} else {
+			SessionState::SignatureComputing
 		};
 
 		Ok(())
@@ -564,16 +561,15 @@ impl SessionImpl {
 
 		let mut data = self.data.lock();
 
-		if let &GenerationMessage::InitializeSession(ref message) = &message.message {
-			if &self.core.meta.master_node_id != sender {
+		if let GenerationMessage::InitializeSession(message) = &message.message {
+			if self.core.meta.master_node_id != *sender {
 				match data.delegation_status.as_ref() {
 					Some(&DelegationStatus::DelegatedTo(s)) if s == *sender => (),
 					_ => return Err(Error::InvalidMessage),
 				}
 			}
 
-			let consensus_group: BTreeSet<NodeId> = message.nodes.keys().cloned().map(Into::into).collect();
-			let mut other_consensus_group_nodes = consensus_group.clone();
+			let mut other_consensus_group_nodes = message.nodes.keys().cloned().map(Into::into).collect::<BTreeSet<_>>();
 			other_consensus_group_nodes.remove(&self.core.meta.self_node_id);
 
 			data.inv_zero_generation_session = Some(Self::start_generation_session(&self.core, &other_consensus_group_nodes,
@@ -604,10 +600,10 @@ impl SessionImpl {
 		}
 
 		Self::send_inversed_nonce_coeff_share(&self.core, &mut*data)?;
-		data.state = if self.core.meta.master_node_id != self.core.meta.self_node_id {
-			SessionState::SignatureComputing
-		} else {
+		data.state = if self.core.meta.master_node_id == self.core.meta.self_node_id {
 			SessionState::WaitingForInversedNonceShares
+		} else {
+			SessionState::SignatureComputing
 		};
 
 		Ok(())
@@ -650,7 +646,7 @@ impl SessionImpl {
 			Self::compute_inversed_nonce_coeff(&self.core, &*data)?
 		};
 
-		let version = data.version.as_ref().ok_or(Error::InvalidMessage)?.clone();
+		let version = *data.version.as_ref().ok_or(Error::InvalidMessage)?;
 		let message_hash = data.message_hash
 			.expect("we are on master node; on master node message_hash is filled in initialize(); on_generation_message follows initialize; qed");
 
@@ -685,8 +681,8 @@ impl SessionImpl {
 		let sig_nonce_public = data.sig_nonce_generation_session.as_ref().expect(nonce_exists_proof).joint_public_and_secret().expect(nonce_exists_proof)?.0;
 		let inv_nonce_share = data.inv_nonce_generation_session.as_ref().expect(nonce_exists_proof).joint_public_and_secret().expect(nonce_exists_proof)?.2;
 
-		let version = data.version.as_ref().ok_or(Error::InvalidMessage)?.clone();
-		let key_version = key_share.version(&version)?.hash.clone();
+		let version = *data.version.as_ref().ok_or(Error::InvalidMessage)?;
+		let key_version = key_share.version(&version)?.hash;
 
 		let signing_job = EcdsaSigningJob::new_on_slave(key_share.clone(), key_version, sig_nonce_public, inv_nonce_share)?;
 		let signing_transport = self.core.signing_transport();
@@ -741,7 +737,7 @@ impl SessionImpl {
 	/// Process error from the other node.
 	fn process_node_error(&self, node: Option<&NodeId>, error: Error) -> Result<(), Error> {
 		let mut data = self.data.lock();
-		let is_self_node_error = node.map(|n| n == &self.core.meta.self_node_id).unwrap_or(false);
+		let is_self_node_error = node.map_or(false, |n| n == &self.core.meta.self_node_id);
 		// error is always fatal if coming from this node
 		if is_self_node_error {
 			Self::set_signing_result(&self.core, &mut *data, Err(error.clone()));
@@ -758,7 +754,7 @@ impl SessionImpl {
 				Ok(())
 			},
 			Ok(true) => {
-				let version = data.version.as_ref().ok_or(Error::InvalidMessage)?.clone();
+				let version = *data.version.as_ref().ok_or(Error::InvalidMessage)?;
 
 				let message_hash = data.message_hash.as_ref().cloned()
 					.expect("on_node_error returned true; this means that jobs must be REsent; this means that jobs already have been sent; jobs are sent when message_hash.is_some(); qed");
@@ -791,11 +787,11 @@ impl SessionImpl {
 	fn start_generation_session<F>(core: &SessionCore, other_consensus_group_nodes: &BTreeSet<NodeId>, map_message: F) -> GenerationSession
 		where F: Fn(SessionId, Secret, u64, GenerationMessage) -> EcdsaSigningMessage + Send + Sync + 'static {
 		GenerationSession::new(GenerationSessionParams {
-			id: core.meta.id.clone(),
-			self_node_id: core.meta.self_node_id.clone(),
+			id: core.meta.id,
+			self_node_id: core.meta.self_node_id,
 			key_storage: None,
 			cluster: Arc::new(NonceGenerationTransport {
-				id: core.meta.id.clone(),
+				id: core.meta.id,
 				access_key: core.access_key.clone(),
 				nonce: core.nonce,
 				cluster: core.cluster.clone(),
@@ -821,7 +817,7 @@ impl SessionImpl {
 					session: core.meta.id.clone().into(),
 					sub_session: core.access_key.clone().into(),
 					session_nonce: nonce,
-					error: error.clone().into(),
+					error: error.clone(),
 				}))),
 			};
 		}
@@ -878,8 +874,7 @@ impl SessionImpl {
 		let key_share = core.key_share.as_ref().expect(proof);
 		let key_version = key_share.version(data.version.as_ref().expect(proof)).expect(proof);
 
-		let proof = "inversed nonce coeff is computed after all shares are received; qed";
-		let inversed_nonce_coeff_shares = data.inversed_nonce_coeff_shares.as_ref().expect(proof);
+		let inversed_nonce_coeff_shares = data.inversed_nonce_coeff_shares.as_ref().expect("inversed nonce coeff is computed after all shares are received; qed");
 
 		math::compute_ecdsa_inversed_secret_coeff_from_shares(key_share.threshold,
 			&inversed_nonce_coeff_shares.keys().map(|n| key_version.id_numbers[n].clone()).collect::<Vec<_>>(),
@@ -897,7 +892,7 @@ impl ClusterSession for SessionImpl {
 	}
 
 	fn id(&self) -> SessionIdWithSubSession {
-		SessionIdWithSubSession::new(self.core.meta.id.clone(), self.core.access_key.clone())
+		SessionIdWithSubSession::new(self.core.meta.id, self.core.access_key.clone())
 	}
 
 	fn is_finished(&self) -> bool {
@@ -928,7 +923,7 @@ impl ClusterSession for SessionImpl {
 				session: self.core.meta.id.clone().into(),
 				sub_session: self.core.access_key.clone().into(),
 				session_nonce: self.core.nonce,
-				error: error.clone().into(),
+				error,
 			}));
 
 			// do not bother processing send error, as we already processing error
@@ -941,9 +936,10 @@ impl ClusterSession for SessionImpl {
 	}
 
 	fn on_message(&self, sender: &NodeId, message: &Message) -> Result<(), Error> {
-		match *message {
-			Message::EcdsaSigning(ref message) => self.process_message(sender, message),
-			_ => unreachable!("cluster checks message to be correct before passing; qed"),
+		if let Message::EcdsaSigning(message) = message {
+			self.process_message(sender, message)
+		} else {
+			unreachable!("cluster checks message to be correct before passing; qed")
 		}
 	}
 }
@@ -951,7 +947,7 @@ impl ClusterSession for SessionImpl {
 impl<F> NonceGenerationTransport<F> where F: Fn(SessionId, Secret, u64, GenerationMessage) -> EcdsaSigningMessage + Send + Sync {
 	fn map_message(&self, message: Message) -> Result<Message, Error> {
 		match message {
-			Message::Generation(message) => Ok(Message::EcdsaSigning((self.map)(self.id.clone(), self.access_key.clone(), self.nonce, message))),
+			Message::Generation(message) => Ok(Message::EcdsaSigning((self.map)(self.id, self.access_key.clone(), self.nonce, message))),
 			_ => Err(Error::InvalidMessage),
 		}
 	}
@@ -991,7 +987,7 @@ impl<F> Cluster for NonceGenerationTransport<F> where F: Fn(SessionId, Secret, u
 impl SessionCore {
 	pub fn signing_transport(&self) -> SigningJobTransport {
 		SigningJobTransport {
-			id: self.meta.id.clone(),
+			id: self.meta.id,
 			access_key: self.access_key.clone(),
 			nonce: self.nonce,
 			cluster: self.cluster.clone()
@@ -1004,7 +1000,7 @@ impl SessionCore {
 			Some(key_share) => key_share,
 		};
 
-		let key_version = key_share.version(version)?.hash.clone();
+		let key_version = key_share.version(version)?.hash;
 		let signing_job = EcdsaSigningJob::new_on_master(key_share.clone(), key_version, nonce_public, inv_nonce_share, inversed_nonce_coeff, message_hash)?;
 		consensus_session.disseminate_jobs(signing_job, self.signing_transport(), false).map(|_| ())
 	}
@@ -1084,7 +1080,7 @@ mod tests {
 			let ml = GenerationMessageLoop::new(num_nodes).init(threshold)?;
 			ml.0.loop_until(|| ml.0.is_empty()); // complete generation session
 
-			Ok(MessageLoop(ml.0))
+			Ok(Self(ml.0))
 		}
 
 		pub fn init_with_version(self, key_version: Option<H256>) -> Result<(Self, Public, H256), Error> {

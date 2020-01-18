@@ -30,7 +30,7 @@ use key_server_cluster::message::{Message, GenerationMessage, InitializeSession,
 
 /// Distributed key generation session.
 /// Based on "ECDKG: A Distributed Key Generation Protocol Based on Elliptic Curve Discrete Logarithm" paper:
-/// http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.124.4128&rep=rep1&type=pdf
+/// <http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.124.4128&rep=rep1&type=pdf>
 /// Brief overview:
 /// 1) initialization: master node (which has received request for generating joint public + secret) initializes the session on all other nodes
 /// 2) key dissemination (KD): all nodes are generating secret + public values and send these to appropriate nodes
@@ -53,7 +53,7 @@ pub struct SessionImpl {
 	completed: CompletionSignal<Public>,
 }
 
-/// SessionImpl creation parameters
+/// `SessionImpl` creation parameters
 pub struct SessionParams {
 	/// SessionImpl identifier.
 	pub id: SessionId,
@@ -183,22 +183,22 @@ pub enum InitializationNodes {
 
 impl InitializationNodes {
 	pub fn set(&self) -> BTreeSet<NodeId> {
-		match *self {
-			InitializationNodes::RandomNumbers(ref nodes) => nodes.clone(),
-			InitializationNodes::SpecificNumbers(ref nodes) => nodes.keys().cloned().collect(),
+		match self {
+			Self::RandomNumbers(nodes) => nodes.clone(),
+			Self::SpecificNumbers(nodes) => nodes.keys().cloned().collect(),
 		}
 	}
 }
 
 impl From<BTreeSet<NodeId>> for InitializationNodes {
 	fn from(nodes: BTreeSet<NodeId>) -> Self {
-		InitializationNodes::RandomNumbers(nodes)
+		Self::RandomNumbers(nodes)
 	}
 }
 
 impl From<BTreeMap<NodeId, Secret>> for InitializationNodes {
 	fn from(nodes: BTreeMap<NodeId, Secret>) -> Self {
-		InitializationNodes::SpecificNumbers(nodes)
+		Self::SpecificNumbers(nodes)
 	}
 }
 
@@ -206,7 +206,7 @@ impl SessionImpl {
 	/// Create new generation session.
 	pub fn new(params: SessionParams) -> (Self, Oneshot<Result<Public, Error>>) {
 		let (completed, oneshot) = CompletionSignal::new();
-		(SessionImpl {
+		(Self {
 			id: params.id,
 			self_node_id: params.self_node_id,
 			key_storage: params.key_storage,
@@ -235,14 +235,14 @@ impl SessionImpl {
 	}
 
 	/// Get this node Id.
-	pub fn node(&self) -> &NodeId {
+	pub const fn node(&self) -> &NodeId {
 		&self.self_node_id
 	}
 
 	/// Get derived point.
 	#[cfg(test)]
 	pub fn derived_point(&self) -> Option<Public> {
-		self.data.lock().derived_point.clone()
+		self.data.lock().derived_point
 	}
 
 	/// Simulate faulty generation session behaviour.
@@ -257,13 +257,13 @@ impl SessionImpl {
 
 	/// Get session origin.
 	pub fn origin(&self) -> Option<Address> {
-		self.data.lock().origin.clone()
+		self.data.lock().origin
 	}
 
 	/// Get session completion result (if available).
 	pub fn result(&self) -> Option<Result<Public, Error>> {
 		self.data.lock().joint_public_and_secret.clone()
-			.map(|r| r.map(|r| r.0.clone()))
+			.map(|r| r.map(|r| r.0))
 	}
 
 	/// Get generated public and secret (if any).
@@ -284,9 +284,9 @@ impl SessionImpl {
 		}
 
 		// update state
-		data.master = Some(self.node().clone());
-		data.author = Some(author.clone());
-		data.origin = origin.clone();
+		data.master = Some(*self.node());
+		data.author = Some(author);
+		data.origin = origin;
 		data.is_zero = Some(is_zero);
 		data.threshold = Some(threshold);
 		match nodes {
@@ -306,38 +306,35 @@ impl SessionImpl {
 
 		let mut visit_policy = EveryOtherNodeVisitor::new(self.node(), data.nodes.keys().cloned());
 		let derived_point = math::generate_random_point()?;
-		match visit_policy.next_node() {
-			Some(next_node) => {
-				data.state = SessionState::WaitingForInitializationConfirm(visit_policy);
+		if let Some(next_node) = visit_policy.next_node() {
+			data.state = SessionState::WaitingForInitializationConfirm(visit_policy);
 
-				// start initialization
-				self.cluster.send(&next_node, Message::Generation(GenerationMessage::InitializeSession(InitializeSession {
-						session: self.id.clone().into(),
-						session_nonce: self.nonce,
-						origin: origin.map(Into::into),
-						author: author.into(),
-						nodes: data.nodes.iter().map(|(k, v)| (k.clone().into(), v.id_number.clone().into())).collect(),
-						is_zero: data.is_zero.expect("is_zero is filled in initialization phase; KD phase follows initialization phase; qed"),
-						threshold: data.threshold.expect("threshold is filled in initialization phase; KD phase follows initialization phase; qed"),
-						derived_point: derived_point.into(),
-					})))
-			},
-			None => {
-				drop(data);
-				self.complete_initialization(derived_point)?;
-				self.disseminate_keys()?;
-				self.verify_keys()?;
-				self.complete_generation()?;
+			// start initialization
+			self.cluster.send(&next_node, Message::Generation(GenerationMessage::InitializeSession(InitializeSession {
+				session: self.id.clone().into(),
+				session_nonce: self.nonce,
+				origin: origin.map(Into::into),
+				author: author.into(),
+				nodes: data.nodes.iter().map(|(k, v)| (k.clone().into(), v.id_number.clone().into())).collect(),
+				is_zero: data.is_zero.expect("is_zero is filled in initialization phase; KD phase follows initialization phase; qed"),
+				threshold: data.threshold.expect("threshold is filled in initialization phase; KD phase follows initialization phase; qed"),
+				derived_point: derived_point.into(),
+			})))
+		} else {
+			drop(data);
+			self.complete_initialization(derived_point)?;
+			self.disseminate_keys()?;
+			self.verify_keys()?;
+			self.complete_generation()?;
 
-				let mut data = self.data.lock();
-				let result = data.joint_public_and_secret.clone()
-					.expect("session is instantly completed on a single node; qed")
-					.map(|(p, _, _)| p);
-				data.state = SessionState::Finished;
-				self.completed.send(result);
+			let mut data = self.data.lock();
+			let result = data.joint_public_and_secret.clone()
+				.expect("session is instantly completed on a single node; qed")
+				.map(|(p, _, _)| p);
+			data.state = SessionState::Finished;
+			self.completed.send(result);
 
-				Ok(())
-			}
+			Ok(())
 		}
 	}
 
@@ -347,22 +344,22 @@ impl SessionImpl {
 			return Err(Error::ReplayProtection);
 		}
 
-		match message {
-			&GenerationMessage::InitializeSession(ref message) =>
+		match &message {
+			GenerationMessage::InitializeSession(message) =>
 				self.on_initialize_session(sender.clone(), message),
-			&GenerationMessage::ConfirmInitialization(ref message) =>
+			GenerationMessage::ConfirmInitialization(message) =>
 				self.on_confirm_initialization(sender.clone(), message),
-			&GenerationMessage::CompleteInitialization(ref message) =>
+			GenerationMessage::CompleteInitialization(message) =>
 				self.on_complete_initialization(sender.clone(), message),
-			&GenerationMessage::KeysDissemination(ref message) =>
+			GenerationMessage::KeysDissemination(message) =>
 				self.on_keys_dissemination(sender.clone(), message),
-			&GenerationMessage::PublicKeyShare(ref message) =>
+			GenerationMessage::PublicKeyShare(message) =>
 				self.on_public_key_share(sender.clone(), message),
-			&GenerationMessage::SessionError(ref message) => {
+			GenerationMessage::SessionError(message) => {
 				self.on_session_error(sender, message.error.clone());
 				Ok(())
 			},
-			&GenerationMessage::SessionCompleted(ref message) =>
+			GenerationMessage::SessionCompleted(message) =>
 				self.on_session_completed(sender.clone(), message),
 		}
 	}
@@ -416,15 +413,16 @@ impl SessionImpl {
 		debug_assert!(data.nodes.contains_key(&sender));
 
 		// check state && select new node to be initialized
-		let next_receiver = match data.state {
-			SessionState::WaitingForInitializationConfirm(ref mut visit_policy) => {
+		let next_receiver = {
+			if let SessionState::WaitingForInitializationConfirm(visit_policy) = &mut data.state {
 				if !visit_policy.mark_visited(&sender) {
 					return Err(Error::InvalidStateForRequest);
 				}
 
 				visit_policy.next_node()
-			},
-			_ => return Err(Error::InvalidStateForRequest),
+			} else {
+				return Err(Error::InvalidStateForRequest);
+			}
 		};
 
 		// proceed message
@@ -437,7 +435,7 @@ impl SessionImpl {
 					nodes: data.nodes.iter().map(|(k, v)| (k.clone().into(), v.id_number.clone().into())).collect(),
 					is_zero: data.is_zero.expect("is_zero is filled in initialization phase; KD phase follows initialization phase; qed"),
 					threshold: data.threshold.expect("threshold is filled in initialization phase; KD phase follows initialization phase; qed"),
-					derived_point: message.derived_point.clone().into(),
+					derived_point: message.derived_point.clone(),
 				})));
 		}
 
@@ -534,7 +532,7 @@ impl SessionImpl {
 
 		// update node data with received public share
 		{
-			let node_data = &mut data.nodes.get_mut(&sender).ok_or(Error::InvalidMessage)?;
+			let node_data = data.nodes.get_mut(&sender).ok_or(Error::InvalidMessage)?;
 			if node_data.public_share.is_some() {
 				return Err(Error::InvalidMessage);
 			}
@@ -576,28 +574,28 @@ impl SessionImpl {
 
 			// calculate joint public key
 			let is_zero = data.is_zero.expect("is_zero is filled in initialization phase; KG phase follows initialization phase; qed");
-			let joint_public = if !is_zero {
+			let joint_public = if is_zero {
+				Public::zero()
+			} else {
 				let public_shares = data.nodes.values().map(|n| n.public_share.as_ref().expect("keys received on KD phase; KG phase follows KD phase; qed"));
 				math::compute_joint_public(public_shares)?
-			} else {
-				Default::default()
 			};
 
 			// save encrypted data to key storage
 			let encrypted_data = DocumentKeyShare {
-				author: data.author.as_ref().expect("author is filled in initialization phase; KG phase follows initialization phase; qed").clone(),
+				author: *data.author.as_ref().expect("author is filled in initialization phase; KG phase follows initialization phase; qed"),
 				threshold: data.threshold.expect("threshold is filled in initialization phase; KG phase follows initialization phase; qed"),
 				public: joint_public,
 				common_point: None,
 				encrypted_point: None,
 				versions: vec![DocumentKeyShareVersion::new(
-					data.nodes.iter().map(|(node_id, node_data)| (node_id.clone(), node_data.id_number.clone())).collect(),
+					data.nodes.iter().map(|(node_id, node_data)| (*node_id, node_data.id_number.clone())).collect(),
 					data.secret_share.as_ref().expect("secret_share is filled in KG phase; we are at the end of KG phase; qed").clone(),
 				)],
 			};
 
-			if let Some(ref key_storage) = self.key_storage {
-				key_storage.insert(self.id.clone(), encrypted_data.clone())?;
+			if let Some(key_storage) = &self.key_storage {
+				key_storage.insert(self.id.clone(), encrypted_data)?;
 			}
 
 			// then respond with confirmation
@@ -640,7 +638,7 @@ impl SessionImpl {
 
 		// remember derived point
 		let mut data = self.data.lock();
-		data.derived_point = Some(derived_point.clone().into());
+		data.derived_point = Some(derived_point);
 
 		// broadcast derived point && other session paraeters to every other node
 		self.cluster.broadcast(Message::Generation(GenerationMessage::CompleteInitialization(CompleteInitialization {
@@ -666,32 +664,35 @@ impl SessionImpl {
 		data.secret_coeff = Some(polynom1[0].clone());
 
 		// compute t+1 public values
-		let publics = match is_zero {
-			false => math::public_values_generation(threshold,
-				data.derived_point.as_ref().expect("keys dissemination occurs after derived point is agreed; qed"),
-				&polynom1,
-				&polynom2)?,
-			true => Default::default(),
+		let publics = {
+			if !is_zero {
+				math::public_values_generation(threshold,
+					data.derived_point.as_ref().expect("keys dissemination occurs after derived point is agreed; qed"),
+					&polynom1,
+					&polynom2)?
+			} else {
+				Default::default()
+			}
 		};
 
 		// compute secret values for every other node
-		for (node, node_data) in data.nodes.iter_mut() {
+		for (node, node_data) in &mut data.nodes {
 			let secret1 = math::compute_polynom(&polynom1, &node_data.id_number)?;
 			let secret2 = math::compute_polynom(&polynom2, &node_data.id_number)?;
 
 			// send a message containing secret1 && secret2 to other node
-			if node != self.node() {
-				self.cluster.send(&node, Message::Generation(GenerationMessage::KeysDissemination(KeysDissemination {
+			if node == self.node() {
+				node_data.secret1 = Some(secret1);
+				node_data.secret2 = Some(secret2);
+				node_data.publics = Some(publics.clone());
+			} else {
+				self.cluster.send(node, Message::Generation(GenerationMessage::KeysDissemination(KeysDissemination {
 					session: self.id.clone().into(),
 					session_nonce: self.nonce,
 					secret1: secret1.into(),
 					secret2: secret2.into(),
 					publics: publics.iter().cloned().map(Into::into).collect(),
 				})))?;
-			} else {
-				node_data.secret1 = Some(secret1);
-				node_data.secret2 = Some(secret2);
-				node_data.publics = Some(publics.clone());
 			}
 		}
 
@@ -709,7 +710,10 @@ impl SessionImpl {
 		let threshold = data.threshold.expect("threshold is filled in initialization phase; KV phase follows initialization phase; qed");
 		let is_zero = data.is_zero.expect("is_zero is filled in initialization phase; KV phase follows initialization phase; qed");
 		let self_public_share = {
-			if !is_zero {
+			if is_zero {
+				// TODO [Trust]: add verification when available
+				Public::zero()
+			} else {
 				let derived_point = data.derived_point.clone().expect("derived point generated on initialization phase; KV phase follows initialization phase; qed");
 				let number_id = data.nodes[self.node()].id_number.clone();
 				for (_	, node_data) in data.nodes.iter_mut().filter(|&(node_id, _)| node_id != self.node()) {
@@ -726,15 +730,8 @@ impl SessionImpl {
 				}
 
 				// calculate public share
-				let self_public_share = {
-					let self_secret_coeff = data.secret_coeff.as_ref().expect("secret_coeff is generated on KD phase; KG phase follows KD phase; qed");
-					math::compute_public_share(self_secret_coeff)?
-				};
-
-				self_public_share
-			} else {
-				// TODO [Trust]: add verification when available
-				Default::default()
+				let self_secret_coeff = data.secret_coeff.as_ref().expect("secret_coeff is generated on KD phase; KG phase follows KD phase; qed");
+				math::compute_public_share(self_secret_coeff)?
 			}
 		};
 
@@ -749,7 +746,7 @@ impl SessionImpl {
 		data.state = SessionState::WaitingForPublicKeyShare;
 		data.secret_share = Some(self_secret_share);
 		let self_node = data.nodes.get_mut(self.node()).expect("node is always qualified by himself; qed");
-		self_node.public_share = Some(self_public_share.clone());
+		self_node.public_share = Some(self_public_share);
 
 		// broadcast self public key share
 		self.cluster.broadcast(Message::Generation(GenerationMessage::PublicKeyShare(PublicKeyShare {
@@ -765,23 +762,23 @@ impl SessionImpl {
 
 		// calculate joint public key
 		let is_zero = data.is_zero.expect("is_zero is filled in initialization phase; KG phase follows initialization phase; qed");
-		let joint_public = if !is_zero {
+		let joint_public = if is_zero {
+			Public::zero()
+		} else {
 			let public_shares = data.nodes.values().map(|n| n.public_share.as_ref().expect("keys received on KD phase; KG phase follows KD phase; qed"));
 			math::compute_joint_public(public_shares)?
-		} else {
-			Default::default()
 		};
 
 		// prepare key data
 		let secret_share = data.secret_share.as_ref().expect("secret_share is filled in KG phase; we are at the end of KG phase; qed").clone();
 		let encrypted_data = DocumentKeyShare {
-			author: data.author.as_ref().expect("author is filled in initialization phase; KG phase follows initialization phase; qed").clone(),
+			author: *data.author.as_ref().expect("author is filled in initialization phase; KG phase follows initialization phase; qed"),
 			threshold: data.threshold.expect("threshold is filled in initialization phase; KG phase follows initialization phase; qed"),
-			public: joint_public.clone(),
+			public: joint_public,
 			common_point: None,
 			encrypted_point: None,
 			versions: vec![DocumentKeyShareVersion::new(
-				data.nodes.iter().map(|(node_id, node_data)| (node_id.clone(), node_data.id_number.clone())).collect(),
+				data.nodes.iter().map(|(node_id, node_data)| (*node_id, node_data.id_number.clone())).collect(),
 				secret_share.clone(),
 			)],
 		};
@@ -796,7 +793,7 @@ impl SessionImpl {
 		}
 
 		// then save encrypted data to the key storage
-		if let Some(ref key_storage) = self.key_storage {
+		if let Some(key_storage) = &self.key_storage {
 			key_storage.insert(self.id.clone(), encrypted_data.clone())?;
 		}
 
@@ -829,7 +826,7 @@ impl ClusterSession for SessionImpl {
 	}
 
 	fn id(&self) -> SessionId {
-		self.id.clone()
+		self.id
 	}
 
 	fn is_finished(&self) -> bool {
@@ -870,7 +867,7 @@ impl ClusterSession for SessionImpl {
 			let _ = self.cluster.broadcast(Message::Generation(GenerationMessage::SessionError(SessionError {
 				session: self.id.clone().into(),
 				session_nonce: self.nonce,
-				error: error.clone().into(),
+				error: error.clone(),
 			})));
 		}
 
@@ -882,8 +879,8 @@ impl ClusterSession for SessionImpl {
 	}
 
 	fn on_message(&self, sender: &NodeId, message: &Message) -> Result<(), Error> {
-		match *message {
-			Message::Generation(ref message) => self.process_message(sender, message),
+		match message {
+			Message::Generation(message) => self.process_message(sender, message),
 			_ => unreachable!("cluster checks message to be correct before passing; qed"),
 		}
 	}
@@ -891,7 +888,7 @@ impl ClusterSession for SessionImpl {
 
 impl EveryOtherNodeVisitor {
 	pub fn new<I>(self_id: &NodeId, nodes: I) -> Self where I: Iterator<Item=NodeId> {
-		EveryOtherNodeVisitor {
+		Self {
 			visited: BTreeSet::new(),
 			unvisited: nodes.filter(|n| n != self_id).collect(),
 			in_progress: BTreeSet::new(),
@@ -900,7 +897,7 @@ impl EveryOtherNodeVisitor {
 
 	pub fn next_node(&mut self) -> Option<NodeId> {
 		let next_node = self.unvisited.pop_front();
-		if let Some(ref next_node) = next_node {
+		if let Some(next_node) = next_node {
 			self.in_progress.insert(next_node.clone());
 		}
 		next_node
@@ -916,7 +913,7 @@ impl EveryOtherNodeVisitor {
 
 impl NodeData {
 	fn with_id_number(node_id_number: Secret) -> Self {
-		NodeData {
+		Self {
 			id_number: node_id_number,
 			secret1: None,
 			secret2: None,
@@ -966,7 +963,7 @@ pub mod tests {
 
 	impl MessageLoop {
 		pub fn new(num_nodes: usize) -> Self {
-			MessageLoop(make_clusters_and_preserve_sessions(num_nodes))
+			Self(make_clusters_and_preserve_sessions(num_nodes))
 		}
 
 		pub fn init(self, threshold: usize) -> Result<Self, Error> {
@@ -1256,14 +1253,16 @@ pub mod tests {
 			}
 
 			// now let's encrypt some secret (which is a point on EC)
-			let document_secret_plain = Random.generate().unwrap().public().clone();
+			let document_secret_plain = *Random.generate().unwrap().public();
 			let all_nodes_id_numbers = ml.nodes_id_numbers();
 			let all_nodes_secret_shares = ml.nodes_secret_shares();
-			let document_secret_decrypted = do_encryption_and_decryption(threshold, &joint_public_key,
+			let document_secret_decrypted = do_encryption_and_decryption(
+				threshold,
+				&joint_public_key,
 				&all_nodes_id_numbers,
 				&all_nodes_secret_shares,
 				None,
-				document_secret_plain.clone()
+				document_secret_plain,
 			).0;
 			assert_eq!(document_secret_plain, document_secret_decrypted);
 		}

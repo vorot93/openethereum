@@ -66,9 +66,9 @@ pub struct OriginInfo {
 impl OriginInfo {
 	/// Populates origin info from action params.
 	pub fn from(params: &ActionParams) -> Self {
-		OriginInfo {
-			address: params.address.clone(),
-			origin: params.origin.clone(),
+		Self {
+			address: params.address,
+			origin: params.origin,
 			gas_price: params.gas_price,
 			value: match params.value {
 				ActionValue::Transfer(val) | ActionValue::Apparent(val) => val
@@ -133,7 +133,7 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 {
 	fn initial_storage_at(&self, key: &H256) -> vm::Result<H256> {
 		if self.state.is_base_storage_root_unchanged(&self.origin_info.address)? {
-			self.state.checkpoint_storage_at(0, &self.origin_info.address, key).map(|v| v.unwrap_or_default()).map_err(Into::into)
+			self.state.checkpoint_storage_at(0, &self.origin_info.address, key).map(Option::unwrap_or_default).map_err(Into::into)
 		} else {
 			warn!(target: "externalities", "Detected existing account {:#x} where a forced contract creation happened.", self.origin_info.address);
 			Ok(H256::zero())
@@ -182,11 +182,11 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 			let data: H256 = BigEndianHash::from_uint(number);
 
 			let params = ActionParams {
-				sender: self.origin_info.address.clone(),
-				address: blockhash_contract_address.clone(),
+				sender: self.origin_info.address,
+				address: blockhash_contract_address,
 				value: ActionValue::Apparent(self.origin_info.value),
-				code_address: blockhash_contract_address.clone(),
-				origin: self.origin_info.origin.clone(),
+				code_address: blockhash_contract_address,
+				origin: self.origin_info.origin,
 				gas: self.machine.params().eip210_contract_gas,
 				gas_price: 0.into(),
 				code,
@@ -200,25 +200,22 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 			let mut ex = Executive::new(self.state, self.env_info, self.machine, self.schedule);
 			let r = ex.call_with_crossbeam(params, self.substate, self.stack_depth + 1, self.tracer, self.vm_tracer);
 			let output = match &r {
-				Ok(ref r) => H256::from_slice(&r.return_data[..32]),
+				Ok(r) => H256::from_slice(&r.return_data[..32]),
 				_ => H256::zero(),
 			};
 			trace!("ext: blockhash contract({}) -> {:?}({}) self.env_info.number={}\n", number, r, output, self.env_info.number);
 			output
 		} else {
 			// TODO: comment out what this function expects from env_info, since it will produce panics if the latter is inconsistent
-			match *number < U256::from(self.env_info.number) && number.low_u64() >= cmp::max(256, self.env_info.number) - 256 {
-				true => {
-					let index = self.env_info.number - number.low_u64() - 1;
-					assert!(index < self.env_info.last_hashes.len() as u64, format!("Inconsistent env_info, should contain at least {:?} last hashes", index+1));
-					let r = self.env_info.last_hashes[index as usize].clone();
-					trace!("ext: blockhash({}) -> {} self.env_info.number={}\n", number, r, self.env_info.number);
-					r
-				},
-				false => {
-					trace!("ext: blockhash({}) -> null self.env_info.number={}\n", number, self.env_info.number);
-					H256::zero()
-				},
+			if *number < U256::from(self.env_info.number) && number.low_u64() >= cmp::max(256, self.env_info.number) - 256 {
+				let index = self.env_info.number - number.low_u64() - 1;
+				assert!(index < self.env_info.last_hashes.len() as u64, format!("Inconsistent env_info, should contain at least {:?} last hashes", index+1));
+				let r = self.env_info.last_hashes[index as usize];
+				trace!("ext: blockhash({}) -> {} self.env_info.number={}\n", number, r, self.env_info.number);
+				r
+			} else {
+				trace!("ext: blockhash({}) -> null self.env_info.number={}\n", number, self.env_info.number);
+				H256::zero()
 			}
 		}
 	}
@@ -234,7 +231,7 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 	) -> ::std::result::Result<ContractCreateResult, TrapKind> {
 		// create new contract address
 		let (address, code_hash) = match self.state.nonce(&self.origin_info.address) {
-			Ok(nonce) => contract_address(address_scheme, &self.origin_info.address, &nonce, &code),
+			Ok(nonce) => contract_address(address_scheme, &self.origin_info.address, &nonce, code),
 			Err(e) => {
 				debug!(target: "ext", "Database corruption encountered: {:?}", e);
 				return Ok(ContractCreateResult::Failed)
@@ -243,10 +240,10 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 
 		// prepare the params
 		let params = ActionParams {
-			code_address: address.clone(),
-			address: address.clone(),
-			sender: self.origin_info.address.clone(),
-			origin: self.origin_info.origin.clone(),
+			code_address: address,
+			address,
+			sender: self.origin_info.address,
+			origin: self.origin_info.origin,
 			gas: *gas,
 			gas_price: self.origin_info.gas_price,
 			value: ActionValue::Transfer(*value),
@@ -258,12 +255,10 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 			params_type: vm::ParamsType::Embedded,
 		};
 
-		if !self.static_flag {
-			if !self.schedule.keep_unsigned_nonce || params.sender != UNSIGNED_SENDER {
-				if let Err(e) = self.state.inc_nonce(&self.origin_info.address) {
-					debug!(target: "ext", "Database corruption encountered: {:?}", e);
-					return Ok(ContractCreateResult::Failed)
-				}
+		if !self.static_flag && (!self.schedule.keep_unsigned_nonce || params.sender != UNSIGNED_SENDER) {
+			if let Err(e) = self.state.inc_nonce(&self.origin_info.address) {
+				debug!(target: "ext", "Database corruption encountered: {:?}", e);
+				return Ok(ContractCreateResult::Failed)
 			}
 		}
 
@@ -300,11 +295,11 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 		};
 
 		let mut params = ActionParams {
-			sender: sender_address.clone(),
-			address: receive_address.clone(),
+			sender: *sender_address,
+			address: *receive_address,
 			value: ActionValue::Apparent(self.origin_info.value),
-			code_address: code_address.clone(),
-			origin: self.origin_info.origin.clone(),
+			code_address: *code_address,
+			origin: self.origin_info.origin,
 			gas: *gas,
 			gas_price: self.origin_info.gas_price,
 			code,
@@ -349,7 +344,7 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 			return Err(vm::Error::MutableCallInStaticContext);
 		}
 
-		let address = self.origin_info.address.clone();
+		let address = self.origin_info.address;
 		self.substate.logs.push(LogEntry {
 			address,
 			topics,
@@ -368,9 +363,10 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 			OutputPolicy::InitContract if apply_state => {
 				let return_cost = U256::from(data.len()) * U256::from(self.schedule.create_data_gas);
 				if return_cost > *gas || data.len() > self.schedule.create_data_limit {
-					return match self.schedule.exceptional_failed_code_deposit {
-						true => Err(vm::Error::OutOfGas),
-						false => Ok(*gas)
+					return if self.schedule.exceptional_failed_code_deposit {
+						Err(vm::Error::OutOfGas)
+					} else {
+						Ok(*gas)
 					}
 				}
 				self.state.init_code(&self.origin_info.address, data.to_vec())?;
@@ -387,9 +383,9 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 			return Err(vm::Error::MutableCallInStaticContext);
 		}
 
-		let address = self.origin_info.address.clone();
+		let address = self.origin_info.address;
 		let balance = self.balance(&address)?;
-		if &address == refund_address {
+		if address == *refund_address {
 			// TODO [todr] To be consistent with CPP client we set balance to 0 in that case.
 			self.state.sub_balance(&address, &balance, &mut CleanupMode::NoEmpty)?;
 		} else {
@@ -398,7 +394,7 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 				&address,
 				refund_address,
 				&balance,
-				cleanup_mode(&mut self.substate, &self.schedule)
+				cleanup_mode(&mut self.substate, self.schedule)
 			)?;
 		}
 
@@ -409,7 +405,7 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 	}
 
 	fn schedule(&self) -> &Schedule {
-		&self.schedule
+		self.schedule
 	}
 
 	fn env_info(&self) -> &EnvInfo {
@@ -449,7 +445,7 @@ impl<'a, T: 'a, V: 'a, B: 'a> Ext for Externalities<'a, T, V, B>
 	}
 
 	fn is_static(&self) -> bool {
-		return self.static_flag
+		self.static_flag
 	}
 }
 
@@ -484,7 +480,7 @@ mod tests {
 			author: Address::from_low_u64_be(0),
 			timestamp: 0,
 			difficulty: 0.into(),
-			last_hashes: Arc::new(vec![]),
+			last_hashes: Arc::new(Vec::new()),
 			gas_used: 0.into(),
 			gas_limit: 0.into(),
 		}
@@ -500,7 +496,7 @@ mod tests {
 
 	impl Default for TestSetup {
 		fn default() -> Self {
-			TestSetup::new()
+			Self::new()
 		}
 	}
 
@@ -509,7 +505,7 @@ mod tests {
 			let machine = test_helpers::load_machine(include_bytes!("../../res/null_morden.json"));
 			let env_info = get_test_env_info();
 			let schedule = machine.schedule(env_info.number);
-			TestSetup {
+			Self {
 				state: get_temp_state(),
 				schedule,
 				machine,
@@ -550,7 +546,7 @@ mod tests {
 	#[test]
 	fn can_return_block_hash() {
 		let test_hash = H256::from_str("afafafafafafafafafafafbcbcbcbcbcbcbcbcbcbeeeeeeeeeeeeedddddddddd").unwrap();
-		let test_env_number = 0x120001;
+		let test_env_number = 0x0012_0001;
 
 		let mut setup = TestSetup::new();
 		{
@@ -598,7 +594,7 @@ mod tests {
 
 	#[test]
 	fn can_log() {
-		let log_data = vec![120u8, 110u8];
+		let log_data = vec![120_u8, 110_u8];
 		let log_topics = vec![H256::from_str("af0fa234a6af46afa23faf23bcbc1c1cb4bcb7bcbe7e7e7ee3ee2edddddddddd").unwrap()];
 
 		let mut setup = TestSetup::new();

@@ -16,6 +16,8 @@
 
 //! Spec deserialization.
 
+#![allow(clippy::module_inception)]
+
 pub mod account;
 pub mod builtin;
 pub mod genesis;

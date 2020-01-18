@@ -72,10 +72,10 @@ fn signer_tester() -> SignerTester {
 
 	SignerTester {
 		_runtime: runtime,
-		signer: signer,
-		accounts: accounts,
-		io: io,
-		miner: miner,
+		signer,
+		accounts,
+		io,
+		miner,
 	}
 }
 
@@ -90,11 +90,11 @@ fn should_return_list_of_items_to_confirm() {
 		gas_price: U256::from(10_000),
 		gas: U256::from(10_000_000),
 		value: U256::from(1),
-		data: vec![],
+		data: Vec::new(),
 		nonce: None,
 		condition: None,
 	}), Origin::Unknown).unwrap();
-	let _sign_future = tester.signer.add_request(ConfirmationPayload::EthSignMessage(Address::from_low_u64_be(1), vec![5].into()), Origin::Unknown).unwrap();
+	let _sign_future = tester.signer.add_request(ConfirmationPayload::EthSignMessage(Address::from_low_u64_be(1), vec![5]), Origin::Unknown).unwrap();
 
 	// when
 	let request = r#"{"jsonrpc":"2.0","method":"signer_requestsToConfirm","params":[],"id":1}"#;
@@ -106,7 +106,7 @@ fn should_return_list_of_items_to_confirm() {
 	);
 
 	// then
-	assert_eq!(tester.io.handle_request_sync(&request), Some(response.to_owned()));
+	assert_eq!(tester.io.handle_request_sync(request), Some(response.to_owned()));
 }
 
 #[test]
@@ -120,7 +120,7 @@ fn should_reject_transaction_from_queue_without_dispatching() {
 		gas_price: U256::from(10_000),
 		gas: U256::from(10_000_000),
 		value: U256::from(1),
-		data: vec![],
+		data: Vec::new(),
 		nonce: None,
 		condition: None,
 	}), Origin::Unknown).unwrap();
@@ -131,7 +131,7 @@ fn should_reject_transaction_from_queue_without_dispatching() {
 	let response = r#"{"jsonrpc":"2.0","result":true,"id":1}"#;
 
 	// then
-	assert_eq!(tester.io.handle_request_sync(&request), Some(response.to_owned()));
+	assert_eq!(tester.io.handle_request_sync(request), Some(response.to_owned()));
 	assert_eq!(tester.signer.requests().len(), 0);
 	assert_eq!(tester.miner.imported_transactions.lock().len(), 0);
 }
@@ -147,7 +147,7 @@ fn should_not_remove_transaction_if_password_is_invalid() {
 		gas_price: U256::from(10_000),
 		gas: U256::from(10_000_000),
 		value: U256::from(1),
-		data: vec![],
+		data: Vec::new(),
 		nonce: None,
 		condition: None,
 	}), Origin::Unknown).unwrap();
@@ -158,7 +158,7 @@ fn should_not_remove_transaction_if_password_is_invalid() {
 	let response = r#"{"jsonrpc":"2.0","error":{"code":-32021,"message":"Account password is invalid or account does not exist.","data":"SStore(InvalidAccount)"},"id":1}"#;
 
 	// then
-	assert_eq!(tester.io.handle_request_sync(&request), Some(response.to_owned()));
+	assert_eq!(tester.io.handle_request_sync(request), Some(response.to_owned()));
 	assert_eq!(tester.signer.requests().len(), 1);
 }
 
@@ -166,7 +166,7 @@ fn should_not_remove_transaction_if_password_is_invalid() {
 fn should_not_remove_sign_if_password_is_invalid() {
 	// given
 	let tester = signer_tester();
-	let _confirmation_future = tester.signer.add_request(ConfirmationPayload::EthSignMessage(Address::zero(), vec![5].into()), Origin::Unknown).unwrap();
+	let _confirmation_future = tester.signer.add_request(ConfirmationPayload::EthSignMessage(Address::zero(), vec![5]), Origin::Unknown).unwrap();
 	assert_eq!(tester.signer.requests().len(), 1);
 
 	// when
@@ -174,7 +174,7 @@ fn should_not_remove_sign_if_password_is_invalid() {
 	let response = r#"{"jsonrpc":"2.0","error":{"code":-32021,"message":"Account password is invalid or account does not exist.","data":"SStore(InvalidAccount)"},"id":1}"#;
 
 	// then
-	assert_eq!(tester.io.handle_request_sync(&request), Some(response.to_owned()));
+	assert_eq!(tester.io.handle_request_sync(request), Some(response.to_owned()));
 	assert_eq!(tester.signer.requests().len(), 1);
 }
 
@@ -191,7 +191,7 @@ fn should_confirm_transaction_and_dispatch() {
 		gas_price: U256::from(10_000),
 		gas: U256::from(10_000_000),
 		value: U256::from(1),
-		data: vec![],
+		data: Vec::new(),
 		nonce: None,
 		condition: None,
 	}), Origin::Unknown).unwrap();
@@ -202,7 +202,7 @@ fn should_confirm_transaction_and_dispatch() {
 		gas: U256::from(0x50505),
 		action: Action::Call(recipient),
 		value: U256::from(0x1),
-		data: vec![]
+		data: Vec::new()
 	};
 	tester.accounts.unlock_account_temporarily(address, "test".into()).unwrap();
 	let signature = tester.accounts.sign(address, None, t.hash(None)).unwrap();
@@ -220,7 +220,7 @@ fn should_confirm_transaction_and_dispatch() {
 	let response = r#"{"jsonrpc":"2.0","result":""#.to_owned() + format!("0x{:x}", t.hash()).as_ref() + r#"","id":1}"#;
 
 	// then
-	assert_eq!(tester.io.handle_request_sync(&request), Some(response.to_owned()));
+	assert_eq!(tester.io.handle_request_sync(request), Some(response));
 	assert_eq!(tester.signer.requests().len(), 0);
 	assert_eq!(tester.miner.imported_transactions.lock().len(), 1);
 }
@@ -237,7 +237,7 @@ fn should_alter_the_sender_and_nonce() {
 		gas_price: U256::from(10_000),
 		gas: U256::from(10_000_000),
 		value: U256::from(1),
-		data: vec![],
+		data: Vec::new(),
 		nonce: Some(10.into()),
 		condition: None,
 	}), Origin::Unknown).unwrap();
@@ -248,7 +248,7 @@ fn should_alter_the_sender_and_nonce() {
 		gas: U256::from(0x50505),
 		action: Action::Call(recipient),
 		value: U256::from(0x1),
-		data: vec![]
+		data: Vec::new()
 	};
 
 	let address = tester.accounts.new_account(&"test".into()).unwrap();
@@ -269,7 +269,7 @@ fn should_alter_the_sender_and_nonce() {
 	let response = r#"{"jsonrpc":"2.0","result":""#.to_owned() + &format!("0x{:x}", t.hash()) + r#"","id":1}"#;
 
 	// then
-	assert_eq!(tester.io.handle_request_sync(&request), Some(response.to_owned()));
+	assert_eq!(tester.io.handle_request_sync(&request), Some(response));
 	assert_eq!(tester.signer.requests().len(), 0);
 	assert_eq!(tester.miner.imported_transactions.lock().len(), 1);
 }
@@ -287,7 +287,7 @@ fn should_confirm_transaction_with_token() {
 		gas_price: U256::from(10_000),
 		gas: U256::from(10_000_000),
 		value: U256::from(1),
-		data: vec![],
+		data: Vec::new(),
 		nonce: None,
 		condition: None,
 	}), Origin::Unknown).unwrap();
@@ -298,7 +298,7 @@ fn should_confirm_transaction_with_token() {
 		gas: U256::from(10_000_000),
 		action: Action::Call(recipient),
 		value: U256::from(0x1),
-		data: vec![]
+		data: Vec::new()
 	};
 	let (signature, token) = tester.accounts.sign_with_token(address, "test".into(), t.hash(None)).unwrap();
 	let t = t.with_signature(signature, None);
@@ -336,7 +336,7 @@ fn should_confirm_transaction_with_rlp() {
 		gas_price: U256::from(10_000),
 		gas: U256::from(10_000_000),
 		value: U256::from(1),
-		data: vec![],
+		data: Vec::new(),
 		nonce: None,
 		condition: None,
 	}), Origin::Unknown).unwrap();
@@ -347,7 +347,7 @@ fn should_confirm_transaction_with_rlp() {
 		gas: U256::from(10_000_000),
 		action: Action::Call(recipient),
 		value: U256::from(0x1),
-		data: vec![]
+		data: Vec::new()
 	};
 	let signature = tester.accounts.sign(address, Some("test".into()), t.hash(None)).unwrap();
 	let t = t.with_signature(signature, None);
@@ -365,7 +365,7 @@ fn should_confirm_transaction_with_rlp() {
 	let response = r#"{"jsonrpc":"2.0","result":""#.to_owned() + format!("0x{:x}", t.hash()).as_ref() + r#"","id":1}"#;
 
 	// then
-	assert_eq!(tester.io.handle_request_sync(&request), Some(response.to_owned()));
+	assert_eq!(tester.io.handle_request_sync(&request), Some(response));
 	assert_eq!(tester.signer.requests().len(), 0);
 	assert_eq!(tester.miner.imported_transactions.lock().len(), 1);
 }
@@ -383,7 +383,7 @@ fn should_return_error_when_sender_does_not_match() {
 		gas_price: U256::from(10_000),
 		gas: U256::from(10_000_000),
 		value: U256::from(1),
-		data: vec![],
+		data: Vec::new(),
 		nonce: None,
 		condition: None,
 	}), Origin::Unknown).unwrap();
@@ -394,7 +394,7 @@ fn should_return_error_when_sender_does_not_match() {
 		gas: U256::from(10_000_000),
 		action: Action::Call(recipient),
 		value: U256::from(0x1),
-		data: vec![]
+		data: Vec::new()
 	};
 	tester.accounts.unlock_account_temporarily(address, "test".into()).unwrap();
 	let signature = tester.accounts.sign(address, None, t.hash(None)).unwrap();
@@ -430,7 +430,7 @@ fn should_confirm_sign_transaction_with_rlp() {
 		gas_price: U256::from(10_000),
 		gas: U256::from(10_000_000),
 		value: U256::from(1),
-		data: vec![],
+		data: Vec::new(),
 		nonce: None,
 		condition: None,
 	}), Origin::Unknown).unwrap();
@@ -442,7 +442,7 @@ fn should_confirm_sign_transaction_with_rlp() {
 		gas: U256::from(10_000_000),
 		action: Action::Call(recipient),
 		value: U256::from(0x1),
-		data: vec![]
+		data: Vec::new()
 	};
 	let signature = tester.accounts.sign(address, Some("test".into()), t.hash(None)).unwrap();
 	let t = SignedTransaction::new(t.with_signature(signature.clone(), None)).unwrap();
@@ -477,7 +477,7 @@ fn should_confirm_sign_transaction_with_rlp() {
 		r#"}},"id":1}"#;
 
 	// then
-	assert_eq!(tester.io.handle_request_sync(&request), Some(response.to_owned()));
+	assert_eq!(tester.io.handle_request_sync(&request), Some(response));
 	assert_eq!(tester.signer.requests().len(), 0);
 	assert_eq!(tester.miner.imported_transactions.lock().len(), 0);
 }
@@ -489,11 +489,11 @@ fn should_confirm_data_sign_with_signature() {
 	let address = tester.accounts.new_account(&"test".into()).unwrap();
 	let _confirmation_future = tester.signer.add_request(ConfirmationPayload::EthSignMessage(
 		address,
-		vec![1, 2, 3, 4].into(),
+		vec![1, 2, 3, 4],
 	), Origin::Unknown).unwrap();
 	assert_eq!(tester.signer.requests().len(), 1);
 
-	let data_hash = eth_data_hash(vec![1, 2, 3, 4].into());
+	let data_hash = eth_data_hash(vec![1, 2, 3, 4]);
 	let signature = H520(tester.accounts.sign(address, Some("test".into()), data_hash).unwrap().into_electrum());
 	let signature = format!("{:?}", signature);
 
@@ -507,7 +507,7 @@ fn should_confirm_data_sign_with_signature() {
 	let response = r#"{"jsonrpc":"2.0","result":""#.to_owned() + &signature + r#"","id":1}"#;
 
 	// then
-	assert_eq!(tester.io.handle_request_sync(&request), Some(response.to_owned()));
+	assert_eq!(tester.io.handle_request_sync(&request), Some(response));
 	assert_eq!(tester.signer.requests().len(), 0);
 	assert_eq!(tester.miner.imported_transactions.lock().len(), 0);
 }
@@ -519,7 +519,7 @@ fn should_confirm_decrypt_with_phrase() {
 	let address = tester.accounts.new_account(&"test".into()).unwrap();
 	let _confirmation_future = tester.signer.add_request(ConfirmationPayload::Decrypt(
 		address,
-		vec![1, 2, 3, 4].into(),
+		vec![1, 2, 3, 4],
 	), Origin::Unknown).unwrap();
 	assert_eq!(tester.signer.requests().len(), 1);
 
@@ -535,7 +535,7 @@ fn should_confirm_decrypt_with_phrase() {
 	let response = r#"{"jsonrpc":"2.0","result":"#.to_owned() + &decrypted + r#","id":1}"#;
 
 	// then
-	assert_eq!(tester.io.handle_request_sync(&request), Some(response.to_owned()));
+	assert_eq!(tester.io.handle_request_sync(&request), Some(response));
 	assert_eq!(tester.signer.requests().len(), 0);
 	assert_eq!(tester.miner.imported_transactions.lock().len(), 0);
 }
@@ -555,5 +555,5 @@ fn should_generate_new_token() {
 	let response = r#"{"jsonrpc":"2.0","result":"new_token","id":1}"#;
 
 	// then
-	assert_eq!(tester.io.handle_request_sync(&request), Some(response.to_owned()));
+	assert_eq!(tester.io.handle_request_sync(request), Some(response.to_owned()));
 }

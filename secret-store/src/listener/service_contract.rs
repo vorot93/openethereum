@@ -29,27 +29,27 @@ use ServerKeyId;
 
 use_contract!(service, "res/service.json");
 
-/// Name of the general SecretStore contract in the registry.
-pub const SERVICE_CONTRACT_REGISTRY_NAME: &'static str = "secretstore_service";
-/// Name of the server key generation SecretStore contract in the registry.
-pub const SRV_KEY_GEN_SERVICE_CONTRACT_REGISTRY_NAME: &'static str = "secretstore_service_srv_gen";
-/// Name of the server key retrieval SecretStore contract in the registry.
-pub const SRV_KEY_RETR_SERVICE_CONTRACT_REGISTRY_NAME: &'static str = "secretstore_service_srv_retr";
-/// Name of the document key store SecretStore contract in the registry.
-pub const DOC_KEY_STORE_SERVICE_CONTRACT_REGISTRY_NAME: &'static str = "secretstore_service_doc_store";
-/// Name of the document key retrieval SecretStore contract in the registry.
-pub const DOC_KEY_SRETR_SERVICE_CONTRACT_REGISTRY_NAME: &'static str = "secretstore_service_doc_sretr";
+/// Name of the general `SecretStore` contract in the registry.
+pub const SERVICE_CONTRACT_REGISTRY_NAME: &str = "secretstore_service";
+/// Name of the server key generation `SecretStore` contract in the registry.
+pub const SRV_KEY_GEN_SERVICE_CONTRACT_REGISTRY_NAME: &str = "secretstore_service_srv_gen";
+/// Name of the server key retrieval `SecretStore` contract in the registry.
+pub const SRV_KEY_RETR_SERVICE_CONTRACT_REGISTRY_NAME: &str = "secretstore_service_srv_retr";
+/// Name of the document key store `SecretStore` contract in the registry.
+pub const DOC_KEY_STORE_SERVICE_CONTRACT_REGISTRY_NAME: &str = "secretstore_service_doc_store";
+/// Name of the document key retrieval `SecretStore` contract in the registry.
+pub const DOC_KEY_SRETR_SERVICE_CONTRACT_REGISTRY_NAME: &str = "secretstore_service_doc_sretr";
 
 /// Server key generation has been requested.
-const SERVER_KEY_GENERATION_REQUESTED_EVENT_NAME: &'static [u8] = &*b"ServerKeyGenerationRequested(bytes32,address,uint8)";
+const SERVER_KEY_GENERATION_REQUESTED_EVENT_NAME: &[u8] = b"ServerKeyGenerationRequested(bytes32,address,uint8)";
 /// Server key retrieval has been requested.
-const SERVER_KEY_RETRIEVAL_REQUESTED_EVENT_NAME: &'static [u8] = &*b"ServerKeyRetrievalRequested(bytes32)";
+const SERVER_KEY_RETRIEVAL_REQUESTED_EVENT_NAME: &[u8] = b"ServerKeyRetrievalRequested(bytes32)";
 /// Document key store has been requested.
-const DOCUMENT_KEY_STORE_REQUESTED_EVENT_NAME: &'static [u8] = &*b"DocumentKeyStoreRequested(bytes32,address,bytes,bytes)";
+const DOCUMENT_KEY_STORE_REQUESTED_EVENT_NAME: &[u8] = b"DocumentKeyStoreRequested(bytes32,address,bytes,bytes)";
 /// Document key common part retrieval has been requested.
-const DOCUMENT_KEY_COMMON_PART_RETRIEVAL_REQUESTED_EVENT_NAME: &'static [u8] = &*b"DocumentKeyCommonRetrievalRequested(bytes32,address)";
+const DOCUMENT_KEY_COMMON_PART_RETRIEVAL_REQUESTED_EVENT_NAME: &[u8] = b"DocumentKeyCommonRetrievalRequested(bytes32,address)";
 /// Document key personal part retrieval has been requested.
-const DOCUMENT_KEY_PERSONAL_PART_RETRIEVAL_REQUESTED_EVENT_NAME: &'static [u8] = &*b"DocumentKeyPersonalRetrievalRequested(bytes32,bytes)";
+const DOCUMENT_KEY_PERSONAL_PART_RETRIEVAL_REQUESTED_EVENT_NAME: &[u8] = b"DocumentKeyPersonalRetrievalRequested(bytes32,bytes)";
 
 lazy_static! {
 	pub static ref SERVER_KEY_GENERATION_REQUESTED_EVENT_NAME_HASH: H256 = keccak(SERVER_KEY_GENERATION_REQUESTED_EVENT_NAME);
@@ -133,12 +133,12 @@ struct DocumentKeyShadowRetrievalService;
 impl OnChainServiceContract {
 	/// Create new on-chain service contract.
 	pub fn new(mask: ApiMask, client: Arc<dyn SecretStoreChain>, name: String, address_source: ContractAddress, self_key_pair: Arc<dyn SigningKeyPair>) -> Self {
-		let contract = OnChainServiceContract {
-			mask: mask,
-			client: client,
-			self_key_pair: self_key_pair,
-			name: name,
-			address_source: address_source,
+		let contract = Self {
+			mask,
+			client,
+			self_key_pair,
+			name,
+			address_source,
 			data: RwLock::new(ServiceData {
 				contract_address: None,
 				last_log_block: None,
@@ -190,8 +190,8 @@ impl OnChainServiceContract {
 			.map(|count| {
 				let client = client.clone();
 				let self_key_pair = self.self_key_pair.clone();
-				let contract_address = contract_address.clone();
-				let block = block.clone();
+				let contract_address = *contract_address;
+				let block = *block;
 				Box::new(PendingRequestsIterator {
 					read_request: move |index| read_item(&*self_key_pair, &*client, &contract_address, &block, index)
 						.map_err(|error| {
@@ -256,7 +256,7 @@ impl ServiceContract for OnChainServiceContract {
 		}).unwrap_or_default();
 
 		let mut data = self.data.write();
-		data.last_log_block = Some(confirmed_block.clone());
+		data.last_log_block = Some(confirmed_block);
 
 		Box::new(request_logs.into_iter()
 			.filter_map(|log| {
@@ -291,37 +291,34 @@ impl ServiceContract for OnChainServiceContract {
 		let data = self.data.read();
 		match data.contract_address {
 			None => Box::new(::std::iter::empty()),
-			Some(contract_address) => self.client.get_confirmed_block_hash()
-				.map(|b| {
-					let block = BlockId::Hash(b);
-					let iter = match self.mask.server_key_generation_requests {
-						true => Box::new(self.create_pending_requests_iterator(self.client.clone(), &contract_address, &block,
-							&ServerKeyGenerationService::read_pending_requests_count,
-							&ServerKeyGenerationService::read_pending_request)) as Box<dyn Iterator<Item=(bool, ServiceTask)>>,
-						false => Box::new(::std::iter::empty()),
-					};
-					let iter = match self.mask.server_key_retrieval_requests {
-						true => Box::new(iter.chain(self.create_pending_requests_iterator(self.client.clone(), &contract_address, &block,
-							&ServerKeyRetrievalService::read_pending_requests_count,
-							&ServerKeyRetrievalService::read_pending_request))),
-						false => iter,
-					};
-					let iter = match self.mask.document_key_store_requests {
-						true => Box::new(iter.chain(self.create_pending_requests_iterator(self.client.clone(), &contract_address, &block,
-							&DocumentKeyStoreService::read_pending_requests_count,
-							&DocumentKeyStoreService::read_pending_request))),
-						false => iter,
-					};
-					let iter = match self.mask.document_key_shadow_retrieval_requests {
-						true => Box::new(iter.chain(self.create_pending_requests_iterator(self.client.clone(), &contract_address, &block,
-							&DocumentKeyShadowRetrievalService::read_pending_requests_count,
-							&DocumentKeyShadowRetrievalService::read_pending_request))),
-						false => iter
-					};
+			Some(contract_address) => {
+				let mut iter: Box<dyn Iterator<Item = (bool, ServiceTask)>> = Box::new(std::iter::empty());
 
-					iter
-				})
-				.unwrap_or_else(|| Box::new(::std::iter::empty()))
+				if let Some(block) = self.client.get_confirmed_block_hash().map(BlockId::Hash) {
+					if self.mask.server_key_generation_requests {
+						iter = Box::new(self.create_pending_requests_iterator(self.client.clone(), &contract_address, &block,
+							&ServerKeyGenerationService::read_pending_requests_count,
+							&ServerKeyGenerationService::read_pending_request));
+					}
+					if self.mask.server_key_retrieval_requests {
+						iter = Box::new(iter.chain(self.create_pending_requests_iterator(self.client.clone(), &contract_address, &block,
+							&ServerKeyRetrievalService::read_pending_requests_count,
+							&ServerKeyRetrievalService::read_pending_request)));
+					}
+					if self.mask.document_key_store_requests {
+						iter = Box::new(iter.chain(self.create_pending_requests_iterator(self.client.clone(), &contract_address, &block,
+							&DocumentKeyStoreService::read_pending_requests_count,
+							&DocumentKeyStoreService::read_pending_request)));
+					}
+					if  self.mask.document_key_shadow_retrieval_requests {
+						iter = Box::new(iter.chain(self.create_pending_requests_iterator(self.client.clone(), &contract_address, &block,
+							&DocumentKeyShadowRetrievalService::read_pending_requests_count,
+							&DocumentKeyShadowRetrievalService::read_pending_request)));
+					}
+				}
+
+				iter
+			}
 		}
 	}
 
@@ -391,7 +388,7 @@ impl<F> Iterator for PendingRequestsIterator<F> where F: Fn(U256) -> Option<(boo
 			return None;
 		}
 
-		let index = self.index.clone();
+		let index = self.index;
 		self.index = self.index + 1;
 
 		(self.read_request)(index)
@@ -421,7 +418,7 @@ impl ServerKeyGenerationService {
 	/// Parse request log entry.
 	pub fn parse_log(origin: &Address, raw_log: RawLog) -> Result<ServiceTask, String> {
 		match service::events::server_key_generation_requested::parse_log(raw_log) {
-			Ok(l) => Ok(ServiceTask::GenerateServerKey(origin.clone(), l.server_key_id, l.author, parse_threshold(l.threshold)?)),
+			Ok(l) => Ok(ServiceTask::GenerateServerKey(*origin, l.server_key_id, l.author, parse_threshold(l.threshold)?)),
 			Err(e) => Err(format!("{}", e)),
 		}
 	}
@@ -467,7 +464,7 @@ impl ServerKeyGenerationService {
 			.map_err(|e| e.to_string())?;
 
 		let task = ServiceTask::GenerateServerKey(
-			contract_address.clone(),
+			*contract_address,
 			server_key_id,
 			author,
 			threshold,
@@ -539,7 +536,7 @@ impl DocumentKeyStoreService {
 	pub fn parse_log(origin: &Address, raw_log: RawLog) -> Result<ServiceTask, String> {
 		match service::events::document_key_store_requested::parse_log(raw_log) {
 			Ok(l) => Ok(ServiceTask::StoreDocumentKey(
-				origin.clone(),
+				*origin,
 				l.server_key_id,
 				l.author,
 				H512::from_slice(&*l.common_point),
@@ -603,7 +600,7 @@ impl DocumentKeyShadowRetrievalService {
 	/// Parse common request log entry.
 	pub fn parse_common_request_log(origin: &Address, raw_log: RawLog) -> Result<ServiceTask, String> {
 		match service::events::document_key_common_retrieval_requested::parse_log(raw_log) {
-			Ok(l) => Ok(ServiceTask::RetrieveShadowDocumentKeyCommon(origin.clone(), l.server_key_id, l.requester)),
+			Ok(l) => Ok(ServiceTask::RetrieveShadowDocumentKeyCommon(*origin, l.server_key_id, l.requester)),
 			Err(e) => Err(e.to_string())
 		}
 	}
@@ -611,7 +608,7 @@ impl DocumentKeyShadowRetrievalService {
 	/// Parse personal request log entry.
 	pub fn parse_personal_request_log(origin: &Address, raw_log: RawLog) -> Result<ServiceTask, String> {
 		match service::events::document_key_personal_retrieval_requested::parse_log(raw_log) {
-			Ok(l) => Ok(ServiceTask::RetrieveShadowDocumentKeyPersonal(origin.clone(), l.server_key_id, H512::from_slice(&*l.requester_public))),
+			Ok(l) => Ok(ServiceTask::RetrieveShadowDocumentKeyPersonal(*origin, l.server_key_id, H512::from_slice(&*l.requester_public))),
 			Err(e) => Err(e.to_string())
 		}
 	}
@@ -633,9 +630,9 @@ impl DocumentKeyShadowRetrievalService {
 
 	/// Prepare publish personal key transaction data.
 	pub fn prepare_pubish_personal_tx_data(client: &dyn SecretStoreChain, contract_address: &Address, server_key_id: &ServerKeyId, requester: &Address, participants: &[Address], decrypted_secret: Public, shadow: Bytes) -> Result<Bytes, String> {
-		let mut participants_mask = U256::default();
+		let mut participants_mask = U256::zero();
 		for participant in participants {
-			let participant_index = Self::map_key_server_address(client, contract_address, participant.clone())
+			let participant_index = Self::map_key_server_address(client, contract_address, *participant)
 				.map_err(|e| format!("Error searching for {} participant: {}", participant, e))?;
 			participants_mask = participants_mask | (U256::one() << participant_index);
 		}
@@ -670,17 +667,18 @@ impl DocumentKeyShadowRetrievalService {
 		let not_confirmed = decoder.decode(&client.call_contract(*block, *contract_address, encoded)?)
 			.map_err(|e| e.to_string())?;
 
-		let task = match is_common_retrieval_completed {
-			true => ServiceTask::RetrieveShadowDocumentKeyPersonal(
+		let task = if is_common_retrieval_completed {
+			ServiceTask::RetrieveShadowDocumentKeyPersonal(
 				*contract_address,
 				server_key_id,
 				requester,
-			),
-			false => ServiceTask::RetrieveShadowDocumentKeyCommon(
+			)
+		} else {
+			ServiceTask::RetrieveShadowDocumentKeyCommon(
 				*contract_address,
 				server_key_id,
 				public_to_address(&requester),
-			),
+			)
 		};
 
 		Ok((not_confirmed, task))
@@ -705,7 +703,7 @@ impl DocumentKeyShadowRetrievalService {
 /// Parse threshold (we only supposrt 256 KS at max).
 fn parse_threshold(threshold: U256) -> Result<usize, String> {
 	let threshold_num = threshold.low_u64();
-	if threshold != threshold_num.into() || threshold_num >= ::std::u8::MAX as u64 {
+	if threshold != threshold_num.into() || threshold_num >= u8::max_value() as u64 {
 		return Err(format!("invalid threshold to use in service contract: {}", threshold));
 	}
 
@@ -714,7 +712,7 @@ fn parse_threshold(threshold: U256) -> Result<usize, String> {
 
 /// Serialize threshold (we only support 256 KS at max).
 fn serialize_threshold(threshold: usize) -> Result<U256, String> {
-	if threshold > ::std::u8::MAX as usize {
+	if threshold > u8::max_value() as usize {
 		return Err(format!("invalid threshold to use in service contract: {}", threshold));
 	}
 	Ok(threshold.into())
@@ -760,7 +758,7 @@ pub mod tests {
 		}
 
 		fn publish_generated_server_key(&self, _origin: &Address, server_key_id: &ServerKeyId, server_key: Public) -> Result<(), String> {
-			self.generated_server_keys.lock().push((server_key_id.clone(), server_key.clone()));
+			self.generated_server_keys.lock().push((*server_key_id, server_key));
 			Ok(())
 		}
 
@@ -770,37 +768,37 @@ pub mod tests {
 		}
 
 		fn publish_retrieved_server_key(&self, _origin: &Address, server_key_id: &ServerKeyId, server_key: Public, threshold: usize) -> Result<(), String> {
-			self.retrieved_server_keys.lock().push((server_key_id.clone(), server_key.clone(), threshold));
+			self.retrieved_server_keys.lock().push((*server_key_id, server_key, threshold));
 			Ok(())
 		}
 
 		fn publish_server_key_retrieval_error(&self, _origin: &Address, server_key_id: &ServerKeyId) -> Result<(), String> {
-			self.server_keys_retrieval_failures.lock().push(server_key_id.clone());
+			self.server_keys_retrieval_failures.lock().push(*server_key_id);
 			Ok(())
 		}
 
 		fn publish_stored_document_key(&self, _origin: &Address, server_key_id: &ServerKeyId) -> Result<(), String> {
-			self.stored_document_keys.lock().push(server_key_id.clone());
+			self.stored_document_keys.lock().push(*server_key_id);
 			Ok(())
 		}
 
 		fn publish_document_key_store_error(&self, _origin: &Address, server_key_id: &ServerKeyId) -> Result<(), String> {
-			self.document_keys_store_failures.lock().push(server_key_id.clone());
+			self.document_keys_store_failures.lock().push(*server_key_id);
 			Ok(())
 		}
 
 		fn publish_retrieved_document_key_common(&self, _origin: &Address, server_key_id: &ServerKeyId, requester: &Address, common_point: Public, threshold: usize) -> Result<(), String> {
-			self.common_shadow_retrieved_document_keys.lock().push((server_key_id.clone(), requester.clone(), common_point.clone(), threshold));
+			self.common_shadow_retrieved_document_keys.lock().push((*server_key_id, *requester, common_point, threshold));
 			Ok(())
 		}
 
 		fn publish_retrieved_document_key_personal(&self, _origin: &Address, server_key_id: &ServerKeyId, requester: &Address, participants: &[Address], decrypted_secret: Public, shadow: Bytes) -> Result<(), String> {
-			self.personal_shadow_retrieved_document_keys.lock().push((server_key_id.clone(), requester.clone(), participants.iter().cloned().collect(), decrypted_secret, shadow));
+			self.personal_shadow_retrieved_document_keys.lock().push((*server_key_id, *requester, participants.to_vec(), decrypted_secret, shadow));
 			Ok(())
 		}
 
 		fn publish_document_key_retrieval_error(&self, _origin: &Address, server_key_id: &ServerKeyId, requester: &Address) -> Result<(), String> {
-			self.document_keys_shadow_retrieval_failures.lock().push((server_key_id.clone(), requester.clone()));
+			self.document_keys_shadow_retrieval_failures.lock().push((*server_key_id, *requester));
 			Ok(())
 		}
 	}

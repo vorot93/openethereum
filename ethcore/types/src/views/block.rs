@@ -41,15 +41,11 @@ impl<'a> BlockView<'a> {
 	///
 	/// use types::views::{BlockView};
 	///
-	/// fn main() {
 	/// let bytes : &[u8] = &[];
 	/// let block_view = view!(BlockView, bytes);
-	/// }
 	/// ```
-	pub fn new(rlp: ViewRlp<'a>) -> BlockView<'a> {
-		BlockView {
-			rlp: rlp
-		}
+	pub const fn new(rlp: ViewRlp<'a>) -> Self {
+		Self { rlp }
 	}
 
 	/// Block header hash.
@@ -58,7 +54,7 @@ impl<'a> BlockView<'a> {
 	}
 
 	/// Return reference to underlaying rlp.
-	pub fn rlp(&self) -> &ViewRlp<'a> {
+	pub const fn rlp(&self) -> &ViewRlp<'a> {
 		&self.rlp
 	}
 
@@ -92,8 +88,8 @@ impl<'a> BlockView<'a> {
 			.enumerate()
 			.map(|(i, t)| LocalizedTransaction {
 				signed: t,
-				block_hash: block_hash.clone(),
-				block_number: block_number,
+				block_hash,
+				block_number,
 				transaction_index: i,
 				cached_sender: None,
 			}).collect()
@@ -131,8 +127,8 @@ impl<'a> BlockView<'a> {
 		let block_number = header.number();
 		self.transaction_at(index).map(|t| LocalizedTransaction {
 			signed: t,
-			block_hash: block_hash,
-			block_number: block_number,
+			block_hash,
+			block_number,
 			transaction_index: index,
 			cached_sender: None,
 		})

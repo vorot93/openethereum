@@ -38,15 +38,15 @@ use types::{Error, Public, MessageHash, NodeAddress, RequestSignature, ServerKey
 use jsonrpc_server_utils::cors::{self, AllowCors, AccessControlAllowOrigin};
 
 /// Key server http-requests listener. Available requests:
-/// To generate server key:							POST		/shadow/{server_key_id}/{signature}/{threshold}
-/// To store pregenerated encrypted document key: 	POST		/shadow/{server_key_id}/{signature}/{common_point}/{encrypted_key}
-/// To generate server && document key:				POST		/{server_key_id}/{signature}/{threshold}
-/// To get public portion of server key:			GET			/server/{server_key_id}/{signature}
-/// To get document key:							GET			/{server_key_id}/{signature}
-/// To get document key shadow:						GET			/shadow/{server_key_id}/{signature}
-/// To generate Schnorr signature with server key:	GET			/schnorr/{server_key_id}/{signature}/{message_hash}
-/// To generate ECDSA signature with server key:	GET			/ecdsa/{server_key_id}/{signature}/{message_hash}
-/// To change servers set:							POST		/admin/servers_set_change/{old_signature}/{new_signature} + BODY: json array of hex-encoded nodes ids
+/// To generate server key:                         `POST`    `/shadow/{server_key_id}/{signature}/{threshold}`
+/// To store pregenerated encrypted document key:   `POST`    `/shadow/{server_key_id}/{signature}/{common_point}/{encrypted_key}`
+/// To generate server && document key:             `POST`    `/{server_key_id}/{signature}/{threshold}`
+/// To get public portion of server key:            `GET`     `/server/{server_key_id}/{signature}`
+/// To get document key:                            `GET`     `/{server_key_id}/{signature}`
+/// To get document key shadow:                     `GET`     `/shadow/{server_key_id}/{signature}`
+/// To generate Schnorr signature with server key:  `GET`     `/schnorr/{server_key_id}/{signature}/{message_hash}`
+/// To generate ECDSA signature with server key:    `GET`     `/ecdsa/{server_key_id}/{signature}/{message_hash}`
+/// To change servers set:                          `POST`    `/admin/servers_set_change/{old_signature}/{new_signature}` + BODY: json array of hex-encoded nodes ids
 
 type CorsDomains = Option<Vec<AccessControlAllowOrigin>>;
 
@@ -94,10 +94,10 @@ struct KeyServerSharedHttpHandler {
 
 
 impl KeyServerHttpListener {
-	/// Start KeyServer http listener
+	/// Start `KeyServer` http listener
 	pub fn start(listener_address: NodeAddress, cors_domains: Option<Vec<String>>, key_server: Weak<dyn KeyServer>, executor: Executor) -> Result<Self, Error> {
 		let shared_handler = Arc::new(KeyServerSharedHttpHandler {
-			key_server: key_server,
+			key_server,
 		});
 		let cors: CorsDomains = cors_domains.map(|domains| domains.into_iter().map(AccessControlAllowOrigin::from).collect());
 		let listener_address = format!("{}:{}", listener_address.address, listener_address.port).parse()?;
@@ -120,7 +120,7 @@ impl KeyServerHttpListener {
 
 		executor.spawn(server);
 
-		let listener = KeyServerHttpListener {
+		let listener = Self {
 			_executor: executor,
 			_handler: shared_handler,
 		};
@@ -143,7 +143,7 @@ impl KeyServerHttpHandler {
 		req_body: &[u8],
 		cors: AllowCors<AccessControlAllowOrigin>,
 	) -> Box<dyn Future<Item=HttpResponse<Body>, Error=hyper::Error> + Send> {
-		match parse_request(&req_method, &path, &req_body) {
+		match parse_request(&req_method, path, req_body) {
 			Request::GenerateServerKey(document, signature, threshold) =>
 				Box::new(result(self.key_server())
 					.and_then(move |key_server| key_server.generate_key(document, signature.into(), threshold))
@@ -227,24 +227,22 @@ impl Service for KeyServerHttpHandler {
 			req.headers().get(header::HOST).and_then(|value| value.to_str().ok()),
 			&self.cors
 		);
-		match cors {
-			AllowCors::Invalid => {
-				warn!(target: "secretstore", "Ignoring {}-request {} with unauthorized Origin header", req.method(), req.uri());
-				Box::new(future::ok(HttpResponse::builder()
-					.status(HttpStatusCode::NOT_FOUND)
-					.body(Body::empty())
-					.expect("Nothing to parse, cannot fail; qed")))
-			},
-			_ => {
-				let req_method = req.method().clone();
-				let req_uri = req.uri().clone();
-				let path = req_uri.path().to_string();
-				// We cannot consume Self because of the Service trait requirement.
-				let this = self.clone();
 
-				Box::new(req.into_body().concat2()
-					.and_then(move |body| this.process(req_method, req_uri, &path, &body, cors)))
-			}
+		if let AllowCors::Invalid = cors {
+			warn!(target: "secretstore", "Ignoring {}-request {} with unauthorized Origin header", req.method(), req.uri());
+			Box::new(future::ok(HttpResponse::builder()
+				.status(HttpStatusCode::NOT_FOUND)
+				.body(Body::empty())
+				.expect("Nothing to parse, cannot fail; qed")))
+		} else {
+			let req_method = req.method().clone();
+			let req_uri = req.uri().clone();
+			let path = req_uri.path().to_string();
+			// We cannot consume Self because of the Service trait requirement.
+			let this = self.clone();
+
+			Box::new(req.into_body().concat2()
+				.and_then(move |body| this.process(req_method, req_uri, &path, &body, cors)))
 		}
 	}
 }
@@ -373,7 +371,7 @@ fn parse_request(method: &HttpMethod, uri_path: &str, body: &[u8]) -> Request {
 	};
 
 	let path: Vec<String> = uri_path.trim_start_matches('/').split('/').map(Into::into).collect();
-	if path.len() == 0 {
+	if path.is_empty() {
 		return Request::Invalid;
 	}
 
@@ -518,7 +516,7 @@ mod tests {
 		let node2: Public = "07230e34ebfe41337d3ed53b186b3861751f2401ee74b988bba55694e2a6f60c757677e194be2e53c3523cc8548694e636e6acb35c4e8fdc5e29d28679b9b2f3".parse().unwrap();
 		let nodes = vec![node1, node2].into_iter().collect();
 		assert_eq!(parse_request(&HttpMethod::POST, "/admin/servers_set_change/a199fb39e11eefb61c78a4074a53c0d4424600a3e74aad4fb9d93a26c30d067e1d4d29936de0c73f19827394a1dd049480a0d581aee7ae7546968da7d3d1c2fd01/b199fb39e11eefb61c78a4074a53c0d4424600a3e74aad4fb9d93a26c30d067e1d4d29936de0c73f19827394a1dd049480a0d581aee7ae7546968da7d3d1c2fd01",
-			&r#"["0x843645726384530ffb0c52f175278143b5a93959af7864460f5a4fec9afd1450cfb8aef63dec90657f43f55b13e0a73c7524d4e9a13c051b4e5f1e53f39ecd91",
+			r#"["0x843645726384530ffb0c52f175278143b5a93959af7864460f5a4fec9afd1450cfb8aef63dec90657f43f55b13e0a73c7524d4e9a13c051b4e5f1e53f39ecd91",
 				"0x07230e34ebfe41337d3ed53b186b3861751f2401ee74b988bba55694e2a6f60c757677e194be2e53c3523cc8548694e636e6acb35c4e8fdc5e29d28679b9b2f3"]"#.as_bytes()),
 			Request::ChangeServersSet(
 				"a199fb39e11eefb61c78a4074a53c0d4424600a3e74aad4fb9d93a26c30d067e1d4d29936de0c73f19827394a1dd049480a0d581aee7ae7546968da7d3d1c2fd01".parse().unwrap(),
@@ -539,10 +537,10 @@ mod tests {
 		assert_eq!(parse_request(&HttpMethod::GET, "/schnorr/0000000000000000000000000000000000000000000000000000000000000001/a199fb39e11eefb61c78a4074a53c0d4424600a3e74aad4fb9d93a26c30d067e1d4d29936de0c73f19827394a1dd049480a0d581aee7ae7546968da7d3d1c2fd01/0000000000000000000000000000000000000000000000000000000000000002/0000000000000000000000000000000000000000000000000000000000000002", Default::default()), Request::Invalid);
 		assert_eq!(parse_request(&HttpMethod::GET, "/ecdsa/0000000000000000000000000000000000000000000000000000000000000001/a199fb39e11eefb61c78a4074a53c0d4424600a3e74aad4fb9d93a26c30d067e1d4d29936de0c73f19827394a1dd049480a0d581aee7ae7546968da7d3d1c2fd01/0000000000000000000000000000000000000000000000000000000000000002/0000000000000000000000000000000000000000000000000000000000000002", Default::default()), Request::Invalid);
 		assert_eq!(parse_request(&HttpMethod::POST, "/admin/servers_set_change/xxx/yyy",
-			&r#"["0x843645726384530ffb0c52f175278143b5a93959af7864460f5a4fec9afd1450cfb8aef63dec90657f43f55b13e0a73c7524d4e9a13c051b4e5f1e53f39ecd91",
+			r#"["0x843645726384530ffb0c52f175278143b5a93959af7864460f5a4fec9afd1450cfb8aef63dec90657f43f55b13e0a73c7524d4e9a13c051b4e5f1e53f39ecd91",
 				"0x07230e34ebfe41337d3ed53b186b3861751f2401ee74b988bba55694e2a6f60c757677e194be2e53c3523cc8548694e636e6acb35c4e8fdc5e29d28679b9b2f3"]"#.as_bytes()),
 			Request::Invalid);
-		assert_eq!(parse_request(&HttpMethod::POST, "/admin/servers_set_change/a199fb39e11eefb61c78a4074a53c0d4424600a3e74aad4fb9d93a26c30d067e1d4d29936de0c73f19827394a1dd049480a0d581aee7ae7546968da7d3d1c2fd01/a199fb39e11eefb61c78a4074a53c0d4424600a3e74aad4fb9d93a26c30d067e1d4d29936de0c73f19827394a1dd049480a0d581aee7ae7546968da7d3d1c2fd01", "".as_bytes()),
+		assert_eq!(parse_request(&HttpMethod::POST, "/admin/servers_set_change/a199fb39e11eefb61c78a4074a53c0d4424600a3e74aad4fb9d93a26c30d067e1d4d29936de0c73f19827394a1dd049480a0d581aee7ae7546968da7d3d1c2fd01/a199fb39e11eefb61c78a4074a53c0d4424600a3e74aad4fb9d93a26c30d067e1d4d29936de0c73f19827394a1dd049480a0d581aee7ae7546968da7d3d1c2fd01", b""),
 			Request::Invalid);
 	}
 }

@@ -44,7 +44,7 @@ pub enum Engine {
 
 impl Default for Engine {
 	fn default() -> Self {
-		Engine::Ethash
+		Self::Ethash
 	}
 }
 
@@ -79,24 +79,24 @@ pub struct BlockChain {
 impl BlockChain {
 	/// Returns blocks rlp.
 	pub fn blocks_rlp(&self) -> Vec<Vec<u8>> {
-		self.blocks.iter().map(|block| block.rlp()).collect()
+		self.blocks.iter().map(Block::rlp).collect()
 	}
 
 	/// Returns spec compatible genesis struct.
 	pub fn genesis(&self) -> Genesis {
 		Genesis {
 			seal: Seal::Ethereum(Ethereum {
-				nonce: self.genesis_block.nonce.clone(),
-				mix_hash: self.genesis_block.mix_hash.clone(),
+				nonce: self.genesis_block.nonce,
+				mix_hash: self.genesis_block.mix_hash,
 			}),
 			difficulty: self.genesis_block.difficulty,
-			author: Some(self.genesis_block.author.clone()),
+			author: Some(self.genesis_block.author),
 			timestamp: Some(self.genesis_block.timestamp),
-			parent_hash: Some(self.genesis_block.parent_hash.clone()),
+			parent_hash: Some(self.genesis_block.parent_hash),
 			gas_limit: self.genesis_block.gas_limit,
-			transactions_root: Some(self.genesis_block.transactions_root.clone()),
-			receipts_root: Some(self.genesis_block.receipts_root.clone()),
-			state_root: Some(self.genesis_block.state_root.clone()),
+			transactions_root: Some(self.genesis_block.transactions_root),
+			receipts_root: Some(self.genesis_block.receipts_root),
+			state_root: Some(self.genesis_block.state_root),
 			gas_used: Some(self.genesis_block.gas_used),
 			extra_data: Some(self.genesis_block.extra_data.clone()),
 		}

@@ -78,12 +78,12 @@ pub struct UpdatePolicy {
 
 impl Default for UpdatePolicy {
 	fn default() -> Self {
-		UpdatePolicy {
+		Self {
 			enable_downloading: false,
 			require_consensus: true,
 			filter: UpdateFilter::None,
 			track: ReleaseTrack::Unknown,
-			path: Default::default(),
+			path: PathBuf::new(),
 			max_size: 128 * 1024 * 1024,
 			max_delay: 100,
 			frequency: 20,
@@ -128,15 +128,37 @@ enum UpdaterStatus {
 
 impl Default for UpdaterStatus {
 	fn default() -> Self {
-		UpdaterStatus::Idle
+		Self::new()
 	}
 }
 
-#[derive(Debug, Default)]
+impl UpdaterStatus {
+	pub const fn new() -> Self {
+		Self::Idle
+	}
+}
+
+#[derive(Debug)]
 struct UpdaterState {
 	latest: Option<OperationsInfo>,
 	capability: CapState,
 	status: UpdaterStatus,
+}
+
+impl Default for UpdaterState {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
+impl UpdaterState {
+	pub const fn new() -> Self {
+		Self {
+			latest: None,
+			capability: CapState::new(),
+			status: UpdaterStatus::new(),
+		}
+	}
 }
 
 /// Service for checking for updates and determining whether we can achieve consensus.
@@ -167,6 +189,7 @@ lazy_static! {
 }
 
 lazy_static! {
+	#[allow(clippy::same_functions_in_if_condition)]
 	static ref PLATFORM: String = {
 		if cfg!(target_os = "macos") {
 			"x86_64-apple-darwin".into()
@@ -199,7 +222,7 @@ pub trait OperationsClient: Send + Sync + 'static {
 	/// Get the latest release operations info for the given track.
 	fn latest(&self, this: &VersionInfo, track: ReleaseTrack) -> Result<OperationsInfo, String>;
 
-	/// Fetches the block number when the given release was added, checking the interval [from; latest_block].
+	/// Fetches the block number when the given release was added, checking the interval [`from`; `latest_block`].
 	fn release_block_number(&self, from: BlockNumber, release: &ReleaseInfo) -> Option<BlockNumber>;
 }
 
@@ -210,7 +233,7 @@ pub struct OperationsContractClient {
 
 impl OperationsContractClient {
 	fn new(client: Weak<dyn BlockChainClient>) -> Self {
-		OperationsContractClient {
+		Self {
 			client
 		}
 	}
@@ -246,6 +269,8 @@ impl OperationsContractClient {
 
 impl OperationsClient for OperationsContractClient {
 	fn latest(&self, this: &VersionInfo, track: ReleaseTrack) -> Result<OperationsInfo, String> {
+		const PROOF: &str = "in_minor initialized and assigned with Some; loop breaks if None assigned; qed";
+
 		if track == ReleaseTrack::Unknown {
 			return Err(format!("Current executable ({}) is unreleased.", this.hash));
 		}
@@ -278,13 +303,14 @@ impl OperationsClient for OperationsContractClient {
 		// get the release info for the latest version in track
 		let in_track = self.release_info(latest_in_track, &do_call)?;
 		let mut in_minor = Some(in_track.clone());
-		const PROOF: &str = "in_minor initialized and assigned with Some; loop breaks if None assigned; qed";
 
 		// if the minor version has changed, let's check the minor version on a different track
 		while in_minor.as_ref().expect(PROOF).version.version.minor != this.version.minor {
-			let track = match in_minor.as_ref().expect(PROOF).version.track {
-				ReleaseTrack::Nightly => ReleaseTrack::Stable,
-				_ => { in_minor = None; break; }
+			let track = if let ReleaseTrack::Nightly = in_minor.as_ref().expect(PROOF).version.track {
+				ReleaseTrack::Stable
+			} else {
+				in_minor = None;
+				break;
 			};
 
 			let latest_in_track = self.latest_hash(track, &do_call)?;
@@ -374,10 +400,10 @@ impl Updater {
 		sync: &Weak<dyn SyncProvider>,
 		update_policy: UpdatePolicy,
 		fetcher: fetch::Client,
-	) -> Arc<Updater> {
-		let r = Arc::new(Updater {
+	) -> Arc<Self> {
+		let r = Arc::new(Self {
 			update_policy,
-			weak_self: Mutex::new(Default::default()),
+			weak_self: Mutex::new(Weak::new()),
 			client: client.clone(),
 			sync: Some(sync.clone()),
 			fetcher,
@@ -395,7 +421,7 @@ impl Updater {
 			},
 			time_provider: StdTimeProvider,
 			rng: ThreadRngGenRange,
-			state: Mutex::new(Default::default()),
+			state: Mutex::new(UpdaterState::default()),
 		});
 		*r.weak_self.lock() = Arc::downgrade(&r);
 
@@ -408,6 +434,7 @@ impl Updater {
 	}
 }
 
+#[allow(clippy::use_self)]
 impl<O: OperationsClient, F: HashFetch, T: TimeProvider, R: GenRange> Updater<O, F, T, R> {
 	/// Set a closure to call when we want to restart the client
 	pub fn set_exit_handler<G>(&self, g: G) where G: Fn() + 'static + Send {
@@ -432,12 +459,12 @@ impl<O: OperationsClient, F: HashFetch, T: TimeProvider, R: GenRange> Updater<O,
 		let mut state = self.state.lock();
 
 		// Bail out if the latest release has changed in the meantime
-		if state.latest.as_ref() != Some(&latest) {
+		if state.latest.as_ref() != Some(latest) {
 			return;
 		}
 
 		// The updated status should be set to fetching
-		if let UpdaterStatus::Fetching { ref release, binary, retries } = state.status.clone() {
+		if let UpdaterStatus::Fetching { release, binary, retries } = state.status.clone() {
 			match res {
 				// We've successfully fetched the binary
 				Ok(path) => {
@@ -479,7 +506,7 @@ impl<O: OperationsClient, F: HashFetch, T: TimeProvider, R: GenRange> Updater<O,
 	}
 
 	fn execute_upgrade(&self, mut state: MutexGuard<UpdaterState>) -> bool {
-		if let UpdaterStatus::Ready { ref release } = state.status.clone() {
+		if let UpdaterStatus::Ready { release } = state.status.clone() {
 			let file = Updater::update_file_name(&release.version);
 			let path = self.updates_path("latest");
 
@@ -492,11 +519,12 @@ impl<O: OperationsClient, F: HashFetch, T: TimeProvider, R: GenRange> Updater<O,
 			}
 
 			info!(target: "updater", "Completed upgrade to {}", &release.version);
-			state.status = UpdaterStatus::Installed { release: release.clone() };
+			state.status = UpdaterStatus::Installed { release };
 
-			match *self.exit_handler.lock() {
-				Some(ref h) => (*h)(),
-				None => info!(target: "updater", "Update installed, ready for restart."),
+			if let Some(h) = self.exit_handler.lock().as_ref() {
+				(*h)();
+			} else {
+				info!(target: "updater", "Update installed, ready for restart.");
 			}
 
 			return true;
@@ -529,27 +557,27 @@ impl<O: OperationsClient, F: HashFetch, T: TimeProvider, R: GenRange> Updater<O,
 				// updater is disabled
 				UpdaterStatus::Disabled => {},
 				// the update has already been installed
-				UpdaterStatus::Installed { ref release, .. } if *release == latest.track => {},
+				UpdaterStatus::Installed { release, .. } if release == latest.track => {},
 				// we're currently fetching this update
-				UpdaterStatus::Fetching { ref release, .. } if *release == latest.track => {},
+				UpdaterStatus::Fetching { release, .. } if release == latest.track => {},
 				// the fetch has failed and we're backing off the next retry
-				UpdaterStatus::FetchBackoff { ref release, backoff, .. } if *release == latest.track && self.time_provider.now() < backoff.1 => {},
+				UpdaterStatus::FetchBackoff { release, backoff, .. } if release == latest.track && self.time_provider.now() < backoff.1 => {},
 				// we're delaying the update until the given block number
-				UpdaterStatus::Waiting { ref release, block_number, .. } if *release == latest.track && current_block_number < block_number => {},
+				UpdaterStatus::Waiting { release, block_number, .. } if release == latest.track && current_block_number < block_number => {},
 				// we're at (or past) the block that triggers the update, let's fetch the binary
-				UpdaterStatus::Waiting { ref release, block_number, binary } if *release == latest.track && current_block_number >= block_number => {
+				UpdaterStatus::Waiting { release, block_number, binary } if release == latest.track && current_block_number >= block_number => {
 					info!(target: "updater", "Update for binary {} triggered", binary);
 
-					state.status = UpdaterStatus::Fetching { release: release.clone(), binary, retries: 1 };
+					state.status = UpdaterStatus::Fetching { release, binary, retries: 1 };
 					fetch(latest, binary);
 				},
 				// we're ready to retry the fetch after we applied a backoff for the previous failure
-				UpdaterStatus::FetchBackoff { ref release, backoff, binary } if *release == latest.track && self.time_provider.now() >= backoff.1 => {
-					state.status = UpdaterStatus::Fetching { release: release.clone(), binary, retries: backoff.0 + 1 };
+				UpdaterStatus::FetchBackoff { release, backoff, binary } if release == latest.track && self.time_provider.now() >= backoff.1 => {
+					state.status = UpdaterStatus::Fetching { release, binary, retries: backoff.0 + 1 };
 					fetch(latest, binary);
 				},
 				// the update is ready to be installed
-				UpdaterStatus::Ready { ref release } if *release == latest.track => {
+				UpdaterStatus::Ready { release } if release == latest.track => {
 					let auto = match self.update_policy.filter {
 						UpdateFilter::All => true,
 						UpdateFilter::Critical if release.is_critical /* TODO: or is on a bad fork */ => true,
@@ -599,7 +627,7 @@ impl<O: OperationsClient, F: HashFetch, T: TimeProvider, R: GenRange> Updater<O,
 								}
 							};
 
-							state.status = UpdaterStatus::Waiting { release: latest.track.clone(), binary, block_number: update_block_number };
+							state.status = UpdaterStatus::Waiting { release: latest.track, binary, block_number: update_block_number };
 
 							if update_block_number > current_block_number {
 								info!(target: "updater", "Update for binary {} will be triggered at block {}", binary, update_block_number);
@@ -617,19 +645,15 @@ impl<O: OperationsClient, F: HashFetch, T: TimeProvider, R: GenRange> Updater<O,
 		trace!(target: "updater", "Current release is {} ({:?})", self.this, self.this.hash);
 
 		// We rely on a secure state. Bail if we're unsure about it.
-		if !cfg!(feature = "test-updater") {
-			if self.client.upgrade().map_or(true, |c| !c.chain_info().security_level().is_full()) {
-			    return;
-			}
+		if !cfg!(feature = "test-updater") && self.client.upgrade().map_or(true, |c| !c.chain_info().security_level().is_full()) {
+			return;
 		}
 
 		// Only check for updates every n blocks
 		let current_block_number = self.client.upgrade().map_or(0, |c| c.block_number(BlockId::Latest).unwrap_or(0));
 
-		if !cfg!(feature = "test-updater") {
-			if current_block_number % cmp::max(self.update_policy.frequency, 1) != 0 {
-				return;
-			}
+		if !cfg!(feature = "test-updater") && current_block_number % cmp::max(self.update_policy.frequency, 1) != 0 {
+			return;
 		}
 
 		let mut state = self.state.lock();
@@ -686,7 +710,7 @@ impl ChainNotify for Updater {
 	fn new_blocks(&self, new_blocks: NewBlocks) {
 		if new_blocks.has_more_blocks_to_import { return }
 		match self.sync.as_ref().and_then(Weak::upgrade) {
-			Some(ref s) if !s.is_major_syncing() => self.poll(),
+			Some(s) if !s.is_major_syncing() => self.poll(),
 			_ => {},
 		}
 	}
@@ -698,9 +722,10 @@ impl<O: OperationsClient, F: HashFetch, T: TimeProvider, R: GenRange> Service fo
 	}
 
 	fn upgrade_ready(&self) -> Option<ReleaseInfo> {
-		match self.state.lock().status {
-			UpdaterStatus::Ready { ref release, .. } => Some(release.clone()),
-			_ => None,
+		if let UpdaterStatus::Ready { release, .. } = &self.state.lock().status {
+			Some(release.clone())
+		} else {
+			None
 		}
 	}
 
@@ -735,8 +760,8 @@ pub mod tests {
 	}
 
 	impl FakeOperationsClient {
-		fn new() -> FakeOperationsClient {
-			FakeOperationsClient { result: Arc::new(Mutex::new((None, None))) }
+		fn new() -> Self {
+			Self { result: Arc::new(Mutex::new((None, None))) }
 		}
 
 		fn set_result(&self, operations_info: Option<OperationsInfo>, release_block_number: Option<BlockNumber>) {
@@ -748,11 +773,11 @@ pub mod tests {
 
 	impl OperationsClient for FakeOperationsClient {
 		fn latest(&self, _this: &VersionInfo, _track: ReleaseTrack) -> Result<OperationsInfo, String> {
-			self.result.lock().0.clone().ok_or("unavailable".into())
+			self.result.lock().0.clone().ok_or_else(|| "unavailable".into())
 		}
 
 		fn release_block_number(&self, _from: BlockNumber, _release: &ReleaseInfo) -> Option<BlockNumber> {
-			self.result.lock().1.clone()
+			self.result.lock().1
 		}
 	}
 
@@ -762,12 +787,12 @@ pub mod tests {
 	}
 
 	impl FakeFetch {
-		fn new() -> FakeFetch {
-			FakeFetch { on_done: Arc::new(Mutex::new(None)) }
+		fn new() -> Self {
+			Self { on_done: Arc::new(Mutex::new(None)) }
 		}
 
 		fn trigger(&self, result: Option<PathBuf>) {
-			if let Some(ref on_done) = *self.on_done.lock() {
+			if let Some(on_done) = self.on_done.lock().as_ref() {
 				on_done(result.ok_or(Error::NoResolution))
 			}
 		}
@@ -785,8 +810,8 @@ pub mod tests {
 	}
 
 	impl FakeTimeProvider {
-		fn new() -> FakeTimeProvider {
-			FakeTimeProvider { result: Arc::new(Mutex::new(Instant::now())) }
+		fn new() -> Self {
+			Self { result: Arc::new(Mutex::new(Instant::now())) }
 		}
 
 		fn set_result(&self, result: Instant) {
@@ -806,8 +831,8 @@ pub mod tests {
 	}
 
 	impl FakeGenRange {
-		fn new() -> FakeGenRange {
-			FakeGenRange { result: Arc::new(Mutex::new(0)) }
+		fn new() -> Self {
+			Self { result: Arc::new(Mutex::new(0)) }
 		}
 
 		fn set_result(&self, result: u64) {
@@ -846,14 +871,14 @@ pub mod tests {
 		};
 
 		let updater = Arc::new(Updater {
-			update_policy: update_policy,
+			update_policy,
 			weak_self: Mutex::new(Default::default()),
 			client: weak_client,
 			sync: None,
 			fetcher: fetcher.clone(),
 			operations_client: operations_client.clone(),
 			exit_handler: Mutex::new(None),
-			this: this,
+			this,
 			time_provider: time_provider.clone(),
 			rng: rng.clone(),
 			state: Mutex::new(Default::default()),
@@ -872,7 +897,7 @@ pub mod tests {
 			enable_downloading: true,
 			max_delay: 10,
 			frequency: 1,
-			..Default::default()
+			..UpdatePolicy::default()
 		};
 
 		(update_policy, tempdir)
@@ -905,7 +930,7 @@ pub mod tests {
 	#[test]
 	fn should_stay_idle_when_no_release() {
 		let (update_policy, _) = update_policy();
-		let (_client, updater, _, _, ..) = setup(update_policy);
+		let (_client, updater, ..) = setup(update_policy);
 
 		assert_eq!(updater.state.lock().status, UpdaterStatus::Idle);
 		updater.poll();
@@ -931,8 +956,8 @@ pub mod tests {
 		// fetching it
 		assert_eq!(updater.state.lock().latest, Some(latest));
 		assert_matches!(
-			updater.state.lock().status,
-			UpdaterStatus::Fetching { ref release, retries, .. } if *release == latest_release && retries == 1);
+			&updater.state.lock().status,
+			UpdaterStatus::Fetching { release, retries, .. } if *release == latest_release && *retries == 1);
 
 		// mock fetcher with update binary and trigger the fetch
 		let update_file = tempdir.path().join("parity");
@@ -958,7 +983,7 @@ pub mod tests {
 		let mut latest_file_content = String::new();
 		File::open(latest_file).unwrap().read_to_string(&mut latest_file_content).unwrap();
 
-		assert_eq!(latest_file_content, updated_binary.file_name().and_then(|n| n.to_str()).unwrap());
+		assert_eq!(latest_file_content, updated_binary.file_name().and_then(std::ffi::OsStr::to_str).unwrap());
 	}
 
 	#[test]
@@ -967,7 +992,7 @@ pub mod tests {
 		let (client, updater, operations_client, _, _, rng) = setup(update_policy);
 
 		let (_, latest_release, latest) = new_upgrade("1.0.1");
-		operations_client.set_result(Some(latest.clone()), Some(0));
+		operations_client.set_result(Some(latest), Some(0));
 
 		rng.set_result(5);
 
@@ -975,24 +1000,24 @@ pub mod tests {
 
 		// the update should be delayed for 5 blocks
 		assert_matches!(
-			updater.state.lock().status,
-			UpdaterStatus::Waiting { ref release, block_number, .. } if *release == latest_release && block_number == 5);
+			&updater.state.lock().status,
+			UpdaterStatus::Waiting { release, block_number, .. } if *release == latest_release && *block_number == 5);
 
 		client.add_blocks(1, EachBlockWith::Nothing);
 		updater.poll();
 
 		// we should still be in the waiting state after we push one block
 		assert_matches!(
-			updater.state.lock().status,
-			UpdaterStatus::Waiting { ref release, block_number, .. } if *release == latest_release && block_number == 5);
+			&updater.state.lock().status,
+			UpdaterStatus::Waiting { release, block_number, .. } if *release == latest_release && *block_number == 5);
 
 		client.add_blocks(5, EachBlockWith::Nothing);
 		updater.poll();
 
 		// after we're past the delay the status should switch to fetching
 		assert_matches!(
-			updater.state.lock().status,
-			UpdaterStatus::Fetching { ref release, .. } if *release == latest_release);
+			&updater.state.lock().status,
+			UpdaterStatus::Fetching { release, .. } if *release == latest_release);
 	}
 
 	#[test]
@@ -1002,15 +1027,15 @@ pub mod tests {
 		client.add_blocks(100, EachBlockWith::Nothing);
 
 		let (_, latest_release, latest) = new_upgrade("1.0.1");
-		operations_client.set_result(Some(latest.clone()), Some(0));
+		operations_client.set_result(Some(latest), Some(0));
 
 		updater.poll();
 
 		// the update should not be delayed since it's older than the maximum delay
 		// the update was at block 0 (100 blocks ago), and the maximum delay is 10 blocks
 		assert_matches!(
-			updater.state.lock().status,
-			UpdaterStatus::Fetching { ref release, .. } if *release == latest_release);
+			&updater.state.lock().status,
+			UpdaterStatus::Fetching { release, .. } if *release == latest_release);
 	}
 
 	#[test]
@@ -1020,7 +1045,7 @@ pub mod tests {
 
 		let (client, updater, operations_client, _, _, rng) = setup(update_policy);
 		let (_, latest_release, latest) = new_upgrade("1.0.1");
-		operations_client.set_result(Some(latest.clone()), Some(0));
+		operations_client.set_result(Some(latest), Some(0));
 		rng.set_result(5);
 
 		client.add_blocks(1, EachBlockWith::Nothing);
@@ -1034,8 +1059,8 @@ pub mod tests {
 
 		// after adding a block we check for a new update and trigger the random delay (of 5 blocks)
 		assert_matches!(
-			updater.state.lock().status,
-			UpdaterStatus::Waiting { ref release, block_number, .. } if *release == latest_release && block_number == 5);
+			&updater.state.lock().status,
+			UpdaterStatus::Waiting { release, block_number, .. } if *release == latest_release && *block_number == 5);
 	}
 
 	#[test]
@@ -1045,7 +1070,7 @@ pub mod tests {
 		let (_, latest_release, latest) = new_upgrade("1.0.1");
 
 		// mock operations contract with a new version
-		operations_client.set_result(Some(latest.clone()), None);
+		operations_client.set_result(Some(latest), None);
 
 		let mut now = Instant::now();
 		time_provider.set_result(now);
@@ -1055,8 +1080,8 @@ pub mod tests {
 
 		// we triggered the fetcher with an error result so the updater should backoff any retry
 		assert_matches!(
-			updater.state.lock().status,
-			UpdaterStatus::FetchBackoff { ref release, ref backoff, .. } if *release == latest_release && backoff.0 == 1);
+			&updater.state.lock().status,
+			UpdaterStatus::FetchBackoff { release, backoff, .. } if *release == latest_release && backoff.0 == 1);
 
 		now += Duration::from_secs(1);
 		time_provider.set_result(now);
@@ -1064,8 +1089,8 @@ pub mod tests {
 
 		// if we don't wait for the elapsed time the updater status should stay the same
 		assert_matches!(
-			updater.state.lock().status,
-			UpdaterStatus::FetchBackoff { ref release, ref backoff, .. } if *release == latest_release && backoff.0 == 1);
+			&updater.state.lock().status,
+			UpdaterStatus::FetchBackoff { release, backoff, .. } if *release == latest_release && backoff.0 == 1);
 
 		now += Duration::from_secs(1);
 		time_provider.set_result(now);
@@ -1074,8 +1099,8 @@ pub mod tests {
 
 		// the backoff time has elapsed so we retried again (and failed)
 		assert_matches!(
-			updater.state.lock().status,
-			UpdaterStatus::FetchBackoff { ref release, ref backoff, .. } if *release == latest_release && backoff.0 == 2);
+			&updater.state.lock().status,
+			UpdaterStatus::FetchBackoff { release, backoff, .. } if *release == latest_release && backoff.0 == 2);
 
 		now += Duration::from_secs(4);
 		time_provider.set_result(now);
@@ -1096,19 +1121,19 @@ pub mod tests {
 		let (_, latest_release, latest) = new_upgrade("1.0.1");
 
 		// mock operations contract with a new version
-		operations_client.set_result(Some(latest.clone()), None);
+		operations_client.set_result(Some(latest), None);
 
 		updater.poll();
 		fetcher.trigger(None);
 
 		// we triggered the fetcher with an error result so the updater should backoff any retry
 		assert_matches!(
-			updater.state.lock().status,
-			UpdaterStatus::FetchBackoff { ref release, ref backoff, .. } if *release == latest_release && backoff.0 == 1);
+			&updater.state.lock().status,
+			UpdaterStatus::FetchBackoff { release, backoff, .. } if *release == latest_release && backoff.0 == 1);
 
 		// mock new working release and trigger the fetch afterwards
 		let (_, latest_release, latest) = new_upgrade("1.0.2");
-		operations_client.set_result(Some(latest.clone()), None);
+		operations_client.set_result(Some(latest), None);
 		let update_file = tempdir.path().join("parity");
 		File::create(update_file.clone()).unwrap();
 
@@ -1126,11 +1151,11 @@ pub mod tests {
 		let (latest_version, latest_release, latest) = new_upgrade("1.0.1");
 
 		// mock operations contract with a new version
-		operations_client.set_result(Some(latest.clone()), None);
+		operations_client.set_result(Some(latest), None);
 
 		// mock final update file
 		let update_file = tempdir.path().join(Updater::update_file_name(&latest_version));
-		File::create(update_file.clone()).unwrap();
+		File::create(update_file).unwrap();
 
 		updater.poll();
 
@@ -1146,7 +1171,7 @@ pub mod tests {
 		let (_, _, latest) = new_upgrade("1.0.1");
 
 		// mock operations contract with a new version
-		operations_client.set_result(Some(latest.clone()), None);
+		operations_client.set_result(Some(latest), None);
 
 		updater.poll();
 		// trigger the fetch but don't create the file on-disk. this should lead to a fatal error that disables the updater
@@ -1162,7 +1187,7 @@ pub mod tests {
 		assert_eq!(updater.state.lock().status, UpdaterStatus::Disabled);
 
 		let (_, _, latest) = new_upgrade("1.0.2");
-		operations_client.set_result(Some(latest.clone()), None);
+		operations_client.set_result(Some(latest), None);
 
 		updater.poll();
 
@@ -1177,24 +1202,24 @@ pub mod tests {
 		let (_, latest_release, latest) = new_upgrade("1.0.1");
 
 		// mock operations contract with a new version
-		operations_client.set_result(Some(latest.clone()), None);
+		operations_client.set_result(Some(latest), None);
 
 		updater.poll();
 
 		assert_matches!(
-			updater.state.lock().status,
-			UpdaterStatus::Fetching { ref release, .. } if *release == latest_release);
+			&updater.state.lock().status,
+			UpdaterStatus::Fetching { release, .. } if *release == latest_release);
 
 		let (_, latest_release, latest) = new_upgrade("1.0.2");
-		operations_client.set_result(Some(latest.clone()), None);
+		operations_client.set_result(Some(latest), None);
 		fetcher.trigger(None);
 		updater.poll();
 
 		// even though we triggered the previous fetch with an error, the current state was updated to fetch the new
 		// release, and the previous fetch is ignored
 		assert_matches!(
-			updater.state.lock().status,
-			UpdaterStatus::Fetching { ref release, .. } if *release == latest_release);
+			&updater.state.lock().status,
+			UpdaterStatus::Fetching { release, .. } if *release == latest_release);
 	}
 
 	#[test]
@@ -1205,7 +1230,7 @@ pub mod tests {
 		let (latest_version, latest_release, latest) = new_upgrade("1.0.1");
 
 		// mock operations contract with a new version
-		operations_client.set_result(Some(latest.clone()), None);
+		operations_client.set_result(Some(latest), None);
 
 		// we start in idle state and with no information regarding the latest release
 		assert_eq!(updater.state.lock().latest, None);
@@ -1231,13 +1256,13 @@ pub mod tests {
 		let mut latest_file_content = String::new();
 		File::open(latest_file).unwrap().read_to_string(&mut latest_file_content).unwrap();
 
-		assert_eq!(latest_file_content, updated_binary.file_name().and_then(|n| n.to_str()).unwrap());
+		assert_eq!(latest_file_content, updated_binary.file_name().and_then(std::ffi::OsStr::to_str).unwrap());
 	}
 
 	#[test]
 	fn should_update_capability() {
 		let (update_policy, _tempdir) = update_policy();
-		let (client, updater, operations_client, _, ..) = setup(update_policy);
+		let (client, updater, operations_client, ..) = setup(update_policy);
 		let (_, _, mut latest) = new_upgrade("1.0.1");
 
 		// mock operations contract with a new version
@@ -1253,7 +1278,7 @@ pub mod tests {
 
 		// lets announce a new fork which our node doesn't support
 		latest.fork = 2;
-		operations_client.set_result(Some(latest.clone()), None);
+		operations_client.set_result(Some(latest), None);
 		updater.poll();
 
 		// our node is only capable of operating until block #2 when the fork triggers

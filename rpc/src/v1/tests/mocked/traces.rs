@@ -60,10 +60,10 @@ fn io() -> Tester {
 		gas_used: 10_000.into(),
 		refunded: 0.into(),
 		cumulative_gas_used: 10_000.into(),
-		logs: vec![],
-		contracts_created: vec![],
+		logs: Vec::new(),
+		contracts_created: Vec::new(),
 		output: vec![1, 2, 3],
-		trace: vec![],
+		trace: Vec::new(),
 		vm_trace: None,
 		state_diff: None,
 	}));
@@ -73,9 +73,9 @@ fn io() -> Tester {
 	io.extend_with(traces.to_delegate());
 
 	Tester {
-		client: client,
+		client,
 		_miner: miner,
-		io: io,
+		io,
 	}
 }
 

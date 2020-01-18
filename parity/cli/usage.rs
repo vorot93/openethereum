@@ -163,18 +163,18 @@ macro_rules! usage {
 		impl ArgsError {
 			pub fn exit(self) -> ! {
 				match self {
-					ArgsError::Clap(e) => e.exit(),
-					ArgsError::Decode(e) => {
+					Self::Clap(e) => e.exit(),
+					Self::Decode(e) => {
 						eprintln!("You might have supplied invalid parameters in config file.");
 						eprintln!("{}", e);
 						process::exit(2)
 					},
-					ArgsError::Config(path, e) => {
+					Self::Config(path, e) => {
 						eprintln!("There was an error reading your config file at: {}", path);
 						eprintln!("{}", e);
 						process::exit(2)
 					},
-					ArgsError::PeerConfiguration => {
+					Self::PeerConfiguration => {
 						eprintln!("You have supplied `min_peers` > `max_peers`");
 						process::exit(2)
 					}
@@ -184,13 +184,13 @@ macro_rules! usage {
 
 		impl From<ClapError> for ArgsError {
 			fn from(e: ClapError) -> Self {
-				ArgsError::Clap(e)
+				Self::Clap(e)
 			}
 		}
 
 		impl From<toml::de::Error> for ArgsError {
 			fn from(e: toml::de::Error) -> Self {
-				ArgsError::Decode(e)
+				Self::Decode(e)
 			}
 		}
 
@@ -230,7 +230,7 @@ macro_rules! usage {
 
 		impl Default for Args {
 			fn default() -> Self {
-				Args {
+				Self {
 					$(
 						$subc: Default::default(),
 						$(
@@ -333,8 +333,8 @@ macro_rules! usage {
 					// Don't display error in case default config cannot be loaded.
 					(Err(_), None) => Ok(raw_args.into_args(Config::default())),
 					// Config set from CLI (fail with error)
-					(Err(_), Some(ref config_arg)) => {
-						match presets::preset_config_string(config_arg) {
+					(Err(_), Some(config_arg)) => {
+						match presets::preset_config_string(&config_arg) {
 							Ok(s) => Ok(raw_args.into_args(Self::parse_config(&s)?)),
 							Err(e) => Err(ArgsError::Config(config_file, e))
 						}
@@ -637,7 +637,7 @@ macro_rules! usage {
 						)*
 						.get_matches_from_safe(command.iter().map(|x| OsStr::new(x.as_ref())))?;
 
-				let mut raw_args : RawArgs = Default::default();
+				let mut raw_args = Self::default();
 
 				// Globals
 				$(

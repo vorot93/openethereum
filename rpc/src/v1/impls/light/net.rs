@@ -26,9 +26,9 @@ pub struct NetClient<S: ?Sized> {
 }
 
 impl<S: ?Sized> NetClient<S> where S: LightSyncProvider {
-	/// Creates new NetClient.
+	/// Creates new `NetClient`.
 	pub fn new(sync: Arc<S>) -> Self {
-		NetClient {
+		Self {
 			sync,
 		}
 	}
@@ -36,11 +36,11 @@ impl<S: ?Sized> NetClient<S> where S: LightSyncProvider {
 
 impl<S: ?Sized + Sync + Send + 'static> Net for NetClient<S> where S: LightSyncProvider {
 	fn version(&self) -> Result<String> {
-		Ok(format!("{}", self.sync.network_id()).to_owned())
+		Ok(self.sync.network_id().to_string())
 	}
 
 	fn peer_count(&self) -> Result<String> {
-		Ok(format!("0x{:x}", self.sync.peer_numbers().connected as u64).to_owned())
+		Ok(format!("0x{:x}", self.sync.peer_numbers().connected as u64))
 	}
 
 	fn is_listening(&self) -> Result<bool> {

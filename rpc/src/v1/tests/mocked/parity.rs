@@ -51,7 +51,7 @@ pub struct Dependencies {
 
 impl Dependencies {
 	pub fn new() -> Self {
-		Dependencies {
+		Self {
 			miner: Arc::new(TestMinerService::default()),
 			client: Arc::new(TestBlockChainClient::default()),
 			sync: Arc::new(TestSyncProvider::new(Config {
@@ -436,7 +436,7 @@ fn rpc_parity_local_transactions() {
 	}.fake_sign(Address::from_low_u64_be(3));
 	let tx = Arc::new(::miner::pool::VerifiedTransaction::from_pending_block_transaction(tx));
 	deps.miner.local_transactions.lock().insert(H256::from_low_u64_be(10), LocalTransactionStatus::Pending(tx.clone()));
-	deps.miner.local_transactions.lock().insert(H256::from_low_u64_be(15), LocalTransactionStatus::Pending(tx.clone()));
+	deps.miner.local_transactions.lock().insert(H256::from_low_u64_be(15), LocalTransactionStatus::Pending(tx));
 
 	let request = r#"{"jsonrpc": "2.0", "method": "parity_localTransactions", "params":[], "id": 1}"#;
 	let response = r#"{"jsonrpc":"2.0","result":{"0x000000000000000000000000000000000000000000000000000000000000000a":{"status":"pending"},"0x000000000000000000000000000000000000000000000000000000000000000f":{"status":"pending"}},"id":1}"#;
@@ -489,10 +489,10 @@ fn rpc_parity_call() {
 		gas_used: U256::from(0xff30),
 		refunded: U256::from(0x5),
 		cumulative_gas_used: U256::zero(),
-		logs: vec![],
-		contracts_created: vec![],
+		logs: Vec::new(),
+		contracts_created: Vec::new(),
 		output: vec![0x12, 0x34, 0xff],
-		trace: vec![],
+		trace: Vec::new(),
 		vm_trace: None,
 		state_diff: None,
 	}));
@@ -529,7 +529,7 @@ fn rpc_parity_block_receipts() {
 			cumulative_gas_used: 21_000.into(),
 			gas_used: 21_000.into(),
 			contract_address: None,
-			logs: vec![],
+			logs: Vec::new(),
 			log_bloom: Bloom::from_low_u64_be(1),
 			outcome: TransactionOutcome::Unknown,
 			to: None,

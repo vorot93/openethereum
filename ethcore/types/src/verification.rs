@@ -42,7 +42,7 @@ pub struct VerificationQueueInfo {
 
 impl VerificationQueueInfo {
 	/// The total size of the queues.
-	pub fn total_queue_size(&self) -> usize { self.unverified_queue_size + self.verified_queue_size + self.verifying_queue_size }
+	pub const fn total_queue_size(&self) -> usize { self.unverified_queue_size + self.verified_queue_size + self.verifying_queue_size }
 
 	/// Indicates that queue is full
 	pub fn is_full(&self) -> bool {
@@ -51,7 +51,7 @@ impl VerificationQueueInfo {
 	}
 
 	/// Indicates that queue is empty
-	pub fn is_empty(&self) -> bool {
+	pub const fn is_empty(&self) -> bool {
 		self.unverified_queue_size + self.verified_queue_size + self.verifying_queue_size == 0
 	}
 }
@@ -81,7 +81,7 @@ impl Unverified {
 			(header, transactions, uncles)
 		};
 
-		Ok(Unverified {
+		Ok(Self {
 			header,
 			transactions,
 			uncles,

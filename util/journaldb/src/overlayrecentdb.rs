@@ -70,6 +70,7 @@ use crate::{
 /// the removed key is not present in the history overlay.
 /// 7. Delete ancient record from memory and disk.
 
+#[derive(Clone)]
 pub struct OverlayRecentDB {
 	transaction_overlay: super::MemoryDB,
 	backing: Arc<dyn KeyValueDB>,
@@ -93,7 +94,7 @@ impl Decodable for DatabaseValue {
 		}).collect::<Result<Vec<_>, _>>()?;
 		let deletes = rlp.list_at(2)?;
 
-		let value = DatabaseValue {
+		let value = Self {
 			id,
 			inserts,
 			deletes,
@@ -140,22 +141,11 @@ struct JournalEntry {
 	deletions: Vec<H256>,
 }
 
-impl Clone for OverlayRecentDB {
-	fn clone(&self) -> OverlayRecentDB {
-		OverlayRecentDB {
-			transaction_overlay: self.transaction_overlay.clone(),
-			backing: self.backing.clone(),
-			journal_overlay: self.journal_overlay.clone(),
-			column: self.column.clone(),
-		}
-	}
-}
-
 impl OverlayRecentDB {
 	/// Create a new instance.
-	pub fn new(backing: Arc<dyn KeyValueDB>, col: u32) -> OverlayRecentDB {
-		let journal_overlay = Arc::new(RwLock::new(OverlayRecentDB::read_overlay(&*backing, col)));
-		OverlayRecentDB {
+	pub fn new(backing: Arc<dyn KeyValueDB>, col: u32) -> Self {
+		let journal_overlay = Arc::new(RwLock::new(Self::read_overlay(&*backing, col)));
+		Self {
 			transaction_overlay: new_memory_db(),
 			backing,
 			journal_overlay,
@@ -193,11 +183,11 @@ impl OverlayRecentDB {
 			loop {
 				let mut db_key = DatabaseKey {
 					era,
-					index: 0usize,
+					index: 0_usize,
 				};
 				while let Some(rlp_data) = db.get(col, &encode(&db_key)).expect("Low-level database error.") {
 					trace!("read_overlay: era={}, index={}", era, db_key.index);
-					let value = decode::<DatabaseValue>(&rlp_data).expect(&format!("read_overlay: Error decoding DatabaseValue era={}, index{}", era, db_key.index));
+					let value = decode::<DatabaseValue>(&rlp_data).unwrap_or_else(|e| panic!("read_overlay: Error decoding DatabaseValue era={}, index{}: {}", era, db_key.index, e));
 					count += value.inserts.len();
 					let mut inserted_keys = Vec::new();
 					for (k, v) in value.inserts {
@@ -282,7 +272,7 @@ impl JournalDB for OverlayRecentDB {
 		let journal_overlay = self.journal_overlay.read();
 		let key = to_short_key(key);
 		journal_overlay.backing_overlay.get(&key, EMPTY_PREFIX)
-			.or_else(|| journal_overlay.pending_overlay.get(&key).map(|d| d.clone()))
+			.or_else(|| journal_overlay.pending_overlay.get(&key).cloned())
 			.or_else(|| self.backing.get_by_prefix(self.column, &key[0..DB_PREFIX_LEN]).map(|b| b.to_vec()))
 	}
 
@@ -295,8 +285,8 @@ impl JournalDB for OverlayRecentDB {
 		journal_overlay.pending_overlay.clear();
 
 		let mut tx = self.transaction_overlay.drain();
-		let inserted_keys: Vec<_> = tx.iter().filter_map(|(k, &(_, c))| if c > 0 { Some(k.clone()) } else { None }).collect();
-		let removed_keys: Vec<_> = tx.iter().filter_map(|(k, &(_, c))| if c < 0 { Some(k.clone()) } else { None }).collect();
+		let inserted_keys: Vec<_> = tx.iter().filter_map(|(k, &(_, c))| if c > 0 { Some(*k) } else { None }).collect();
+		let removed_keys: Vec<_> = tx.iter().filter_map(|(k, &(_, c))| if c < 0 { Some(*k) } else { None }).collect();
 		let ops = inserted_keys.len() + removed_keys.len();
 
 		// Increase counter for each inserted key no matter if the block is canonical or not.
@@ -320,7 +310,7 @@ impl JournalDB for OverlayRecentDB {
 			journal_overlay.backing_overlay.emplace(short_key, EMPTY_PREFIX, v);
 		}
 
-		let index = journal_overlay.journal.get(&now).map_or(0, |j| j.len());
+		let index = journal_overlay.journal.get(&now).map_or(0, Vec::len);
 		let db_key = DatabaseKey {
 			era: now,
 			index,
@@ -338,7 +328,7 @@ impl JournalDB for OverlayRecentDB {
 			journal_overlay.earliest_era = Some(now);
 		}
 
-		journal_overlay.journal.entry(now).or_insert_with(Vec::new).push(JournalEntry { id: id.clone(), insertions: inserted_keys, deletions: removed_keys });
+		journal_overlay.journal.entry(now).or_insert_with(Vec::new).push(JournalEntry { id: *id, insertions: inserted_keys, deletions: removed_keys });
 		Ok(ops as u32)
 	}
 
@@ -354,8 +344,7 @@ impl JournalDB for OverlayRecentDB {
 			let mut canon_insertions: Vec<(H256, DBValue)> = Vec::new();
 			let mut canon_deletions: Vec<H256> = Vec::new();
 			let mut overlay_deletions: Vec<H256> = Vec::new();
-			let mut index = 0usize;
-			for mut journal in records.drain(..) {
+			for (index, mut journal) in records.drain(..).enumerate() {
 				//delete the record from the db
 				let db_key = DatabaseKey {
 					era: end_era,
@@ -368,7 +357,7 @@ impl JournalDB for OverlayRecentDB {
 						for h in &journal.insertions {
 							if let Some((d, rc)) = journal_overlay.backing_overlay.raw(&to_short_key(h), EMPTY_PREFIX) {
 								if rc > 0 {
-									canon_insertions.push((h.clone(), d.clone())); //TODO: optimize this to avoid data copy
+									canon_insertions.push((*h, d.clone())); //TODO: optimize this to avoid data copy
 								}
 							}
 						}
@@ -376,7 +365,6 @@ impl JournalDB for OverlayRecentDB {
 					}
 					overlay_deletions.append(&mut journal.insertions);
 				}
-				index += 1;
 			}
 
 			ops += canon_insertions.len();
@@ -496,7 +484,7 @@ mod tests {
 	use keccak_hash::keccak;
 	use super::*;
 	use hash_db::{HashDB, EMPTY_PREFIX};
-	use kvdb_memorydb;
+	
 	use crate::{JournalDB, inject_batch, commit_batch};
 
 	fn new_db() -> OverlayRecentDB {
@@ -763,7 +751,7 @@ mod tests {
 		}
 
 		{
-			let mut jdb = OverlayRecentDB::new(shared_db.clone(), 0);
+			let mut jdb = OverlayRecentDB::new(shared_db, 0);
 			assert!(jdb.contains(&foo, EMPTY_PREFIX));
 			assert!(jdb.contains(&bar, EMPTY_PREFIX));
 			commit_batch(&mut jdb, 2, &keccak(b"2"), Some((1, keccak(b"1")))).unwrap();

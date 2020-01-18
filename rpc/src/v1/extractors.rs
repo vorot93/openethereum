@@ -58,7 +58,7 @@ impl ipc::MetaExtractor<Metadata> for RpcExtractor {
 	}
 }
 
-/// WebSockets server metadata extractor and request middleware.
+/// WS server metadata extractor and request middleware.
 pub struct WsExtractor {
 	authcodes_path: Option<PathBuf>,
 }
@@ -66,7 +66,7 @@ pub struct WsExtractor {
 impl WsExtractor {
 	/// Creates new `WsExtractor` with given authcodes path.
 	pub fn new(path: Option<&Path>) -> Self {
-		WsExtractor {
+		Self {
 			authcodes_path: path.map(ToOwned::to_owned),
 		}
 	}
@@ -76,9 +76,9 @@ impl ws::MetaExtractor<Metadata> for WsExtractor {
 	fn extract(&self, req: &ws::RequestContext) -> Metadata {
 		let id = req.session_id as u64;
 
-		let origin = match self.authcodes_path {
-			Some(ref path) => {
-				let authorization = req.protocols.get(0).and_then(|p| auth_token_hash(&path, p, true));
+		let origin = match &self.authcodes_path {
+			Some(path) => {
+				let authorization = req.protocols.get(0).and_then(|p| auth_token_hash(path, p, true));
 				match authorization {
 					Some(id) => Origin::Signer { session: id },
 					None => Origin::Ws { session: H256::from_low_u64_be(id) },
@@ -100,7 +100,7 @@ impl ws::RequestMiddleware for WsExtractor {
 
 		// Reply with 200 OK to HEAD requests.
 		if req.method() == "HEAD" {
-			let mut response = Response::new(200, "OK", vec![]);
+			let mut response = Response::new(200, "OK", Vec::new());
 			add_security_headers(&mut response);
 			return Some(response).into();
 		}
@@ -114,15 +114,15 @@ impl ws::RequestMiddleware for WsExtractor {
 
 		// If protocol is provided it needs to be valid.
 		let protocols = req.protocols().ok().unwrap_or_else(Vec::new);
-		if let Some(ref path) = self.authcodes_path {
-			if protocols.len() == 1 {
-				let authorization = auth_token_hash(&path, protocols[0], false);
+		if let Some(path) = &self.authcodes_path {
+			if let Some(protocol) = protocols.get(0) {
+				let authorization = auth_token_hash(path, protocol, false);
 				if authorization.is_none() {
 					warn!(
 						"Blocked connection from {} using invalid token.",
 						req.header("origin").and_then(|e| ::std::str::from_utf8(e).ok()).unwrap_or("Unknown Origin")
 					);
-					let mut response = Response::new(403, "Forbidden", vec![]);
+					let mut response = Response::new(403, "Forbidden", Vec::new());
 					add_security_headers(&mut response);
 					return Some(response).into();
 				}
@@ -177,15 +177,15 @@ fn auth_token_hash(codes_path: &Path, protocol: &str, save_file: bool) -> Option
 	None
 }
 
-/// WebSockets RPC usage statistics.
+/// WS RPC usage statistics.
 pub struct WsStats {
 	stats: Arc<RpcStats>,
 }
 
 impl WsStats {
 	/// Creates new WS usage tracker.
-	pub fn new(stats: Arc<RpcStats>) -> Self {
-		WsStats {
+	pub const fn new(stats: Arc<RpcStats>) -> Self {
+		Self {
 			stats,
 		}
 	}
@@ -201,7 +201,7 @@ impl ws::SessionStats for WsStats {
 	}
 }
 
-/// WebSockets middleware dispatching requests to different handles dependning on metadata.
+/// Websocket middleware dispatching requests to different handles dependning on metadata.
 pub struct WsDispatcher<M: core::Middleware<Metadata>> {
 	full_handler: core::MetaIoHandler<Metadata, M>,
 }
@@ -209,7 +209,7 @@ pub struct WsDispatcher<M: core::Middleware<Metadata>> {
 impl<M: core::Middleware<Metadata>> WsDispatcher<M> {
 	/// Create new `WsDispatcher` with given full handler.
 	pub fn new(full_handler: core::MetaIoHandler<Metadata, M>) -> Self {
-		WsDispatcher {
+		Self {
 			full_handler,
 		}
 	}

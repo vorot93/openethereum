@@ -77,7 +77,7 @@ fn empty() {
 	let address: Address = "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6".parse().unwrap();
 
 	let mut params = ActionParams::default();
-	params.address = address.clone();
+	params.address = address;
 	params.gas = U256::from(100_000);
 	params.code = Some(Arc::new(code));
 	let mut ext = FakeExt::new().with_wasm();
@@ -103,9 +103,9 @@ fn logger() {
 	let origin: Address = "0102030405060708090a0b0c0d0e0f1011121314".parse().unwrap();
 
 	let mut params = ActionParams::default();
-	params.address = address.clone();
-	params.sender = sender.clone();
-	params.origin = origin.clone();
+	params.address = address;
+	params.sender = sender;
+	params.origin = origin;
 	params.gas = U256::from(100_000);
 	params.value = ActionValue::transfer(1_000_000_000);
 	params.code = Some(Arc::new(code));
@@ -158,7 +158,7 @@ fn identity() {
 	let sender: Address = "01030507090b0d0f11131517191b1d1f21232527".parse().unwrap();
 
 	let mut params = ActionParams::default();
-	params.sender = sender.clone();
+	params.sender = sender;
 	params.gas = U256::from(100_000);
 	params.code = Some(Arc::new(code));
 	let mut ext = FakeExt::new().with_wasm();
@@ -194,7 +194,7 @@ fn dispersion() {
 	params.gas = U256::from(100_000);
 	params.code = Some(Arc::new(code));
 	params.data = Some(vec![
-		0u8, 125, 197, 255, 19
+		0_u8, 125, 197, 255, 19
 	]);
 	let mut ext = FakeExt::new().with_wasm();
 
@@ -209,7 +209,7 @@ fn dispersion() {
 
 	assert_eq!(
 		result,
-		vec![0u8, 0, 125, 11, 197, 7, 255, 8, 19, 0]
+		vec![0_u8, 0, 125, 11, 197, 7, 255, 8, 19, 0]
 	);
 	assert_eq!(gas_left, U256::from(92_377));
 }
@@ -222,7 +222,7 @@ fn suicide_not() {
 	params.gas = U256::from(100_000);
 	params.code = Some(Arc::new(code));
 	params.data = Some(vec![
-		0u8
+		0_u8
 	]);
 	let mut ext = FakeExt::new().with_wasm();
 
@@ -237,7 +237,7 @@ fn suicide_not() {
 
 	assert_eq!(
 		result,
-		vec![0u8]
+		vec![0_u8]
 	);
 	assert_eq!(gas_left, U256::from(93_378));
 }
@@ -253,7 +253,7 @@ fn suicide() {
 	params.gas = U256::from(100_000);
 	params.code = Some(Arc::new(code));
 
-	let mut args = vec![127u8];
+	let mut args = vec![127_u8];
 	args.extend(refund.as_bytes().to_vec());
 	params.data = Some(args);
 
@@ -281,7 +281,7 @@ fn create() {
 	let mut params = ActionParams::default();
 	params.gas = U256::from(100_000);
 	params.code = Some(Arc::new(load_sample!("creator.wasm")));
-	params.data = Some(vec![0u8, 2, 4, 8, 16, 32, 64, 128]);
+	params.data = Some(vec![0_u8, 2, 4, 8, 16, 32, 64, 128]);
 	params.value = ActionValue::transfer(1_000_000_000);
 
 	let mut ext = FakeExt::new().with_wasm();
@@ -296,7 +296,7 @@ fn create() {
 			},
 			GasLeft::NeedsReturn { gas_left, data, apply_state } => {
 				assert!(apply_state);
-				assert_eq!(data.as_ref(), [0u8; 40].as_ref()); // FakeExt never succeeds in create.
+				assert_eq!(data.as_ref(), [0_u8; 40].as_ref()); // FakeExt never succeeds in create.
 				gas_left
 			},
 		}
@@ -311,11 +311,11 @@ fn create() {
 			sender_address: None,
 			receive_address: None,
 			value: Some((1_000_000_000 / 2).into()),
-			data: vec![0u8, 2, 4, 8, 16, 32, 64, 128],
+			data: vec![0_u8, 2, 4, 8, 16, 32, 64, 128],
 			code_address: None,
 		}
 	));
-	let mut salt = [0u8; 32];
+	let mut salt = [0_u8; 32];
 	salt[0] = 5;
 	let salt = H256::from_slice(salt.as_ref());
 	assert!(ext.calls.contains(
@@ -326,7 +326,7 @@ fn create() {
 			sender_address: None,
 			receive_address: None,
 			value: Some((1_000_000_000 / 2).into()),
-			data: vec![0u8, 2, 4, 8, 16, 32, 64, 128],
+			data: vec![0_u8, 2, 4, 8, 16, 32, 64, 128],
 			code_address: None,
 		}
 	));
@@ -342,15 +342,15 @@ fn call_msg() {
 	let contract_address: Address = "0d461d4174b4ae35775c4a342f1e5e1e4e6c4db5".parse().unwrap();
 
 	let mut params = ActionParams::default();
-	params.sender = sender.clone();
-	params.address = receiver.clone();
-	params.code_address = contract_address.clone();
+	params.sender = sender;
+	params.address = receiver;
+	params.code_address = contract_address;
 	params.gas = U256::from(100_000);
 	params.code = Some(Arc::new(load_sample!("call.wasm")));
 	params.data = Some(Vec::new());
 
 	let mut ext = FakeExt::new().with_wasm();
-	ext.balances.insert(receiver.clone(), U256::from(10000000000u64));
+	ext.balances.insert(receiver.clone(), U256::from(10_000_000_000_u64));
 
 	let gas_left = {
 		let interpreter = wasm_interpreter(params);
@@ -369,8 +369,8 @@ fn call_msg() {
 			gas: U256::from(33_000),
 			sender_address: Some(receiver),
 			receive_address: Some(Address::from([99, 88, 77, 66, 55, 44, 33, 22, 11, 0, 11, 22, 33, 44, 55, 66, 77, 88, 99, 0])),
-			value: Some(1000000000.into()),
-			data: vec![129u8, 123, 113, 107, 101, 97],
+			value: Some(1_000_000_000.into()),
+			data: vec![129_u8, 123, 113, 107, 101, 97],
 			code_address: Some(Address::from([99, 88, 77, 66, 55, 44, 33, 22, 11, 0, 11, 22, 33, 44, 55, 66, 77, 88, 99, 0])),
 		}
 	));
@@ -389,16 +389,16 @@ fn call_msg_gasleft() {
 	let contract_address: Address = "0d461d4174b4ae35775c4a342f1e5e1e4e6c4db5".parse().unwrap();
 
 	let mut params = ActionParams::default();
-	params.sender = sender.clone();
-	params.address = receiver.clone();
-	params.code_address = contract_address.clone();
+	params.sender = sender;
+	params.address = receiver;
+	params.code_address = contract_address;
 	params.gas = U256::from(100_000);
 	params.code = Some(Arc::new(load_sample!("call_gasleft.wasm")));
 	params.data = Some(Vec::new());
 
 	let mut ext = FakeExt::new().with_wasm();
 	ext.schedule.wasm.as_mut().unwrap().have_gasleft = true;
-	ext.balances.insert(receiver.clone(), U256::from(10000000000u64));
+	ext.balances.insert(receiver.clone(), U256::from(10_000_000_000_u64));
 
 	let gas_left = {
 		let interpreter = wasm_interpreter(params);
@@ -417,8 +417,8 @@ fn call_msg_gasleft() {
 			gas: U256::from(91_165),
 			sender_address: Some(receiver),
 			receive_address: Some(Address::from([99, 88, 77, 66, 55, 44, 33, 22, 11, 0, 11, 22, 33, 44, 55, 66, 77, 88, 99, 0])),
-			value: Some(1000000000.into()),
-			data: vec![129u8, 123, 113, 107, 101, 97],
+			value: Some(1_000_000_000.into()),
+			data: vec![129_u8, 123, 113, 107, 101, 97],
 			code_address: Some(Address::from([99, 88, 77, 66, 55, 44, 33, 22, 11, 0, 11, 22, 33, 44, 55, 66, 77, 88, 99, 0])),
 		}
 	));
@@ -434,8 +434,8 @@ fn call_code() {
 	let receiver: Address = "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6".parse().unwrap();
 
 	let mut params = ActionParams::default();
-	params.sender = sender.clone();
-	params.address = receiver.clone();
+	params.sender = sender;
+	params.address = receiver;
 	params.gas = U256::from(100_000);
 	params.code = Some(Arc::new(load_sample!("call_code.wasm")));
 	params.data = Some(Vec::new());
@@ -461,14 +461,14 @@ fn call_code() {
 			sender_address: Some(sender),
 			receive_address: Some(receiver),
 			value: None,
-			data: vec![1u8, 2, 3, 5, 7, 11],
+			data: vec![1_u8, 2, 3, 5, 7, 11],
 			code_address: Some("0d13710000000000000000000000000000000000".parse().unwrap()),
 		}
 	));
 
 	// siphash result
 	let res = LittleEndian::read_u32(&result[..]);
-	assert_eq!(res, 4198595614);
+	assert_eq!(res, 4_198_595_614);
 	assert_eq!(gas_left, U256::from(90_037));
 }
 
@@ -481,13 +481,13 @@ fn call_static() {
 	let contract_address: Address = "0d461d4174b4ae35775c4a342f1e5e1e4e6c4db5".parse().unwrap();
 
 	let mut params = ActionParams::default();
-	params.sender = sender.clone();
-	params.address = receiver.clone();
+	params.sender = sender;
+	params.address = receiver;
 	params.gas = U256::from(100_000);
 	params.code = Some(Arc::new(load_sample!("call_static.wasm")));
 	params.data = Some(Vec::new());
 	params.value = ActionValue::transfer(1_000_000_000);
-	params.code_address = contract_address.clone();
+	params.code_address = contract_address;
 
 	let mut ext = FakeExt::new().with_wasm();
 
@@ -509,14 +509,14 @@ fn call_static() {
 			sender_address: Some(receiver),
 			receive_address: Some("13077bfb00000000000000000000000000000000".parse().unwrap()),
 			value: None,
-			data: vec![1u8, 2, 3, 5, 7, 11],
+			data: vec![1_u8, 2, 3, 5, 7, 11],
 			code_address: Some("13077bfb00000000000000000000000000000000".parse().unwrap()),
 		}
 	));
 
 	// siphash result
 	let res = LittleEndian::read_u32(&result[..]);
-	assert_eq!(res, 317632590);
+	assert_eq!(res, 317_632_590);
 
 	assert_eq!(gas_left, U256::from(90_042));
 }
@@ -529,7 +529,7 @@ fn realloc() {
 	let mut params = ActionParams::default();
 	params.gas = U256::from(100_000);
 	params.code = Some(Arc::new(code));
-	params.data = Some(vec![0u8]);
+	params.data = Some(vec![0_u8]);
 	let mut ext = FakeExt::new().with_wasm();
 
 	let (gas_left, result) = {
@@ -540,7 +540,7 @@ fn realloc() {
 				GasLeft::NeedsReturn { gas_left: gas, data: result, apply_state: _apply } => (gas, result.to_vec()),
 		}
 	};
-	assert_eq!(result, vec![0u8; 2]);
+	assert_eq!(result, vec![0_u8; 2]);
 	assert_eq!(gas_left, U256::from(92_848));
 }
 
@@ -551,7 +551,7 @@ fn alloc() {
 	let mut params = ActionParams::default();
 	params.gas = U256::from(10_000_000);
 	params.code = Some(Arc::new(code));
-	params.data = Some(vec![0u8]);
+	params.data = Some(vec![0_u8]);
 	let mut ext = FakeExt::new().with_wasm();
 
 	let (gas_left, result) = {
@@ -562,7 +562,7 @@ fn alloc() {
 				GasLeft::NeedsReturn { gas_left: gas, data: result, apply_state: _apply } => (gas, result.to_vec()),
 		}
 	};
-	assert_eq!(result, vec![5u8; 1024*400]);
+	assert_eq!(result, vec![5_u8; 1024*400]);
 	assert_eq!(gas_left, U256::from(6_893_881));
 }
 
@@ -637,7 +637,7 @@ fn math_add() {
 	let (gas_left, result) = reqrep_test!(
 		"math.wasm",
 		{
-			let mut args = [0u8; 65];
+			let mut args = [0_u8; 65];
 			let arg_a = U256::from_dec_str("999999999999999999999999999999").unwrap();
 			let arg_b = U256::from_dec_str("888888888888888888888888888888").unwrap();
 			arg_a.to_big_endian(&mut args[1..33]);
@@ -659,7 +659,7 @@ fn math_mul() {
 	let (gas_left, result) = reqrep_test!(
 		"math.wasm",
 		{
-			let mut args = [1u8; 65];
+			let mut args = [1_u8; 65];
 			let arg_a = U256::from_dec_str("888888888888888888888888888888").unwrap();
 			let arg_b = U256::from_dec_str("999999999999999999999999999999").unwrap();
 			arg_a.to_big_endian(&mut args[1..33]);
@@ -681,7 +681,7 @@ fn math_sub() {
 	let (gas_left, result) = reqrep_test!(
 		"math.wasm",
 		{
-			let mut args = [2u8; 65];
+			let mut args = [2_u8; 65];
 			let arg_a = U256::from_dec_str("999999999999999999999999999999").unwrap();
 			let arg_b = U256::from_dec_str("888888888888888888888888888888").unwrap();
 			arg_a.to_big_endian(&mut args[1..33]);
@@ -703,7 +703,7 @@ fn math_sub_with_overflow() {
 	let result = reqrep_test!(
 		"math.wasm",
 		{
-			let mut args = [2u8; 65];
+			let mut args = [2_u8; 65];
 			let arg_a = U256::from_dec_str("888888888888888888888888888888").unwrap();
 			let arg_b = U256::from_dec_str("999999999999999999999999999999").unwrap();
 			arg_a.to_big_endian(&mut args[1..33]);
@@ -723,7 +723,7 @@ fn math_div() {
 	let (gas_left, result) = reqrep_test!(
 		"math.wasm",
 		{
-			let mut args = [3u8; 65];
+			let mut args = [3_u8; 65];
 			let arg_a = U256::from_dec_str("999999999999999999999999999999").unwrap();
 			let arg_b = U256::from_dec_str("888888888888888888888888").unwrap();
 			arg_a.to_big_endian(&mut args[1..33]);
@@ -750,7 +750,7 @@ fn storage_metering() {
 	let address: Address = "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6".parse().unwrap();
 
 	let mut params = ActionParams::default();
-	params.address = address.clone();
+	params.address = address;
 	params.gas = U256::from(100_000);
 	params.code = Some(code.clone());
 	params.data = Some(vec![
@@ -769,9 +769,9 @@ fn storage_metering() {
 	// #2
 
 	let mut params = ActionParams::default();
-	params.address = address.clone();
+	params.address = address;
 	params.gas = U256::from(100_000);
-	params.code = Some(code.clone());
+	params.code = Some(code);
 	params.data = Some(vec![
 		0x9d, 0x9d, 0x9d, 0x9d, 0x9d, 0x9d, 0x9d, 0x9d, 0x9d, 0x9d, 0x9d, 0x9d, 0x9d, 0x9d, 0x9d, 0x9d, 0x9d, 0x9d, 0x9d, 0x9d, 0x9d, 0x9d, 0x9d, 0x9d, 0x9d, 0x9d, 0x9d, 0x9d, 0x9d, 0x9d, 0x9d, 0x9d,
 		0x6b, 0x7b, 0x7b, 0x7b, 0x7b, 0x7b, 0x7b, 0x7b, 0x7b, 0x7b, 0x7b, 0x7b, 0x7b, 0x7b, 0x7b, 0x7b, 0x7b, 0x7b, 0x7b, 0x7b, 0x7b, 0x7b, 0x7b, 0x7b, 0x7b, 0x7b, 0x7b, 0x7b, 0x7b, 0x7b, 0x7b, 0x7b,
@@ -794,11 +794,11 @@ fn externs() {
 		"externs.wasm",
 		Vec::new(),
 		vm::EnvInfo {
-			number: 0x9999999999u64.into(),
+			number: 0x0099_9999_9999_u64,
 			author: "efefefefefefefefefefefefefefefefefefefef".parse().unwrap(),
-			timestamp: 0x8888888888u64.into(),
+			timestamp: 0x0088_8888_8888_u64,
 			difficulty: U256::from_str("0f1f2f3f4f5f6f7f8f9fafbfcfdfefff0d1d2d3d4d5d6d7d8d9dadbdcdddedfd").unwrap(),
-			gas_limit: 0x777777777777u64.into(),
+			gas_limit: 0x7777_7777_7777_u64.into(),
 			last_hashes: Default::default(),
 			gas_used: 0.into(),
 		},
@@ -999,8 +999,8 @@ fn recursive() {
 		//
 		// We pick a relative big number to definitely hit stack overflow.
 		use byteorder::WriteBytesExt;
-		let mut data = vec![];
-		data.write_u32::<LittleEndian>(100000).unwrap();
+		let mut data = Vec::new();
+		data.write_u32::<LittleEndian>(100_000).unwrap();
 		data
 	});
 

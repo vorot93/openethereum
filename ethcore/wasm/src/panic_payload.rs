@@ -44,10 +44,10 @@ pub fn decode(raw: &[u8]) -> PanicPayload {
 	let line = rdr.read_u32::<LittleEndian>().ok();
 	let col = rdr.read_u32::<LittleEndian>().ok();
 	PanicPayload {
-		msg: msg,
-		file: file,
-		line: line,
-		col: col,
+		msg,
+		file,
+		line,
+		col,
 	}
 }
 
@@ -117,7 +117,7 @@ mod tests {
 		assert_eq!(
 			payload,
 			PanicPayload {
-				msg: Some("�msg".to_string()),
+				msg: Some("\u{fffd}msg".to_string()),
 				file: Some("file".to_string()),
 				line: Some(1),
 				col: Some(2),
@@ -132,7 +132,7 @@ mod tests {
 		write_bytes(&mut raw, b"file");
 		write_u32(&mut raw, 1);
 		write_u32(&mut raw, 2);
-		write_u32(&mut raw, 0xdeadbeef);
+		write_u32(&mut raw, 0xdead_beef);
 
 		let payload = decode(&raw);
 

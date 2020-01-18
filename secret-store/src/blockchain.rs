@@ -58,7 +58,7 @@ pub trait SigningKeyPair: Send + Sync {
 	fn sign(&self, data: &H256) -> Result<Signature, EthKeyError>;
 }
 
-/// Wrapps client ChainNotify in order to send signal about new blocks
+/// Wrapps client `ChainNotify` in order to send signal about new blocks
 pub trait NewBlocksNotify: Send + Sync {
 	/// Fires when chain has new blocks.
 	/// Sends this signal only, if contracts' update required
@@ -88,7 +88,7 @@ pub struct Filter {
 
 /// Blockchain representation for Secret Store
 pub trait SecretStoreChain: Send + Sync + 'static {
-	/// Adds listener for chain's NewBlocks event
+	/// Adds listener for chain's `NewBlocks` event
 	fn add_listener(&self, target: Arc<dyn NewBlocksNotify>);
 
 	/// Check if the underlying chain is in the trusted state
@@ -99,7 +99,7 @@ pub trait SecretStoreChain: Send + Sync + 'static {
 
 	/// Read contract address. If address source is registry, address only returned if current client state is
 	/// trusted. Address from registry is read from registry from block latest block with
-	/// REQUEST_CONFIRMATIONS_REQUIRED confirmations.
+	/// `REQUEST_CONFIRMATIONS_REQUIRED` confirmations.
 	fn read_contract_address(&self, registry_name: &str, address: &ContractAddress) -> Option<Address>;
 
 	/// Call contract in the blockchain

@@ -24,7 +24,7 @@ use key_server_cluster::message::Message;
 pub trait Connection: Send + Sync {
 	/// Is this inbound connection? This only matters when both nodes are simultaneously establishing
 	/// two connections to each other. The agreement is that the inbound connection from the node with
-	/// lower NodeId is used and the other connection is closed.
+	/// lower `NodeId` is used and the other connection is closed.
 	fn is_inbound(&self) -> bool;
 	/// Returns id of the connected node.
 	fn node_id(&self) -> &NodeId;
@@ -89,7 +89,7 @@ pub mod tests {
 
 	impl TestConnections {
 		pub fn isolate(&self) {
-			let connected_nodes = ::std::mem::replace(&mut *self.connected_nodes.lock(), Default::default());
+			let connected_nodes = std::mem::take(&mut *self.connected_nodes.lock());
 			self.is_isolated.store(true, Ordering::Relaxed);
 			self.disconnected_nodes.lock().extend(connected_nodes)
 		}
@@ -119,9 +119,10 @@ pub mod tests {
 
 	impl ConnectionProvider for TestConnections {
 		fn connected_nodes(&self) -> Result<BTreeSet<NodeId>, Error> {
-			match self.is_isolated.load(Ordering::Relaxed) {
-				false => Ok(self.connected_nodes.lock().clone()),
-				true => Err(Error::NodeDisconnected),
+			if !self.is_isolated.load(Ordering::Relaxed) {
+				Ok(self.connected_nodes.lock().clone())
+			} else {
+				Err(Error::NodeDisconnected)
 			}
 		}
 
@@ -130,13 +131,14 @@ pub mod tests {
 		}
 
 		fn connection(&self, node: &NodeId) -> Option<Arc<dyn Connection>> {
-			match self.connected_nodes.lock().contains(node) {
-				true => Some(Arc::new(TestConnection {
+			if self.connected_nodes.lock().contains(node) {
+				Some(Arc::new(TestConnection {
 					from: self.node,
 					to: *node,
 					messages: self.messages.clone(),
-				})),
-				false => None,
+				}))
+			} else {
+				None
 			}
 		}
 	}

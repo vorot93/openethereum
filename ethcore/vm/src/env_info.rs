@@ -49,13 +49,13 @@ pub struct EnvInfo {
 
 impl Default for EnvInfo {
 	fn default() -> Self {
-		EnvInfo {
+		Self {
 			number: 0,
 			author: Address::zero(),
 			timestamp: 0,
 			difficulty: 0.into(),
 			gas_limit: 0.into(),
-			last_hashes: Arc::new(vec![]),
+			last_hashes: Arc::new(Vec::new()),
 			gas_used: 0.into(),
 		}
 	}
@@ -64,14 +64,14 @@ impl Default for EnvInfo {
 impl From<ethjson::vm::Env> for EnvInfo {
 	fn from(e: ethjson::vm::Env) -> Self {
 		let number = e.number.into();
-		EnvInfo {
+		Self {
 			number,
 			author: e.author.into(),
 			difficulty: e.difficulty.into(),
 			gas_limit: e.gas_limit.into(),
 			timestamp: e.timestamp.into(),
 			last_hashes: Arc::new((1..cmp::min(number + 1, 257)).map(|i| keccak(format!("{}", number - i).as_bytes())).collect()),
-			gas_used: U256::default(),
+			gas_used: U256::zero(),
 		}
 	}
 }
@@ -93,7 +93,7 @@ mod tests {
 			timestamp: ethjson::uint::Uint(U256::from(1_100))
 		});
 
-		assert_eq!(env_info.number, 1112339);
+		assert_eq!(env_info.number, 1_112_339);
 		assert_eq!(env_info.author, Address::from_str("000000f00000000f000000000000f00000000f00").unwrap());
 		assert_eq!(env_info.gas_limit, 40000.into());
 		assert_eq!(env_info.difficulty, 50000.into());

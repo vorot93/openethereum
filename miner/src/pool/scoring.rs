@@ -63,7 +63,7 @@ impl NonceAndGasPrice {
 			return true
 		}
 
-		&old.transaction.gas_price > new.gas_price()
+		old.transaction.gas_price > *new.gas_price()
 	}
 }
 
@@ -85,7 +85,7 @@ impl<P> txpool::Scoring<P> for NonceAndGasPrice where P: ScoredTransaction + txp
 
 		let min_required_gp = bump_gas_price(*old_gp);
 
-		match min_required_gp.cmp(&new_gp) {
+		match min_required_gp.cmp(new_gp) {
 			cmp::Ordering::Greater => scoring::Choice::RejectNew,
 			_ => scoring::Choice::ReplaceOld,
 		}
@@ -107,7 +107,7 @@ impl<P> txpool::Scoring<P> for NonceAndGasPrice where P: ScoredTransaction + txp
 					super::Priority::Retracted => 10,
 					super::Priority::Regular => 0,
 				};
-				scores[i] = scores[i] << boost;
+				scores[i] <<= boost;
 			},
 			// We are only sending an event in case of penalization.
 			// So just lower the priority of all non-local transactions.
@@ -115,7 +115,7 @@ impl<P> txpool::Scoring<P> for NonceAndGasPrice where P: ScoredTransaction + txp
 				for (score, tx) in scores.iter_mut().zip(txs) {
 					// Never penalize local transactions.
 					if !tx.priority().is_local() {
-						*score = *score >> 3;
+						*score >>= 3;
 					}
 				}
 			},
@@ -175,7 +175,7 @@ mod tests {
 		scoring.update_scores(&transactions, &mut *scores, scoring::Change::InsertedAt(2));
 		assert_eq!(scores, vec![32768.into(), 1024.into(), 1.into()]);
 
-		let mut scores = initial_scores.clone();
+		let mut scores = initial_scores;
 		scoring.update_scores(&transactions, &mut *scores, scoring::Change::ReplacedAt(0));
 		assert_eq!(scores, vec![32768.into(), 0.into(), 0.into()]);
 		scoring.update_scores(&transactions, &mut *scores, scoring::Change::ReplacedAt(1));

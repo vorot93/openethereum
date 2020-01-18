@@ -50,8 +50,8 @@ pub struct Abort {
 }
 
 impl Default for Abort {
-	fn default() -> Abort {
-		Abort {
+	fn default() -> Self {
+		Self {
 			abort: Arc::new(AtomicBool::new(false)),
 			size: MAX_SIZE,
 			time: MAX_SECS,
@@ -61,8 +61,8 @@ impl Default for Abort {
 }
 
 impl From<Arc<AtomicBool>> for Abort {
-	fn from(a: Arc<AtomicBool>) -> Abort {
-		Abort {
+	fn from(a: Arc<AtomicBool>) -> Self {
+		Self {
 			abort: a,
 			size: MAX_SIZE,
 			time: MAX_SECS,
@@ -78,17 +78,17 @@ impl Abort {
 	}
 
 	/// The maximum response body size.
-	pub fn max_size(&self) -> usize {
+	pub const fn max_size(&self) -> usize {
 		self.size
 	}
 
 	/// The maximum total time, including redirects.
-	pub fn max_duration(&self) -> Duration {
+	pub const fn max_duration(&self) -> Duration {
 		self.time
 	}
 
 	/// The maximum number of redirects to allow.
-	pub fn max_redirects(&self) -> usize {
+	pub const fn max_redirects(&self) -> usize {
 		self.redir
 	}
 
@@ -98,18 +98,21 @@ impl Abort {
 	}
 
 	/// Set the maximum reponse body size.
-	pub fn with_max_size(self, n: usize) -> Abort {
-		Abort { size: n, .. self }
+	pub const fn with_max_size(mut self, n: usize) -> Self {
+		self.size = n;
+		self
 	}
 
 	/// Set the maximum duration (including redirects).
-	pub fn with_max_duration(self, d: Duration) -> Abort {
-		Abort { time: d, .. self }
+	pub const fn with_max_duration(mut self, d: Duration) -> Self {
+		self.time = d;
+		self
 	}
 
 	/// Set the maximum number of redirects to follow.
-	pub fn with_max_redirects(self, n: usize) -> Abort {
-		Abort { redir: n, .. self }
+	pub const fn with_max_redirects(mut self, n: usize) -> Self {
+		self.redir = n;
+		self
 	}
 }
 
@@ -144,9 +147,9 @@ pub struct Client {
 
 // When cloning a client we increment the internal reference counter.
 impl Clone for Client {
-	fn clone(&self) -> Client {
+	fn clone(&self) -> Self {
 		self.refs.fetch_add(1, Ordering::SeqCst);
-		Client {
+		Self {
 			runtime: self.runtime.clone(),
 			refs: self.refs.clone(),
 		}
@@ -170,7 +173,7 @@ impl Client {
 		let (tx_start, rx_start) = std::sync::mpsc::sync_channel(1);
 		let (tx_proto, rx_proto) = mpsc::channel(64);
 
-		Client::background_thread(tx_start, rx_proto, num_dns_threads)?;
+		Self::background_thread(tx_start, rx_proto, num_dns_threads)?;
 
 		match rx_start.recv_timeout(Duration::from_secs(10)) {
 			Err(RecvTimeoutError::Timeout) => {
@@ -188,7 +191,7 @@ impl Client {
 			Ok(Ok(())) => {}
 		}
 
-		Ok(Client {
+		Ok(Self {
 			runtime: tx_proto,
 			refs: Arc::new(AtomicUsize::new(1)),
 		})
@@ -206,11 +209,11 @@ impl Client {
 
 			let future = rx_proto.take_while(|item| Ok(item.is_some()))
 				.map(|item| item.expect("`take_while` is only passing on channel items != None; qed"))
-				.for_each(|(request, abort, sender)|
+				.for_each(|(request, abort, _sender)|
 			{
 				trace!(target: "fetch", "new request to {}", request.url());
 				if abort.is_aborted() {
-					return future::ok(sender.send(Err(Error::Aborted)).unwrap_or(()))
+					return future::ok(())
 				}
 				let ini = (hyper.clone(), request, abort, 0);
 				let fut = future::loop_fn(ini, |(client, request, abort, redirects)| {
@@ -238,7 +241,7 @@ impl Client {
 								};
 								Ok(Loop::Continue((client, request, abort, redirects + 1)))
 							} else {
-								if let Some(ref h_val) = resp.headers.get(header::CONTENT_LENGTH) {
+								if let Some(h_val) = resp.headers.get(header::CONTENT_LENGTH) {
 									let content_len = h_val
 										.to_str()?
 										.parse::<u64>()?;
@@ -251,8 +254,8 @@ impl Client {
 							}
 						})
 					})
-					.then(|result| {
-						future::ok(sender.send(result).unwrap_or(()))
+					.then(|_result| {
+						future::ok(())
 					});
 				tokio::spawn(fut);
 				trace!(target: "fetch", "waiting for next request ...");
@@ -292,7 +295,7 @@ impl Fetch for Client {
 		Box::new(future.timeout(maxdur)
 			.map_err(|err| {
 				if err.is_inner() {
-					Error::from(err.into_inner().unwrap())
+					err.into_inner().unwrap()
 				} else {
 					Error::from(err)
 				}
@@ -341,7 +344,7 @@ fn redirect_location(u: Url, r: &Response) -> Option<(Url, bool)> {
 	}
 }
 
-/// A wrapper for hyper::Request using Url and with methods.
+/// A wrapper for `hyper::Request` using Url and with methods.
 #[derive(Debug, Clone)]
 pub struct Request {
 	url: Url,
@@ -352,31 +355,31 @@ pub struct Request {
 
 impl Request {
 	/// Create a new request, with given url and method.
-	pub fn new(url: Url, method: Method) -> Request {
-		Request {
+	pub fn new(url: Url, method: Method) -> Self {
+		Self {
 			url, method,
 			headers: HeaderMap::new(),
-			body: Default::default(),
+			body: Bytes::new(),
 		}
 	}
 
 	/// Create a new GET request.
-	pub fn get(url: Url) -> Request {
-		Request::new(url, Method::GET)
+	pub fn get(url: Url) -> Self {
+		Self::new(url, Method::GET)
 	}
 
 	/// Create a new empty POST request.
-	pub fn post(url: Url) -> Request {
-		Request::new(url, Method::POST)
+	pub fn post(url: Url) -> Self {
+		Self::new(url, Method::POST)
 	}
 
 	/// Read the url.
-	pub fn url(&self) -> &Url {
+	pub const fn url(&self) -> &Url {
 		&self.url
 	}
 
 	/// Read the request headers.
-	pub fn headers(&self) -> &HeaderMap {
+	pub const fn headers(&self) -> &HeaderMap {
 		&self.headers
 	}
 
@@ -410,8 +413,9 @@ impl Request {
 	}
 }
 
+#[allow(clippy::use_self)]
 impl From<Request> for hyper::Request<hyper::Body> {
-	fn from(req: Request) -> hyper::Request<hyper::Body> {
+	fn from(req: Request) -> Self {
 		let uri: hyper::Uri = req.url.as_ref().parse().expect("Every valid URLis also a URI.");
 		hyper::Request::builder()
 			.method(req.method)
@@ -435,8 +439,8 @@ pub struct Response {
 
 impl Response {
 	/// Create a new response, wrapping a hyper response.
-	pub fn new(u: Url, r: hyper::Response<hyper::Body>, a: Abort) -> Response {
-		Response {
+	pub fn new(u: Url, r: hyper::Response<hyper::Body>, a: Abort) -> Self {
+		Self {
 			url: u,
 			status: r.status(),
 			headers: r.headers().clone(),
@@ -447,7 +451,7 @@ impl Response {
 	}
 
 	/// The response status.
-	pub fn status(&self) -> StatusCode {
+	pub const fn status(&self) -> StatusCode {
 		self.status
 	}
 
@@ -508,10 +512,10 @@ pub struct BodyReader {
 
 impl BodyReader {
 	/// Create a new body reader for the given response.
-	pub fn new(r: Response) -> BodyReader {
-		BodyReader {
+	pub fn new(r: Response) -> Self {
+		Self {
 			body: Some(r.body),
-			chunk: Default::default(),
+			chunk: hyper::Chunk::default(),
 			abort: r.abort,
 			offset: 0,
 			count: 0,
@@ -589,19 +593,19 @@ pub enum Error {
 
 impl fmt::Display for Error {
 	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-		match *self {
-			Error::Aborted => write!(fmt, "The request has been aborted."),
-			Error::Hyper(ref e) => write!(fmt, "{}", e),
-			Error::HyperHeaderToStrError(ref e) => write!(fmt, "{}", e),
-			Error::ParseInt(ref e) => write!(fmt, "{}", e),
-			Error::Url(ref e) => write!(fmt, "{}", e),
-			Error::Io(ref e) => write!(fmt, "{}", e),
-			Error::BackgroundThreadDead => write!(fmt, "background thread gond"),
-			Error::TooManyRedirects => write!(fmt, "too many redirects"),
-			Error::TokioTimeoutInnerVal(ref s) => write!(fmt, "tokio timer inner value error: {:?}", s),
-			Error::TokioTimer(ref e) => write!(fmt, "tokio timer error: {:?}", e),
-			Error::Timeout => write!(fmt, "request timed out"),
-			Error::SizeLimit => write!(fmt, "size limit reached"),
+		match self {
+			Self::Aborted => write!(fmt, "The request has been aborted."),
+			Self::Hyper(e) => write!(fmt, "{}", e),
+			Self::HyperHeaderToStrError(e) => write!(fmt, "{}", e),
+			Self::ParseInt(e) => write!(fmt, "{}", e),
+			Self::Url(e) => write!(fmt, "{}", e),
+			Self::Io(e) => write!(fmt, "{}", e),
+			Self::BackgroundThreadDead => write!(fmt, "background thread gond"),
+			Self::TooManyRedirects => write!(fmt, "too many redirects"),
+			Self::TokioTimeoutInnerVal(s) => write!(fmt, "tokio timer inner value error: {:?}", s),
+			Self::TokioTimer(e) => write!(fmt, "tokio timer error: {:?}", e),
+			Self::Timeout => write!(fmt, "request timed out"),
+			Self::SizeLimit => write!(fmt, "size limit reached"),
 		}
 	}
 }
@@ -613,49 +617,50 @@ impl ::std::error::Error for Error {
 
 impl From<hyper::Error> for Error {
 	fn from(e: hyper::Error) -> Self {
-		Error::Hyper(e)
+		Self::Hyper(e)
 	}
 }
 
 impl From<hyper::header::ToStrError> for Error {
 	fn from(e: hyper::header::ToStrError) -> Self {
-		Error::HyperHeaderToStrError(e)
+		Self::HyperHeaderToStrError(e)
 	}
 }
 
 impl From<std::num::ParseIntError> for Error {
 	fn from(e: std::num::ParseIntError) -> Self {
-		Error::ParseInt(e)
+		Self::ParseInt(e)
 	}
 }
 
 impl From<io::Error> for Error {
 	fn from(e: io::Error) -> Self {
-		Error::Io(e)
+		Self::Io(e)
 	}
 }
 
 impl From<url::ParseError> for Error {
 	fn from(e: url::ParseError) -> Self {
-		Error::Url(e)
+		Self::Url(e)
 	}
 }
 
+#[allow(clippy::fallible_impl_from)]
 impl<T: std::fmt::Debug> From<tokio::timer::timeout::Error<T>> for Error {
 	fn from(e: tokio::timer::timeout::Error<T>) -> Self {
 		if e.is_inner() {
-			Error::TokioTimeoutInnerVal(format!("{:?}", e.into_inner().unwrap()))
+			Self::TokioTimeoutInnerVal(format!("{:?}", e.into_inner().unwrap()))
 		} else if e.is_elapsed() {
-			Error::Timeout
+			Self::Timeout
 		} else {
-			Error::TokioTimer(e.into_timer())
+			Self::TokioTimer(e.into_timer())
 		}
 	}
 }
 
 impl From<tokio::timer::Error> for Error {
 	fn from(e: tokio::timer::Error) -> Self {
-		Error::TokioTimer(Some(e))
+		Self::TokioTimer(Some(e))
 	}
 }
 
@@ -686,7 +691,7 @@ mod test {
 				assert!(resp.is_success());
 				resp
 			})
-			.map(|resp| resp.concat2())
+			.map(futures::Stream::concat2)
 			.flatten()
 			.map(|body| assert_eq!(&body[..], b"123"))
 			.map_err(|err| panic!(err));
@@ -705,7 +710,7 @@ mod test {
 				assert!(resp.is_success());
 				resp
 			})
-			.map(|resp| resp.concat2())
+			.map(futures::Stream::concat2)
 			.flatten()
 			.map(|body| assert_eq!(&body[..], b"123"))
 			.map_err(|err| panic!(err));
@@ -792,7 +797,7 @@ mod test {
 			.and_then(|resp| {
 				if resp.is_success() { Ok(resp) } else { panic!("Response unsuccessful") }
 			})
-			.map(|resp| resp.concat2())
+			.map(futures::Stream::concat2)
 			.flatten()
 			.map(|body| assert_eq!(&body[..], b"abcdefghijklmnopqrstuvwxyz"));
 
@@ -810,7 +815,7 @@ mod test {
 			.and_then(|resp| {
 				if resp.is_success() { Ok(resp) } else { panic!("Response unsuccessful") }
 			})
-			.map(|resp| resp.concat2())
+			.map(futures::Stream::concat2)
 			.flatten()
 			.then(|body| {
 				match body {
@@ -834,7 +839,7 @@ mod test {
 		// let mut buffer = Vec::new();
 		// let mut reader = BodyReader::new(resp);
 		// match reader.read_to_end(&mut buffer) {
-		// 	Err(ref e) if e.kind() == io::ErrorKind::PermissionDenied => {}
+		// 	Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {}
 		// 	other => panic!("expected size limit error, got {:?}", other)
 		// }
 
@@ -853,7 +858,7 @@ mod test {
 				let mut buffer = Vec::new();
 				let mut reader = BodyReader::new(resp);
 				match reader.read_to_end(&mut buffer) {
-					Err(ref e) if e.kind() == io::ErrorKind::PermissionDenied => Ok(()),
+					Err(e) if e.kind() == io::ErrorKind::PermissionDenied => Ok(()),
 					other => panic!("expected size limit error, got {:?}", other)
 				}
 			});
@@ -924,7 +929,7 @@ mod test {
 				let addr = ADDRESS.parse().unwrap();
 
 				let server = hyper::server::Server::bind(&addr)
-					.serve(|| future::ok::<_, hyper::Error>(TestServer));
+					.serve(|| future::ok::<_, hyper::Error>(Self));
 
 				tx_start.send(server.local_addr()).unwrap_or(());
 
@@ -941,7 +946,7 @@ mod test {
 	struct Handle(SocketAddr, Option<oneshot::Sender<()>>);
 
 	impl Handle {
-		fn addr(&self) -> SocketAddr {
+		const fn addr(&self) -> SocketAddr {
 			self.0
 		}
 	}

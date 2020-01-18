@@ -17,6 +17,7 @@
 //! Local Accounts checker
 
 use std::collections::HashSet;
+use std::hash::BuildHasher;
 
 use ethereum_types::Address;
 
@@ -26,7 +27,7 @@ pub trait LocalAccounts: Send + Sync {
 	fn is_local(&self, &Address) -> bool;
 }
 
-impl LocalAccounts for HashSet<Address> {
+impl<S: BuildHasher + Send + Sync> LocalAccounts for HashSet<Address, S> {
 	fn is_local(&self, address: &Address) -> bool {
 		self.contains(address)
 	}

@@ -50,7 +50,7 @@ pub struct Options {
 #[cfg(test)]
 impl Default for Options {
 	fn default() -> Self {
-		Options {
+		Self {
 			minimal_gas_price: 0.into(),
 			block_gas_limit: U256::max_value(),
 			tx_gas_limit: U256::max_value(),
@@ -81,48 +81,48 @@ pub enum Transaction {
 impl Transaction {
 	/// Return transaction hash
 	pub fn hash(&self) -> H256 {
-		match *self {
-			Transaction::Unverified(ref tx) => tx.hash(),
-			Transaction::Retracted(ref tx) => tx.hash(),
-			Transaction::Local(ref tx) => tx.hash(),
+		match self {
+			Self::Unverified(tx) => tx.hash(),
+			Self::Retracted(tx) => tx.hash(),
+			Self::Local(tx) => tx.hash(),
 		}
 	}
 
 	/// Return transaction gas price
 	pub fn gas_price(&self) -> &U256 {
-		match *self {
-			Transaction::Unverified(ref tx) => &tx.gas_price,
-			Transaction::Retracted(ref tx) => &tx.gas_price,
-			Transaction::Local(ref tx) => &tx.gas_price,
+		match self {
+			Self::Unverified(tx) => &tx.gas_price,
+			Self::Retracted(tx) => &tx.gas_price,
+			Self::Local(tx) => &tx.gas_price,
 		}
 	}
 
 	fn gas(&self) -> &U256 {
-		match *self {
-			Transaction::Unverified(ref tx) => &tx.gas,
-			Transaction::Retracted(ref tx) => &tx.gas,
-			Transaction::Local(ref tx) => &tx.gas,
+		match self {
+			Self::Unverified(tx) => &tx.gas,
+			Self::Retracted(tx) => &tx.gas,
+			Self::Local(tx) => &tx.gas,
 		}
 	}
 
 	fn transaction(&self) -> &transaction::Transaction {
-		match *self {
-			Transaction::Unverified(ref tx) => &*tx,
-			Transaction::Retracted(ref tx) => &*tx,
-			Transaction::Local(ref tx) => &*tx,
+		match self {
+			Self::Unverified(tx) => &*tx,
+			Self::Retracted(tx) => &*tx,
+			Self::Local(tx) => &*tx,
 		}
 	}
 
 	fn is_local(&self) -> bool {
-		match *self {
-			Transaction::Local(..) => true,
+		match self {
+			Self::Local(..) => true,
 			_ => false,
 		}
 	}
 
 	fn is_retracted(&self) -> bool {
-		match *self {
-			Transaction::Retracted(..) => true,
+		match self {
+			Self::Retracted(..) => true,
 			_ => false,
 		}
 	}
@@ -147,7 +147,7 @@ impl<C, S, V> Verifier<C, S, V> {
 		id: Arc<AtomicUsize>,
 		transaction_to_replace: Option<(S, Arc<V>)>,
 	) -> Self {
-		Verifier {
+		Self {
 			client,
 			options,
 			id,
@@ -172,7 +172,7 @@ impl<C: Client> txpool::Verifier<Transaction> for Verifier<C, ::pool::scoring::N
 		}
 
 		let gas_limit = cmp::min(self.options.tx_gas_limit, self.options.block_gas_limit);
-		if tx.gas() > &gas_limit {
+		if *tx.gas() > gas_limit {
 			debug!(
 				target: "txqueue",
 				"[{:?}] Rejected transaction above gas limit: {} > min({}, {})",
@@ -188,7 +188,7 @@ impl<C: Client> txpool::Verifier<Transaction> for Verifier<C, ::pool::scoring::N
 		}
 
 		let minimal_gas = self.client.required_gas(tx.transaction());
-		if tx.gas() < &minimal_gas {
+		if *tx.gas() < minimal_gas {
 			trace!(target: "txqueue",
 				"[{:?}] Rejected transaction with insufficient gas: {} < {}",
 				hash,
@@ -208,7 +208,7 @@ impl<C: Client> txpool::Verifier<Transaction> for Verifier<C, ::pool::scoring::N
 		// We're checking if the transaction is below configured minimal gas price
 		// or the effective minimal gas price in case the pool is full.
 		if !tx.gas_price().is_zero() && !is_own {
-			if tx.gas_price() < &self.options.minimal_gas_price {
+			if *tx.gas_price() < self.options.minimal_gas_price {
 				trace!(
 					target: "txqueue",
 					"[{:?}] Rejected tx below minimal gas price threshold: {} < {}",
@@ -222,7 +222,7 @@ impl<C: Client> txpool::Verifier<Transaction> for Verifier<C, ::pool::scoring::N
 				});
 			}
 
-			if let Some((ref scoring, ref vtx)) = self.transaction_to_replace {
+			if let Some((scoring, vtx)) = &self.transaction_to_replace {
 				if scoring.should_reject_early(vtx, &tx) {
 					trace!(
 						target: "txqueue",
@@ -311,7 +311,7 @@ impl<C: Client> txpool::Verifier<Transaction> for Verifier<C, ::pool::scoring::N
 				cost,
 			);
 			return Err(transaction::Error::InsufficientBalance {
-				cost: cost,
+				cost,
 				balance: account_details.balance,
 			});
 		}

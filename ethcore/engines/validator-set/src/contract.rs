@@ -22,7 +22,7 @@ use std::sync::Weak;
 use parity_bytes::Bytes;
 use ethabi_contract::use_contract;
 use ethereum_types::{H256, U256, Address};
-use log::{info, warn, trace};
+use log::*;
 use machine::Machine;
 use parking_lot::RwLock;
 use common_types::{
@@ -54,7 +54,7 @@ pub struct ValidatorContract {
 
 impl ValidatorContract {
 	pub fn new(contract_address: Address, posdao_transition: Option<BlockNumber>) -> Self {
-		ValidatorContract {
+		Self {
 			contract_address,
 			validators: ValidatorSafeContract::new(contract_address, posdao_transition),
 			client: RwLock::new(None),
@@ -69,7 +69,7 @@ impl ValidatorContract {
 		let tx_request = TransactionRequest::call(self.contract_address, data).gas_price(gas_price);
 		match full_client.transact(tx_request) {
 			Ok(()) | Err(transaction::Error::AlreadyImported) => Ok(()),
-			Err(e) => Err(e.to_string())?,
+			Err(e) => Err(e.to_string()),
 		}
 	}
 
@@ -199,7 +199,7 @@ mod tests {
 	use parity_bytes::ToPretty;
 	use rlp::encode;
 	use rustc_hex::FromHex;
-	use spec;
+	
 
 	use super::super::ValidatorSet;
 	use super::ValidatorContract;
@@ -226,12 +226,12 @@ mod tests {
 
 		// Make sure reporting can be done.
 		client.miner().set_gas_range_target((1_000_000.into(), 1_000_000.into()));
-		let signer = Box::new((tap.clone(), v1, "".into()));
+		let signer = Box::new((tap, v1, "".into()));
 		client.miner().set_author(miner::Author::Sealer(signer));
 
 		// Check a block that is a bit in future, reject it but don't report the validator.
 		let mut header = Header::default();
-		let seal = vec![encode(&4u8), encode(&H520::zero().as_bytes())];
+		let seal = vec![encode(&4_u8), encode(&H520::zero().as_bytes())];
 		header.set_seal(seal);
 		header.set_author(v1);
 		header.set_number(2);
@@ -244,7 +244,7 @@ mod tests {
 
 		// Now create one that is more in future. That one should be rejected and validator should be reported.
 		let mut header = Header::default();
-		let seal = vec![encode(&8u8), encode(&H520::zero().as_bytes())];
+		let seal = vec![encode(&8_u8), encode(&H520::zero().as_bytes())];
 		header.set_seal(seal);
 		header.set_author(v1);
 		header.set_number(2);

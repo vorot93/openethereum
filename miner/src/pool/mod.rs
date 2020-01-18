@@ -38,8 +38,6 @@ pub use self::queue::{TransactionQueue, Status as QueueStatus};
 pub use self::txpool::{VerifiedTransaction as PoolVerifiedTransaction, Options};
 
 /// How to prioritize transactions in the pool
-///
-/// TODO [ToDr] Implement more strategies.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum PrioritizationStrategy {
 	/// Simple gas-price based prioritization.
@@ -72,8 +70,8 @@ pub struct PendingSettings {
 
 impl PendingSettings {
 	/// Get all transactions (no cap or len limit) prioritized.
-	pub fn all_prioritized(block_number: u64, current_timestamp: u64) -> Self {
-		PendingSettings {
+	pub const fn all_prioritized(block_number: u64, current_timestamp: u64) -> Self {
+		Self {
 			block_number,
 			current_timestamp,
 			nonce_cap: None,
@@ -101,9 +99,9 @@ pub enum Priority {
 }
 
 impl Priority {
-	fn is_local(&self) -> bool {
-		match *self {
-			Priority::Local => true,
+	fn is_local(self) -> bool {
+		match self {
+			Self::Local => true,
 			_ => false,
 		}
 	}
@@ -141,7 +139,7 @@ impl VerifiedTransaction {
 	pub fn from_pending_block_transaction(tx: transaction::SignedTransaction) -> Self {
 		let hash = tx.hash();
 		let sender = tx.sender();
-		VerifiedTransaction {
+		Self {
 			transaction: tx.into(),
 			hash,
 			sender,
@@ -151,7 +149,7 @@ impl VerifiedTransaction {
 	}
 
 	/// Gets transaction insertion id.
-	pub(crate) fn insertion_id(&self) -> usize {
+	pub(crate) const fn insertion_id(&self) -> usize {
 		self.insertion_id
 	}
 
@@ -161,7 +159,7 @@ impl VerifiedTransaction {
 	}
 
 	/// Gets wrapped `PendingTransaction`
-	pub fn pending(&self) -> &transaction::PendingTransaction {
+	pub const fn pending(&self) -> &transaction::PendingTransaction {
 		&self.transaction
 	}
 

@@ -33,21 +33,21 @@ pub enum GasPricer {
 impl GasPricer {
 	/// Create a new Calibrated `GasPricer`.
 	#[cfg(feature = "price-info")]
-	pub fn new_calibrated(calibrator: GasPriceCalibrator) -> GasPricer {
-		GasPricer::Calibrated(calibrator)
+	pub const fn new_calibrated(calibrator: GasPriceCalibrator) -> Self {
+		Self::Calibrated(calibrator)
 	}
 
 	/// Create a new Fixed `GasPricer`.
-	pub fn new_fixed(gas_price: U256) -> GasPricer {
-		GasPricer::Fixed(gas_price)
+	pub const fn new_fixed(gas_price: U256) -> Self {
+		Self::Fixed(gas_price)
 	}
 
 	/// Recalibrate current gas price.
 	pub fn recalibrate<F: FnOnce(U256) + Sync + Send + 'static>(&mut self, set_price: F) {
-		match *self {
-			GasPricer::Fixed(ref curr) => set_price(curr.clone()),
+		match self {
+			Self::Fixed(curr) => set_price(*curr),
 			#[cfg(feature = "price-info")]
-			GasPricer::Calibrated(ref mut cal) => cal.recalibrate(set_price),
+			Self::Calibrated(cal) => cal.recalibrate(set_price),
 		}
 	}
 }

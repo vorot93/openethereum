@@ -16,6 +16,54 @@
 
 //! Façade crate for `patricia_trie` for Ethereum specific impls
 
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
+
 pub extern crate trie_db as trie; // `pub` because we need to import this crate for the tests in `patricia_trie` and there were issues: https://gist.github.com/dvdplm/869251ee557a1b4bd53adc7c971979aa
 extern crate elastic_array;
 extern crate parity_bytes;
@@ -72,14 +120,12 @@ impl trie_db::TrieLayout for Layout {
 ///
 /// type DBValue = ElasticArray128<u8>;
 ///
-/// fn main() {
-///   let mut memdb = journaldb::new_memory_db();
-///   let mut root = H256::zero();
-///   TrieDBMut::new(&mut memdb, &mut root).insert(b"foo", b"bar").unwrap();
-///   let t = TrieDB::new(&memdb, &root).unwrap();
-///   assert!(t.contains(b"foo").unwrap());
-///   assert_eq!(t.get(b"foo").unwrap().unwrap(), b"bar".to_vec());
-/// }
+/// let mut memdb = journaldb::new_memory_db();
+/// let mut root = H256::zero();
+/// TrieDBMut::new(&mut memdb, &mut root).insert(b"foo", b"bar").unwrap();
+/// let t = TrieDB::new(&memdb, &root).unwrap();
+/// assert!(t.contains(b"foo").unwrap());
+/// assert_eq!(t.get(b"foo").unwrap().unwrap(), b"bar".to_vec());
 /// ```
 pub type TrieDB<'db> = trie::TrieDB<'db, Layout>;
 
@@ -117,18 +163,16 @@ pub type FatDB<'db> = trie::FatDB<'db, Layout>;
 ///
 /// type DBValue = ElasticArray128<u8>;
 ///
-/// fn main() {
-///   let mut memdb = journaldb::new_memory_db();
-///   let mut root = H256::zero();
-///   let mut t = TrieDBMut::new(&mut memdb, &mut root);
-///   assert!(t.is_empty());
-///   assert_eq!(*t.root(), KECCAK_NULL_RLP);
-///   t.insert(b"foo", b"bar").unwrap();
-///   assert!(t.contains(b"foo").unwrap());
-///   assert_eq!(t.get(b"foo").unwrap().unwrap(), b"bar".to_vec());
-///   t.remove(b"foo").unwrap();
-///   assert!(!t.contains(b"foo").unwrap());
-/// }
+/// let mut memdb = journaldb::new_memory_db();
+/// let mut root = H256::zero();
+/// let mut t = TrieDBMut::new(&mut memdb, &mut root);
+/// assert!(t.is_empty());
+/// assert_eq!(*t.root(), KECCAK_NULL_RLP);
+/// t.insert(b"foo", b"bar").unwrap();
+/// assert!(t.contains(b"foo").unwrap());
+/// assert_eq!(t.get(b"foo").unwrap().unwrap(), b"bar".to_vec());
+/// t.remove(b"foo").unwrap();
+/// assert!(!t.contains(b"foo").unwrap());
 /// ```
 pub type TrieDBMut<'db> = trie::TrieDBMut<'db, Layout>;
 
@@ -161,14 +205,14 @@ mod tests {
 			let mut triedbmut = TrieDBMut::new(&mut memdb, &mut root);
 			triedbmut.insert(b"foo", b"bar").unwrap();
 			triedbmut.insert(b"fog", b"b").unwrap();
-			triedbmut.insert(b"fot", &vec![0u8;33][..]).unwrap();
+			triedbmut.insert(b"fot", &vec![0_u8;33][..]).unwrap();
 		}
 		let t = TrieDB::new(&memdb, &root).unwrap();
 		assert!(t.contains(b"foo").unwrap());
 		assert!(t.contains(b"fog").unwrap());
 		assert_eq!(t.get(b"foo").unwrap().unwrap(), b"bar".to_vec());
 		assert_eq!(t.get(b"fog").unwrap().unwrap(), b"b".to_vec());
-		assert_eq!(t.get(b"fot").unwrap().unwrap(), vec![0u8;33]);
+		assert_eq!(t.get(b"fot").unwrap().unwrap(), vec![0_u8;33]);
 	}
 
 	#[test]

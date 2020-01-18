@@ -27,8 +27,8 @@ pub fn load_machine(reader: &[u8]) -> Machine {
 	let builtins = spec.accounts.builtins().into_iter().map(|p| (p.0.into(), Builtin::try_from(p.1).expect("chain spec is invalid"))).collect();
 	let params = CommonParams::from(spec.params);
 
-	if let ethjson::spec::Engine::Ethash(ref ethash) = spec.engine {
-		Machine::with_ethash_extensions(params, builtins, ethash.params.clone().into())
+	if let ethjson::spec::Engine::Ethash(ethash) = spec.engine {
+		Machine::with_ethash_extensions(params, builtins, ethash.params.into())
 	} else {
 		Machine::regular(params, builtins)
 	}

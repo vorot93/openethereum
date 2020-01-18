@@ -45,38 +45,38 @@ impl Key {
 	// get the string value of this key.
 	fn as_str(self) -> &'static str {
 		match self {
-			Key::ProtocolVersion => "protocolVersion",
-			Key::NetworkId => "networkId",
-			Key::HeadTD => "headTd",
-			Key::HeadHash => "headHash",
-			Key::HeadNum => "headNum",
-			Key::GenesisHash => "genesisHash",
-			Key::ServeHeaders => "serveHeaders",
-			Key::ServeChainSince => "serveChainSince",
-			Key::ServeStateSince => "serveStateSince",
-			Key::TxRelay => "txRelay",
-			Key::BufferLimit => "flowControl/BL",
-			Key::BufferCostTable => "flowControl/MRC",
-			Key::BufferRechargeRate => "flowControl/MRR",
+			Self::ProtocolVersion => "protocolVersion",
+			Self::NetworkId => "networkId",
+			Self::HeadTD => "headTd",
+			Self::HeadHash => "headHash",
+			Self::HeadNum => "headNum",
+			Self::GenesisHash => "genesisHash",
+			Self::ServeHeaders => "serveHeaders",
+			Self::ServeChainSince => "serveChainSince",
+			Self::ServeStateSince => "serveStateSince",
+			Self::TxRelay => "txRelay",
+			Self::BufferLimit => "flowControl/BL",
+			Self::BufferCostTable => "flowControl/MRC",
+			Self::BufferRechargeRate => "flowControl/MRR",
 		}
 	}
 
 	// try to parse the key value from a string.
 	fn from_str(s: &str) -> Option<Self> {
 		match s {
-			"protocolVersion" => Some(Key::ProtocolVersion),
-			"networkId" => Some(Key::NetworkId),
-			"headTd" => Some(Key::HeadTD),
-			"headHash" => Some(Key::HeadHash),
-			"headNum" => Some(Key::HeadNum),
-			"genesisHash" => Some(Key::GenesisHash),
-			"serveHeaders" => Some(Key::ServeHeaders),
-			"serveChainSince" => Some(Key::ServeChainSince),
-			"serveStateSince" => Some(Key::ServeStateSince),
-			"txRelay" => Some(Key::TxRelay),
-			"flowControl/BL" => Some(Key::BufferLimit),
-			"flowControl/MRC" => Some(Key::BufferCostTable),
-			"flowControl/MRR" => Some(Key::BufferRechargeRate),
+			"protocolVersion" => Some(Self::ProtocolVersion),
+			"networkId" => Some(Self::NetworkId),
+			"headTd" => Some(Self::HeadTD),
+			"headHash" => Some(Self::HeadHash),
+			"headNum" => Some(Self::HeadNum),
+			"genesisHash" => Some(Self::GenesisHash),
+			"serveHeaders" => Some(Self::ServeHeaders),
+			"serveChainSince" => Some(Self::ServeChainSince),
+			"serveStateSince" => Some(Self::ServeStateSince),
+			"txRelay" => Some(Self::TxRelay),
+			"flowControl/BL" => Some(Self::BufferLimit),
+			"flowControl/MRC" => Some(Self::BufferCostTable),
+			"flowControl/MRR" => Some(Self::BufferRechargeRate),
 			_ => None
 		}
 	}
@@ -185,7 +185,7 @@ pub struct Capabilities {
 
 impl Default for Capabilities {
 	fn default() -> Self {
-		Capabilities {
+		Self {
 			serve_headers: true,
 			serve_chain_since: None,
 			serve_state_since: None,
@@ -256,10 +256,10 @@ pub fn write_handshake(status: &Status, capabilities: &Capabilities, flow_params
 	if capabilities.serve_headers {
 		pairs.push(encode_flag(Key::ServeHeaders));
 	}
-	if let Some(ref serve_chain_since) = capabilities.serve_chain_since {
+	if let Some(serve_chain_since) = &capabilities.serve_chain_since {
 		pairs.push(encode_pair(Key::ServeChainSince, serve_chain_since));
 	}
-	if let Some(ref serve_state_since) = capabilities.serve_state_since {
+	if let Some(serve_state_since) = &capabilities.serve_state_since {
 		pairs.push(encode_pair(Key::ServeStateSince, serve_state_since));
 	}
 	if capabilities.tx_relay {
@@ -345,10 +345,10 @@ pub fn write_announcement(announcement: &Announcement) -> Vec<u8> {
 	if announcement.serve_headers {
 		pairs.push(encode_flag(Key::ServeHeaders));
 	}
-	if let Some(ref serve_chain_since) = announcement.serve_chain_since {
+	if let Some(serve_chain_since) = &announcement.serve_chain_since {
 		pairs.push(encode_pair(Key::ServeChainSince, serve_chain_since));
 	}
-	if let Some(ref serve_state_since) = announcement.serve_state_since {
+	if let Some(serve_state_since) = &announcement.serve_state_since {
 		pairs.push(encode_pair(Key::ServeStateSince, serve_state_since));
 	}
 	if announcement.tx_relay {
@@ -381,7 +381,7 @@ mod tests {
 		let status = Status {
 			protocol_version: 1,
 			network_id: 1,
-			head_td: U256::default(),
+			head_td: U256::zero(),
 			head_hash: H256::zero(),
 			head_num: 10,
 			genesis_hash: H256::zero(),
@@ -416,7 +416,7 @@ mod tests {
 		let status = Status {
 			protocol_version: 1,
 			network_id: 1,
-			head_td: U256::default(),
+			head_td: U256::zero(),
 			head_hash: H256::zero(),
 			head_num: 10,
 			genesis_hash: H256::zero(),
@@ -451,7 +451,7 @@ mod tests {
 		let status = Status {
 			protocol_version: 1,
 			network_id: 1,
-			head_td: U256::default(),
+			head_td: U256::zero(),
 			head_hash: H256::zero(),
 			head_num: 10,
 			genesis_hash: H256::zero(),
@@ -549,7 +549,7 @@ mod tests {
 		let status = Status {
 			protocol_version: 1,
 			network_id: 1,
-			head_td: U256::default(),
+			head_td: U256::zero(),
 			head_hash: H256::zero(),
 			head_num: 10,
 			genesis_hash: H256::zero(),

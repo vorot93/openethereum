@@ -28,6 +28,6 @@ pub fn format_time(time: &Duration) -> String {
 }
 
 /// Formats the time as microseconds.
-pub fn as_micros(time: &Duration) -> u64 {
+pub const fn as_micros(time: &Duration) -> u64 {
 	time.as_secs() * 1_000_000 + time.subsec_nanos() as u64 / 1_000
 }

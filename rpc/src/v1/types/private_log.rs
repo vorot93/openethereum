@@ -38,11 +38,11 @@ pub enum Status {
 impl From<EthStatus> for Status {
 	fn from(c: EthStatus) -> Self {
 		match c {
-			EthStatus::Created => Status::Created,
-			EthStatus::PrivateStateSync => Status::PrivateStateSync,
-			EthStatus::PrivateStateSyncFailed => Status::PrivateStateSyncFailed,
-			EthStatus::Validating => Status::Validating,
-			EthStatus::Deployed => Status::Deployed,
+			EthStatus::Created => Self::Created,
+			EthStatus::PrivateStateSync => Self::PrivateStateSync,
+			EthStatus::PrivateStateSyncFailed => Self::PrivateStateSyncFailed,
+			EthStatus::Validating => Self::Validating,
+			EthStatus::Deployed => Self::Deployed,
 		}
 	}
 }
@@ -59,7 +59,7 @@ pub struct ValidatorLog {
 
 impl From<EthValidatorLog> for ValidatorLog {
 	fn from(r: EthValidatorLog) -> Self {
-		ValidatorLog {
+		Self {
 			account: r.account,
 			validation_timestamp: r.validation_timestamp.map(|t| t.duration_since(SystemTime::UNIX_EPOCH).unwrap_or_default().as_secs()),
 		}
@@ -86,7 +86,7 @@ pub struct PrivateTransactionLog {
 
 impl From<EthTransactionLog> for PrivateTransactionLog {
 	fn from(r: EthTransactionLog) -> Self {
-		PrivateTransactionLog {
+		Self {
 			tx_hash: r.tx_hash,
 			status: r.status.into(),
 			creation_timestamp: r.creation_timestamp.duration_since(SystemTime::UNIX_EPOCH).unwrap_or_default().as_secs(),

@@ -30,7 +30,7 @@ pub struct ViewRlp<'a> {
 impl<'a, 'view> ViewRlp<'a> where 'a : 'view {
 	#[doc(hidden)]
 	pub fn new(bytes: &'a [u8], file: &'a str, line: u32) -> Self {
-		ViewRlp {
+		Self {
 			rlp: Rlp::new(bytes),
 			file,
 			line
@@ -38,8 +38,8 @@ impl<'a, 'view> ViewRlp<'a> where 'a : 'view {
 	}
 
 	/// Returns a new instance replacing existing rlp with new rlp, maintaining debug info
-	fn new_from_rlp(&self, rlp: Rlp<'a>) -> Self {
-		ViewRlp {
+	const fn new_from_rlp(&self, rlp: Rlp<'a>) -> Self {
+		Self {
 			rlp,
 			file: self.file,
 			line: self.line

@@ -51,11 +51,11 @@ pub struct ArchiveDB {
 
 impl ArchiveDB {
 	/// Create a new instance from a key-value db.
-	pub fn new(backing: Arc<dyn KeyValueDB>, column: u32) -> ArchiveDB {
+	pub fn new(backing: Arc<dyn KeyValueDB>, column: u32) -> Self {
 		let latest_era = backing.get(column, &LATEST_ERA_KEY)
 			.expect("Low-level database error.")
 			.map(|val| decode::<u64>(&val).expect("decoding db value failed"));
-		ArchiveDB {
+		Self {
 			overlay: new_memory_db(),
 			backing,
 			latest_era,
@@ -98,11 +98,11 @@ impl HashDB<KeccakHasher, DBValue> for ArchiveDB {
 
 impl JournalDB for ArchiveDB {
 	fn boxed_clone(&self) -> Box<dyn JournalDB> {
-		Box::new(ArchiveDB {
+		Box::new(Self {
 			overlay: self.overlay.clone(),
 			backing: self.backing.clone(),
 			latest_era: self.latest_era,
-			column: self.column.clone(),
+			column: self.column,
 		})
 	}
 
@@ -115,8 +115,8 @@ impl JournalDB for ArchiveDB {
 	}
 
 	fn journal_under(&mut self, batch: &mut DBTransaction, now: u64, _id: &H256) -> io::Result<u32> {
-		let mut inserts = 0usize;
-		let mut deletes = 0usize;
+		let mut inserts = 0_usize;
+		let mut deletes = 0_usize;
 
 		for i in self.overlay.drain() {
 			let (key, (value, rc)) = i;
@@ -143,8 +143,8 @@ impl JournalDB for ArchiveDB {
 	}
 
 	fn inject(&mut self, batch: &mut DBTransaction) -> io::Result<u32> {
-		let mut inserts = 0usize;
-		let mut deletes = 0usize;
+		let mut inserts = 0_usize;
+		let mut deletes = 0_usize;
 
 		for i in self.overlay.drain() {
 			let (key, (value, rc)) = i;
@@ -171,7 +171,7 @@ impl JournalDB for ArchiveDB {
 	fn latest_era(&self) -> Option<u64> { self.latest_era }
 
 	fn state(&self, id: &H256) -> Option<Bytes> {
-		self.backing.get_by_prefix(self.column, &id[0..DB_PREFIX_LEN]).map(|b| b.into_vec())
+		self.backing.get_by_prefix(self.column, &id[0..DB_PREFIX_LEN]).map(<[u8]>::into_vec)
 	}
 
 	fn is_prunable(&self) -> bool { false }
@@ -208,7 +208,7 @@ mod tests {
 	use keccak_hash::keccak;
 	use hash_db::{HashDB, EMPTY_PREFIX};
 	use super::*;
-	use kvdb_memorydb;
+	
 	use crate::{JournalDB, inject_batch, commit_batch};
 
 	#[test]

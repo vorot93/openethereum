@@ -224,7 +224,7 @@ usage! {
 			CMD cmd_db_reset {
 				"Removes NUM latests blocks from the db",
 
-				ARG arg_db_reset_num: (u32) = 10u32,
+				ARG arg_db_reset_num: (u32) = 10_u32,
 				"<NUM>",
 				"Number of blocks to revert",
 			}
@@ -250,11 +250,11 @@ usage! {
 	{
 		// Global flags and arguments
 		["Operating Options"]
-			FLAG flag_no_download: (bool) = false, or |c: &Config| c.parity.as_ref()?.no_download.clone(),
+			FLAG flag_no_download: (bool) = false, or |c: &Config| c.parity.as_ref()?.no_download,
 			"--no-download",
 			"Normally new releases will be downloaded ready for updating. This disables it. Not recommended.",
 
-			FLAG flag_no_consensus: (bool) = false, or |c: &Config| c.parity.as_ref()?.no_consensus.clone(),
+			FLAG flag_no_consensus: (bool) = false, or |c: &Config| c.parity.as_ref()?.no_consensus,
 			"--no-consensus",
 			"Force the binary to run even if there are known issues regarding consensus. Not recommended.",
 
@@ -274,11 +274,11 @@ usage! {
 			"--mode=[MODE]",
 			"Set the operating mode. MODE can be one of: last - Uses the last-used mode, active if none; active - Parity continuously syncs the chain; passive - Parity syncs initially, then sleeps and wakes regularly to resync; dark - Parity syncs only when the JSON-RPC is active; offline - Parity doesn't sync.",
 
-			ARG arg_mode_timeout: (u64) = 300u64, or |c: &Config| c.parity.as_ref()?.mode_timeout.clone(),
+			ARG arg_mode_timeout: (u64) = 300_u64, or |c: &Config| c.parity.as_ref()?.mode_timeout,
 			"--mode-timeout=[SECS]",
 			"Specify the number of seconds before inactivity timeout occurs when mode is dark or passive",
 
-			ARG arg_mode_alarm: (u64) = 3600u64, or |c: &Config| c.parity.as_ref()?.mode_alarm.clone(),
+			ARG arg_mode_alarm: (u64) = 3600_u64, or |c: &Config| c.parity.as_ref()?.mode_alarm,
 			"--mode-alarm=[SECS]",
 			"Specify the number of seconds before auto sleep reawake timeout occurs when mode is passive",
 
@@ -286,11 +286,11 @@ usage! {
 			"--auto-update=[SET]",
 			"Set a releases set to automatically update and install. SET can be one of: all - All updates in the our release track; critical - Only consensus/security updates; none - No updates will be auto-installed.",
 
-			ARG arg_auto_update_delay: (u16) = 100u16, or |c: &Config| c.parity.as_ref()?.auto_update_delay.clone(),
+			ARG arg_auto_update_delay: (u16) = 100_u16, or |c: &Config| c.parity.as_ref()?.auto_update_delay,
 			"--auto-update-delay=[NUM]",
 			"Specify the maximum number of blocks used for randomly delaying updates.",
 
-			ARG arg_auto_update_check_frequency: (u16) = 20u16, or |c: &Config| c.parity.as_ref()?.auto_update_check_frequency.clone(),
+			ARG arg_auto_update_check_frequency: (u16) = 20_u16, or |c: &Config| c.parity.as_ref()?.auto_update_check_frequency,
 			"--auto-update-check-frequency=[NUM]",
 			"Specify the number of blocks between each auto-update check.",
 
@@ -327,20 +327,20 @@ usage! {
 			"-c, --config=[CONFIG]",
 			"Specify a configuration. CONFIG may be either a configuration file or a preset: dev, insecure, dev-insecure, mining, or non-standard-ports.",
 
-			ARG arg_ports_shift: (u16) = 0u16, or |c: &Config| c.misc.as_ref()?.ports_shift,
+			ARG arg_ports_shift: (u16) = 0_u16, or |c: &Config| c.misc.as_ref()?.ports_shift,
 			"--ports-shift=[SHIFT]",
 			"Add SHIFT to all port numbers Parity is listening on. Includes network port and all servers (HTTP JSON-RPC, WebSockets JSON-RPC, IPFS, SecretStore).",
 
 		["Account Options"]
-			FLAG flag_fast_unlock: (bool) = false, or |c: &Config| c.account.as_ref()?.fast_unlock.clone(),
+			FLAG flag_fast_unlock: (bool) = false, or |c: &Config| c.account.as_ref()?.fast_unlock,
 			"--fast-unlock",
 			"Use drastically faster unlocking mode. This setting causes raw secrets to be stored unprotected in memory, so use with care.",
 
-			ARG arg_keys_iterations: (u32) = 10240u32, or |c: &Config| c.account.as_ref()?.keys_iterations.clone(),
+			ARG arg_keys_iterations: (u32) = 10240_u32, or |c: &Config| c.account.as_ref()?.keys_iterations,
 			"--keys-iterations=[NUM]",
 			"Specify the number of iterations to use when deriving key from the password (bigger is more secure)",
 
-			ARG arg_accounts_refresh: (u64) = 5u64, or |c: &Config| c.account.as_ref()?.refresh_time.clone(),
+			ARG arg_accounts_refresh: (u64) = 5_u64, or |c: &Config| c.account.as_ref()?.refresh_time,
 			"--accounts-refresh=[TIME]",
 			"Specify the cache time of accounts read from disk. If you manage thousands of accounts set this to 0 to disable refresh.",
 
@@ -381,7 +381,7 @@ usage! {
 			"--private-sstore-url=[URL]",
 			"Specify secret store URL used for encrypting private transactions.",
 
-			ARG arg_private_sstore_threshold: (Option<u32>) = None, or |c: &Config| c.private_tx.as_ref()?.sstore_threshold.clone(),
+			ARG arg_private_sstore_threshold: (Option<u32>) = None, or |c: &Config| c.private_tx.as_ref()?.sstore_threshold,
 			"--private-sstore-threshold=[NUM]",
 			"Specify secret store threshold used for encrypting private transactions.",
 
@@ -399,11 +399,11 @@ usage! {
 			"--no-warp",
 			"Disable syncing from the snapshot over the network.",
 
-			FLAG flag_no_discovery: (bool) = false, or |c: &Config| c.network.as_ref()?.discovery.map(|d| !d).clone(),
+			FLAG flag_no_discovery: (bool) = false, or |c: &Config| c.network.as_ref()?.discovery.map(|d| !d),
 			"--no-discovery",
 			"Disable new peer discovery.",
 
-			FLAG flag_reserved_only: (bool) = false, or |c: &Config| c.network.as_ref()?.reserved_only.clone(),
+			FLAG flag_reserved_only: (bool) = false, or |c: &Config| c.network.as_ref()?.reserved_only,
 			"--reserved-only",
 			"Connect only to reserved nodes.",
 
@@ -411,15 +411,15 @@ usage! {
 			"--no-ancient-blocks",
 			"Disable downloading old blocks after snapshot restoration or warp sync. Not recommended.",
 
-			FLAG flag_no_serve_light: (bool) = false, or |c: &Config| c.network.as_ref()?.no_serve_light.clone(),
+			FLAG flag_no_serve_light: (bool) = false, or |c: &Config| c.network.as_ref()?.no_serve_light,
 			"--no-serve-light",
 			"Disable serving of light peers.",
 
-			ARG arg_warp_barrier: (Option<u64>) = None, or |c: &Config| c.network.as_ref()?.warp_barrier.clone(),
+			ARG arg_warp_barrier: (Option<u64>) = None, or |c: &Config| c.network.as_ref()?.warp_barrier,
 			"--warp-barrier=[NUM]",
 			"When warp enabled never attempt regular sync before warping to block NUM.",
 
-			ARG arg_port: (u16) = 30303u16, or |c: &Config| c.network.as_ref()?.port.clone(),
+			ARG arg_port: (u16) = 30303_u16, or |c: &Config| c.network.as_ref()?.port,
 			"--port=[PORT]",
 			"Override the port on which the node should listen.",
 
@@ -427,15 +427,15 @@ usage! {
 			"--interface=[IP]",
 			"Network interfaces. Valid values are 'all', 'local' or the ip of the interface you want parity to listen to.",
 
-			ARG arg_min_peers: (Option<u16>) = None, or |c: &Config| c.network.as_ref()?.min_peers.clone(),
+			ARG arg_min_peers: (Option<u16>) = None, or |c: &Config| c.network.as_ref()?.min_peers,
 			"--min-peers=[NUM]",
 			"Try to maintain at least NUM peers.",
 
-			ARG arg_max_peers: (Option<u16>) = None, or |c: &Config| c.network.as_ref()?.max_peers.clone(),
+			ARG arg_max_peers: (Option<u16>) = None, or |c: &Config| c.network.as_ref()?.max_peers,
 			"--max-peers=[NUM]",
 			"Allow up to NUM peers.",
 
-			ARG arg_snapshot_peers: (u16) = 0u16, or |c: &Config| c.network.as_ref()?.snapshot_peers.clone(),
+			ARG arg_snapshot_peers: (u16) = 0_u16, or |c: &Config| c.network.as_ref()?.snapshot_peers,
 			"--snapshot-peers=[NUM]",
 			"Allow additional NUM peers for a snapshot sync.",
 
@@ -447,11 +447,11 @@ usage! {
 			"--allow-ips=[FILTER]",
 			"Filter outbound connections. Must be one of: private - connect to private network IP addresses only; public - connect to public network IP addresses only; all - connect to any IP address.",
 
-			ARG arg_max_pending_peers: (u16) = 64u16, or |c: &Config| c.network.as_ref()?.max_pending_peers.clone(),
+			ARG arg_max_pending_peers: (u16) = 64_u16, or |c: &Config| c.network.as_ref()?.max_pending_peers,
 			"--max-pending-peers=[NUM]",
 			"Allow up to NUM pending connections.",
 
-			ARG arg_network_id: (Option<u64>) = None, or |c: &Config| c.network.as_ref()?.id.clone(),
+			ARG arg_network_id: (Option<u64>) = None, or |c: &Config| c.network.as_ref()?.id,
 			"--network-id=[INDEX]",
 			"Override the network identifier from the chain we are on.",
 
@@ -467,7 +467,7 @@ usage! {
 			"--reserved-peers=[FILE]",
 			"Provide a file containing enodes, one per line. These nodes will always have a reserved slot on top of the normal maximum peers.",
 
-			CHECK |args: &Args| {
+			CHECK |args: &Self| {
 				if let (Some(max_peers), Some(min_peers)) = (args.arg_max_peers, args.arg_min_peers) {
 					if min_peers > max_peers {
 						return Err(ArgsError::PeerConfiguration);
@@ -478,11 +478,11 @@ usage! {
 			},
 
 		["API and Console Options – HTTP JSON-RPC"]
-			FLAG flag_jsonrpc_allow_missing_blocks: (bool) = false, or |c: &Config| c.rpc.as_ref()?.allow_missing_blocks.clone(),
+			FLAG flag_jsonrpc_allow_missing_blocks: (bool) = false, or |c: &Config| c.rpc.as_ref()?.allow_missing_blocks,
 			"--jsonrpc-allow-missing-blocks",
 			"RPC calls will return 'null' instead of an error if ancient block sync is still in progress and the block information requested could not be found",
 
-			FLAG flag_no_jsonrpc: (bool) = false, or |c: &Config| c.rpc.as_ref()?.disable.clone(),
+			FLAG flag_no_jsonrpc: (bool) = false, or |c: &Config| c.rpc.as_ref()?.disable,
 			"--no-jsonrpc",
 			"Disable the HTTP JSON-RPC API server.",
 
@@ -490,11 +490,11 @@ usage! {
 			"--jsonrpc-no-keep-alive",
 			"Disable HTTP/1.1 keep alive header. Disabling keep alive will prevent re-using the same TCP connection to fire multiple requests, recommended when using one request per connection.",
 
-			FLAG flag_jsonrpc_experimental: (bool) = false, or |c: &Config| c.rpc.as_ref()?.experimental_rpcs.clone(),
+			FLAG flag_jsonrpc_experimental: (bool) = false, or |c: &Config| c.rpc.as_ref()?.experimental_rpcs,
 			"--jsonrpc-experimental",
 			"Enable experimental RPCs. Enable to have access to methods from unfinalised EIPs in all namespaces",
 
-			ARG arg_jsonrpc_port: (u16) = 8545u16, or |c: &Config| c.rpc.as_ref()?.port.clone(),
+			ARG arg_jsonrpc_port: (u16) = 8545_u16, or |c: &Config| c.rpc.as_ref()?.port,
 			"--jsonrpc-port=[PORT]",
 			"Specify the port portion of the HTTP JSON-RPC API server.",
 
@@ -526,16 +526,16 @@ usage! {
 			"--jsonrpc-max-payload=[MB]",
 			"Specify maximum size for HTTP JSON-RPC requests in megabytes.",
 
-			ARG arg_poll_lifetime: (u32) = 60u32, or |c: &Config| c.rpc.as_ref()?.poll_lifetime.clone(),
+			ARG arg_poll_lifetime: (u32) = 60_u32, or |c: &Config| c.rpc.as_ref()?.poll_lifetime,
 			"--poll-lifetime=[S]",
 			"Set the RPC filter lifetime to S seconds. The filter has to be polled at least every S seconds , otherwise it is removed.",
 
 		["API and Console Options – WebSockets"]
-			FLAG flag_no_ws: (bool) = false, or |c: &Config| c.websockets.as_ref()?.disable.clone(),
+			FLAG flag_no_ws: (bool) = false, or |c: &Config| c.websockets.as_ref()?.disable,
 			"--no-ws",
 			"Disable the WebSockets JSON-RPC server.",
 
-			ARG arg_ws_port: (u16) = 8546u16, or |c: &Config| c.websockets.as_ref()?.port.clone(),
+			ARG arg_ws_port: (u16) = 8546_u16, or |c: &Config| c.websockets.as_ref()?.port,
 			"--ws-port=[PORT]",
 			"Specify the port portion of the WebSockets JSON-RPC server.",
 
@@ -555,12 +555,12 @@ usage! {
 			"--ws-hosts=[HOSTS]",
 			"List of allowed Host header values. This option will validate the Host header sent by the browser, it is additional security against some attack vectors. Special options: \"all\", \"none\".",
 
-			ARG arg_ws_max_connections: (usize) = 100usize, or |c: &Config| c.websockets.as_ref()?.max_connections,
+			ARG arg_ws_max_connections: (usize) = 100_usize, or |c: &Config| c.websockets.as_ref()?.max_connections,
 			"--ws-max-connections=[CONN]",
 			"Maximum number of allowed concurrent WebSockets JSON-RPC connections.",
 
 		["API and Console Options – IPC"]
-			FLAG flag_no_ipc: (bool) = false, or |c: &Config| c.ipc.as_ref()?.disable.clone(),
+			FLAG flag_no_ipc: (bool) = false, or |c: &Config| c.ipc.as_ref()?.disable,
 			"--no-ipc",
 			"Disable JSON-RPC over IPC service.",
 
@@ -577,11 +577,11 @@ usage! {
 			"Specify custom API set available via JSON-RPC over IPC using a comma-delimited list of API names. Possible names are: all, safe, web3, net, eth, pubsub, personal, signer, parity, parity_pubsub, parity_accounts, parity_set, traces, rpc, secretstore. You can also disable a specific API by putting '-' in the front, example: all,-personal. 'safe' enables the following APIs: web3, net, eth, pubsub, parity, parity_pubsub, traces, rpc",
 
 		["API and Console Options – IPFS"]
-			FLAG flag_ipfs_api: (bool) = false, or |c: &Config| c.ipfs.as_ref()?.enable.clone(),
+			FLAG flag_ipfs_api: (bool) = false, or |c: &Config| c.ipfs.as_ref()?.enable,
 			"--ipfs-api",
 			"Enable IPFS-compatible HTTP API.",
 
-			ARG arg_ipfs_api_port: (u16) = 5001u16, or |c: &Config| c.ipfs.as_ref()?.port.clone(),
+			ARG arg_ipfs_api_port: (u16) = 5001_u16, or |c: &Config| c.ipfs.as_ref()?.port,
 			"--ipfs-api-port=[PORT]",
 			"Configure on which port the IPFS HTTP API should listen.",
 
@@ -619,15 +619,15 @@ usage! {
 			"Specify light client the number of failures for a request until it gets exponentially backed off",
 
 		["Secret Store Options"]
-			FLAG flag_no_secretstore: (bool) = false, or |c: &Config| c.secretstore.as_ref()?.disable.clone(),
+			FLAG flag_no_secretstore: (bool) = false, or |c: &Config| c.secretstore.as_ref()?.disable,
 			"--no-secretstore",
 			"Disable Secret Store functionality.",
 
-			FLAG flag_no_secretstore_http: (bool) = false, or |c: &Config| c.secretstore.as_ref()?.disable_http.clone(),
+			FLAG flag_no_secretstore_http: (bool) = false, or |c: &Config| c.secretstore.as_ref()?.disable_http,
 			"--no-secretstore-http",
 			"Disable Secret Store HTTP API.",
 
-			FLAG flag_no_secretstore_auto_migrate: (bool) = false, or |c: &Config| c.secretstore.as_ref()?.disable_auto_migrate.clone(),
+			FLAG flag_no_secretstore_auto_migrate: (bool) = false, or |c: &Config| c.secretstore.as_ref()?.disable_auto_migrate,
 			"--no-secretstore-auto-migrate",
 			"Do not run servers set change session automatically when servers set changes. This option has no effect when servers set is read from configuration file.",
 
@@ -671,7 +671,7 @@ usage! {
 			"--secretstore-interface=[IP]",
 			"Specify the hostname portion for listening to Secret Store Key Server internal requests, IP should be an interface's IP address, or local.",
 
-			ARG arg_secretstore_port: (u16) = 8083u16, or |c: &Config| c.secretstore.as_ref()?.port.clone(),
+			ARG arg_secretstore_port: (u16) = 8083_u16, or |c: &Config| c.secretstore.as_ref()?.port,
 			"--secretstore-port=[PORT]",
 			"Specify the port portion for listening to Secret Store Key Server internal requests.",
 
@@ -679,7 +679,7 @@ usage! {
 			"--secretstore-http-interface=[IP]",
 			"Specify the hostname portion for listening to Secret Store Key Server HTTP requests, IP should be an interface's IP address, or local.",
 
-			ARG arg_secretstore_http_port: (u16) = 8082u16, or |c: &Config| c.secretstore.as_ref()?.http_port.clone(),
+			ARG arg_secretstore_http_port: (u16) = 8082_u16, or |c: &Config| c.secretstore.as_ref()?.http_port,
 			"--secretstore-http-port=[PORT]",
 			"Specify the port portion for listening to Secret Store Key Server HTTP requests.",
 
@@ -696,31 +696,31 @@ usage! {
 			"Hex-encoded public key of secret store administrator.",
 
 		["Sealing/Mining Options"]
-			FLAG flag_force_sealing: (bool) = false, or |c: &Config| c.mining.as_ref()?.force_sealing.clone(),
+			FLAG flag_force_sealing: (bool) = false, or |c: &Config| c.mining.as_ref()?.force_sealing,
 			"--force-sealing",
 			"Force the node to author new blocks as if it were always sealing/mining.",
 
-			FLAG flag_reseal_on_uncle: (bool) = false, or |c: &Config| c.mining.as_ref()?.reseal_on_uncle.clone(),
+			FLAG flag_reseal_on_uncle: (bool) = false, or |c: &Config| c.mining.as_ref()?.reseal_on_uncle,
 			"--reseal-on-uncle",
 			"Force the node to author new blocks when a new uncle block is imported.",
 
-			FLAG flag_remove_solved: (bool) = false, or |c: &Config| c.mining.as_ref()?.remove_solved.clone(),
+			FLAG flag_remove_solved: (bool) = false, or |c: &Config| c.mining.as_ref()?.remove_solved,
 			"--remove-solved",
 			"Move solved blocks from the work package queue instead of cloning them. This gives a slightly faster import speed, but means that extra solutions submitted for the same work package will go unused.",
 
-			FLAG flag_tx_queue_no_unfamiliar_locals: (bool) = false, or |c: &Config| c.mining.as_ref()?.tx_queue_no_unfamiliar_locals.clone(),
+			FLAG flag_tx_queue_no_unfamiliar_locals: (bool) = false, or |c: &Config| c.mining.as_ref()?.tx_queue_no_unfamiliar_locals,
 			"--tx-queue-no-unfamiliar-locals",
 			"Local transactions sent through JSON-RPC (HTTP, WebSockets, etc) will be treated as 'external' if the sending account is unknown.",
 
-			FLAG flag_tx_queue_no_early_reject: (bool) = false, or |c: &Config| c.mining.as_ref()?.tx_queue_no_early_reject.clone(),
+			FLAG flag_tx_queue_no_early_reject: (bool) = false, or |c: &Config| c.mining.as_ref()?.tx_queue_no_early_reject,
 			"--tx-queue-no-early-reject",
 			"Disables transaction queue optimization to early reject transactions below minimal effective gas price. This allows local transactions to always enter the pool, despite it being full, but requires additional ecrecover on every transaction.",
 
-			FLAG flag_refuse_service_transactions: (bool) = false, or |c: &Config| c.mining.as_ref()?.refuse_service_transactions.clone(),
+			FLAG flag_refuse_service_transactions: (bool) = false, or |c: &Config| c.mining.as_ref()?.refuse_service_transactions,
 			"--refuse-service-transactions",
 			"Always refuse service transactions.",
 
-			FLAG flag_infinite_pending_block: (bool) = false, or |c: &Config| c.mining.as_ref()?.infinite_pending_block.clone(),
+			FLAG flag_infinite_pending_block: (bool) = false, or |c: &Config| c.mining.as_ref()?.infinite_pending_block,
 			"--infinite-pending-block",
 			"Pending block will be created with maximal possible gas limit and will execute all transactions in the queue. Note that such block is invalid and should never be attempted to be mined.",
 
@@ -730,7 +730,7 @@ usage! {
 
 			// For backward compatibility; Stratum should be enabled if the config file
 			// contains a `[stratum]` section and it is not explicitly disabled (disable = true)
-			FLAG flag_stratum: (bool) = false, or |c: &Config| Some(c.stratum.as_ref().map(|s| s.disable != Some(true)).unwrap_or(false)),
+			FLAG flag_stratum: (bool) = false, or |c: &Config| Some(c.stratum.as_ref().map_or(false, |s| s.disable != Some(true))),
 			"--stratum",
 			"Run Stratum server for miner push notification.",
 
@@ -738,15 +738,15 @@ usage! {
 			"--reseal-on-txs=[SET]",
 			"Specify which transactions should force the node to reseal a block. SET is one of: none - never reseal on new transactions; own - reseal only on a new local transaction; ext - reseal only on a new external transaction; all - reseal on all new transactions.",
 
-			ARG arg_reseal_min_period: (u64) = 2000u64, or |c: &Config| c.mining.as_ref()?.reseal_min_period.clone(),
+			ARG arg_reseal_min_period: (u64) = 2000_u64, or |c: &Config| c.mining.as_ref()?.reseal_min_period,
 			"--reseal-min-period=[MS]",
 			"Specify the minimum time between reseals from incoming transactions. MS is time measured in milliseconds.",
 
-			ARG arg_reseal_max_period: (u64) = 120000u64, or |c: &Config| c.mining.as_ref()?.reseal_max_period.clone(),
+			ARG arg_reseal_max_period: (u64) = 120_000_u64, or |c: &Config| c.mining.as_ref()?.reseal_max_period,
 			"--reseal-max-period=[MS]",
 			"Specify the maximum time since last block to enable force-sealing. MS is time measured in milliseconds.",
 
-			ARG arg_work_queue_size: (usize) = 20usize, or |c: &Config| c.mining.as_ref()?.work_queue_size.clone(),
+			ARG arg_work_queue_size: (usize) = 20_usize, or |c: &Config| c.mining.as_ref()?.work_queue_size,
 			"--work-queue-size=[ITEMS]",
 			"Specify the number of historical work packages which are kept cached lest a solution is found for them later. High values take more memory but result in fewer unusable solutions.",
 
@@ -774,15 +774,15 @@ usage! {
 			"--gas-cap=[GAS]",
 			"A cap on how large we will raise the gas limit per block due to transaction volume.",
 
-			ARG arg_tx_queue_mem_limit: (u32) = 4u32, or |c: &Config| c.mining.as_ref()?.tx_queue_mem_limit.clone(),
+			ARG arg_tx_queue_mem_limit: (u32) = 4_u32, or |c: &Config| c.mining.as_ref()?.tx_queue_mem_limit,
 			"--tx-queue-mem-limit=[MB]",
 			"Maximum amount of memory that can be used by the transaction queue. Setting this parameter to 0 disables limiting.",
 
-			ARG arg_tx_queue_size: (usize) = 8_192usize, or |c: &Config| c.mining.as_ref()?.tx_queue_size.clone(),
+			ARG arg_tx_queue_size: (usize) = 8_192_usize, or |c: &Config| c.mining.as_ref()?.tx_queue_size,
 			"--tx-queue-size=[LIMIT]",
 			"Maximum amount of transactions in the queue (waiting to be included in next block).",
 
-			ARG arg_tx_queue_per_sender: (Option<usize>) = None, or |c: &Config| c.mining.as_ref()?.tx_queue_per_sender.clone(),
+			ARG arg_tx_queue_per_sender: (Option<usize>) = None, or |c: &Config| c.mining.as_ref()?.tx_queue_per_sender,
 			"--tx-queue-per-sender=[LIMIT]",
 			"Maximum number of transactions per sender in the queue. By default it's 1% of the entire queue, but not less than 16.",
 
@@ -798,15 +798,15 @@ usage! {
 			"--stratum-interface=[IP]",
 			"Interface address for Stratum server.",
 
-			ARG arg_stratum_port: (u16) = 8008u16, or |c: &Config| c.stratum.as_ref()?.port.clone(),
+			ARG arg_stratum_port: (u16) = 8008_u16, or |c: &Config| c.stratum.as_ref()?.port,
 			"--stratum-port=[PORT]",
 			"Port for Stratum server to listen on.",
 
-			ARG arg_min_gas_price: (Option<u64>) = None, or |c: &Config| c.mining.as_ref()?.min_gas_price.clone(),
+			ARG arg_min_gas_price: (Option<u64>) = None, or |c: &Config| c.mining.as_ref()?.min_gas_price,
 			"--min-gas-price=[STRING]",
 			"Minimum amount of Wei per GAS to be paid for a transaction to be accepted for mining. Overrides --usd-per-tx.",
 
-			ARG arg_gas_price_percentile: (usize) = 50usize, or |c: &Config| c.mining.as_ref()?.gas_price_percentile,
+			ARG arg_gas_price_percentile: (usize) = 50_usize, or |c: &Config| c.mining.as_ref()?.gas_price_percentile,
 			"--gas-price-percentile=[PCT]",
 			"Set PCT percentile gas price value from last 100 blocks as default gas price when sending transactions.",
 
@@ -822,7 +822,7 @@ usage! {
 			"--tx-gas-limit=[GAS]",
 			"Apply a limit of GAS as the maximum amount of gas a single transaction may have for it to be mined.",
 
-			ARG arg_tx_time_limit: (Option<u64>) = None, or |c: &Config| c.mining.as_ref()?.tx_time_limit.clone(),
+			ARG arg_tx_time_limit: (Option<u64>) = None, or |c: &Config| c.mining.as_ref()?.tx_time_limit,
 			"--tx-time-limit=[MS]",
 			"Maximal time for processing single transaction. If enabled senders of transactions offending the limit will get other transactions penalized.",
 
@@ -838,7 +838,7 @@ usage! {
 			"--stratum-secret=[STRING]",
 			"Secret for authorizing Stratum server for peers.",
 
-			ARG arg_max_round_blocks_to_import: (usize) = 12usize, or |c: &Config| c.mining.as_ref()?.max_round_blocks_to_import.clone(),
+			ARG arg_max_round_blocks_to_import: (usize) = 12_usize, or |c: &Config| c.mining.as_ref()?.max_round_blocks_to_import,
 			"--max-round-blocks-to-import=[S]",
 			"Maximal number of blocks to import for each import round.",
 
@@ -848,7 +848,7 @@ usage! {
 			"Executable will auto-restart if exiting with 69",
 
 		["Miscellaneous Options"]
-			FLAG flag_no_color: (bool) = false, or |c: &Config| c.misc.as_ref()?.color.map(|c| !c).clone(),
+			FLAG flag_no_color: (bool) = false, or |c: &Config| c.misc.as_ref()?.color.map(|c| !c),
 			"--no-color",
 			"Don't use terminal color codes in output.",
 
@@ -869,7 +869,7 @@ usage! {
 			"Specify a filename into which logging should be appended.",
 
 		["Footprint Options"]
-			FLAG flag_scale_verifiers: (bool) = false, or |c: &Config| c.footprint.as_ref()?.scale_verifiers.clone(),
+			FLAG flag_scale_verifiers: (bool) = false, or |c: &Config| c.footprint.as_ref()?.scale_verifiers,
 			"--scale-verifiers",
 			"Automatically scale amount of verifier threads based on workload. Not guaranteed to be faster.",
 
@@ -881,27 +881,27 @@ usage! {
 			"--pruning=[METHOD]",
 			"Configure pruning of the state/storage trie. METHOD may be one of auto, archive, fast: archive - keep all state trie data. No pruning. fast - maintain journal overlay. Fast but 50MB used. auto - use the method most recently synced or default to fast if none synced.",
 
-			ARG arg_pruning_history: (u64) = 64u64, or |c: &Config| c.footprint.as_ref()?.pruning_history.clone(),
+			ARG arg_pruning_history: (u64) = 64_u64, or |c: &Config| c.footprint.as_ref()?.pruning_history,
 			"--pruning-history=[NUM]",
 			"Set a minimum number of recent states to keep in memory when pruning is active.",
 
-			ARG arg_pruning_memory: (usize) = 32usize, or |c: &Config| c.footprint.as_ref()?.pruning_memory.clone(),
+			ARG arg_pruning_memory: (usize) = 32_usize, or |c: &Config| c.footprint.as_ref()?.pruning_memory,
 			"--pruning-memory=[MB]",
 			"The ideal amount of memory in megabytes to use to store recent states. As many states as possible will be kept within this limit, and at least --pruning-history states will always be kept.",
 
-			ARG arg_cache_size_db: (u32) = 128u32, or |c: &Config| c.footprint.as_ref()?.cache_size_db.clone(),
+			ARG arg_cache_size_db: (u32) = 128_u32, or |c: &Config| c.footprint.as_ref()?.cache_size_db,
 			"--cache-size-db=[MB]",
 			"Override database cache size.",
 
-			ARG arg_cache_size_blocks: (u32) = 8u32, or |c: &Config| c.footprint.as_ref()?.cache_size_blocks.clone(),
+			ARG arg_cache_size_blocks: (u32) = 8_u32, or |c: &Config| c.footprint.as_ref()?.cache_size_blocks,
 			"--cache-size-blocks=[MB]",
 			"Specify the preferred size of the blockchain cache in megabytes.",
 
-			ARG arg_cache_size_queue: (u32) = 40u32, or |c: &Config| c.footprint.as_ref()?.cache_size_queue.clone(),
+			ARG arg_cache_size_queue: (u32) = 40_u32, or |c: &Config| c.footprint.as_ref()?.cache_size_queue,
 			"--cache-size-queue=[MB]",
 			"Specify the maximum size of memory to use for block queue.",
 
-			ARG arg_cache_size_state: (u32) = 25u32, or |c: &Config| c.footprint.as_ref()?.cache_size_state.clone(),
+			ARG arg_cache_size_state: (u32) = 25_u32, or |c: &Config| c.footprint.as_ref()?.cache_size_state,
 			"--cache-size-state=[MB]",
 			"Specify the maximum size of memory to use for the state cache.",
 
@@ -913,11 +913,11 @@ usage! {
 			"--fat-db=[BOOL]",
 			"Build appropriate information to allow enumeration of all accounts and storage keys. Doubles the size of the state database. BOOL may be one of on, off or auto.",
 
-			ARG arg_cache_size: (Option<u32>) = None, or |c: &Config| c.footprint.as_ref()?.cache_size.clone(),
+			ARG arg_cache_size: (Option<u32>) = None, or |c: &Config| c.footprint.as_ref()?.cache_size,
 			"--cache-size=[MB]",
 			"Set total amount of discretionary memory to use for the entire system, overrides other cache and queue options.",
 
-			ARG arg_num_verifiers: (Option<usize>) = None, or |c: &Config| c.footprint.as_ref()?.num_verifiers.clone(),
+			ARG arg_num_verifiers: (Option<usize>) = None, or |c: &Config| c.footprint.as_ref()?.num_verifiers,
 			"--num-verifiers=[INT]",
 			"Amount of verifier threads to use or to begin with, if verifier auto-scaling is enabled.",
 
@@ -927,7 +927,7 @@ usage! {
 			"Skip block seal check.",
 
 		["Snapshot Options"]
-			FLAG flag_no_periodic_snapshot: (bool) = false, or |c: &Config| c.snapshots.as_ref()?.disable_periodic.clone(),
+			FLAG flag_no_periodic_snapshot: (bool) = false, or |c: &Config| c.snapshots.as_ref()?.disable_periodic,
 			"--no-periodic-snapshot",
 			"Disable automated snapshots which usually occur once every 5000 blocks.",
 
@@ -940,7 +940,7 @@ usage! {
 			"--whisper",
 			"Does nothing. Whisper has been moved to https://github.com/paritytech/whisper",
 
-			ARG arg_whisper_pool_size: (Option<usize>) = None, or |c: &Config| c.whisper.as_ref()?.pool_size.clone(),
+			ARG arg_whisper_pool_size: (Option<usize>) = None, or |c: &Config| c.whisper.as_ref()?.pool_size,
 			"--whisper-pool-size=[MB]",
 			"Does nothing. Whisper has been moved to https://github.com/paritytech/whisper",
 
@@ -1028,7 +1028,7 @@ usage! {
 			"--fast-and-loose",
 			"Does nothing; DB WAL is always activated.",
 
-			FLAG flag_no_dapps: (bool) = false, or |c: &Config| c.dapps.as_ref()?._legacy_disable.clone(),
+			FLAG flag_no_dapps: (bool) = false, or |c: &Config| c.dapps.as_ref()?._legacy_disable,
 			"--no-dapps",
 			"Disable the Dapps server (e.g. status page).",
 
@@ -1092,7 +1092,7 @@ usage! {
 
 			// ARG Removed in 1.7.
 
-			ARG arg_dapps_port: (Option<u16>) = None, or |c: &Config| c.dapps.as_ref()?._legacy_port.clone(),
+			ARG arg_dapps_port: (Option<u16>) = None, or |c: &Config| c.dapps.as_ref()?._legacy_port,
 			"--dapps-port=[PORT]",
 			"Does nothing; dapps server has been removed.",
 
@@ -1130,11 +1130,11 @@ usage! {
 			"--ui-port=[PORT]",
 			"Does nothing; UI is now a separate project.",
 
-			ARG arg_tx_queue_ban_count: (Option<u16>) = None, or |c: &Config| c.mining.as_ref()?.tx_queue_ban_count.clone(),
+			ARG arg_tx_queue_ban_count: (Option<u16>) = None, or |c: &Config| c.mining.as_ref()?.tx_queue_ban_count,
 			"--tx-queue-ban-count=[C]",
 			"Not supported.",
 
-			ARG arg_tx_queue_ban_time: (Option<u16>) = None, or |c: &Config| c.mining.as_ref()?.tx_queue_ban_time.clone(),
+			ARG arg_tx_queue_ban_time: (Option<u16>) = None, or |c: &Config| c.mining.as_ref()?.tx_queue_ban_time,
 			"--tx-queue-ban-time=[SEC]",
 			"Not supported.",
 
@@ -1517,7 +1517,7 @@ mod tests {
 		let result = Args::parse(&["parity", "--please-exit-gracefully"]);
 		assert!(
 			match result {
-				Err(ArgsError::Clap(ref clap_error)) if clap_error.kind == ClapErrorKind::UnknownArgument => true,
+				Err(ArgsError::Clap(clap_error)) if clap_error.kind == ClapErrorKind::UnknownArgument => true,
 				_ => false
 			}
 		);
@@ -1623,7 +1623,7 @@ mod tests {
 		// then
 		assert_eq!(args.flag_stratum, false);
 		assert_eq!(args.arg_stratum_interface, "local".to_owned());
-		assert_eq!(args.arg_stratum_port, 8008u16);
+		assert_eq!(args.arg_stratum_port, 8008_u16);
 		assert_eq!(args.arg_stratum_secret, None);
 	}
 
@@ -1638,7 +1638,7 @@ mod tests {
 		// then
 		assert_eq!(args.flag_stratum, false);
 		assert_eq!(args.arg_stratum_interface, "local".to_owned());
-		assert_eq!(args.arg_stratum_port, 8008u16);
+		assert_eq!(args.arg_stratum_port, 8008_u16);
 		assert_eq!(args.arg_stratum_secret, None);
 	}
 
@@ -1653,7 +1653,7 @@ mod tests {
 		// then (with custom configurations)
 		assert_eq!(args.flag_stratum, true);
 		assert_eq!(args.arg_stratum_interface, "some_interface".to_owned());
-		assert_eq!(args.arg_stratum_port, 8007u16);
+		assert_eq!(args.arg_stratum_port, 8007_u16);
 		assert_eq!(args.arg_stratum_secret, Some("Yellow".to_owned()));
 	}
 
@@ -1668,7 +1668,7 @@ mod tests {
 		// then
 		assert_eq!(args.flag_stratum, true);
 		assert_eq!(args.arg_stratum_interface, "local".to_owned());
-		assert_eq!(args.arg_stratum_port, 8008u16);
+		assert_eq!(args.arg_stratum_port, 8008_u16);
 		assert_eq!(args.arg_stratum_secret, None);
 	}
 
@@ -1685,7 +1685,7 @@ mod tests {
 		// then
 		assert_eq!(args.flag_stratum, true);
 		assert_eq!(args.arg_stratum_interface, "local".to_owned());
-		assert_eq!(args.arg_stratum_port, 8008u16);
+		assert_eq!(args.arg_stratum_port, 8008_u16);
 		assert_eq!(args.arg_stratum_secret, None);
 	}
 
@@ -1748,11 +1748,11 @@ mod tests {
 
 			// -- Operating Options
 			arg_mode: "last".into(),
-			arg_mode_timeout: 300u64,
-			arg_mode_alarm: 3600u64,
+			arg_mode_timeout: 300_u64,
+			arg_mode_alarm: 3600_u64,
 			arg_auto_update: "none".into(),
-			arg_auto_update_delay: 200u16,
-			arg_auto_update_check_frequency: 50u16,
+			arg_auto_update_delay: 200_u16,
+			arg_auto_update_check_frequency: 50_u16,
 			arg_release_track: "current".into(),
 			flag_public_node: false,
 			flag_no_download: false,
@@ -1775,8 +1775,8 @@ mod tests {
 			// -- Account Options
 			arg_unlock: Some("0xdeadbeefcafe0000000000000000000000000000".into()),
 			arg_password: vec!["~/.safe/password.file".into()],
-			arg_keys_iterations: 10240u32,
-			arg_accounts_refresh: 5u64,
+			arg_keys_iterations: 10240_u32,
+			arg_accounts_refresh: 5_u64,
 			flag_fast_unlock: false,
 
 			// -- Private Transactions Options
@@ -1799,12 +1799,12 @@ mod tests {
 
 			// -- Networking Options
 			flag_no_warp: false,
-			arg_port: 30303u16,
+			arg_port: 30303_u16,
 			arg_interface: "all".into(),
-			arg_min_peers: Some(25u16),
-			arg_max_peers: Some(50u16),
-			arg_max_pending_peers: 64u16,
-			arg_snapshot_peers: 0u16,
+			arg_min_peers: Some(25_u16),
+			arg_max_peers: Some(50_u16),
+			arg_max_pending_peers: 64_u16,
+			arg_snapshot_peers: 0_u16,
 			arg_allow_ips: "all".into(),
 			arg_nat: "any".into(),
 			arg_network_id: Some(1),
@@ -1821,7 +1821,7 @@ mod tests {
 			flag_no_jsonrpc: false,
 			flag_jsonrpc_no_keep_alive: false,
 			flag_jsonrpc_experimental: false,
-			arg_jsonrpc_port: 8545u16,
+			arg_jsonrpc_port: 8545_u16,
 			arg_jsonrpc_interface: "local".into(),
 			arg_jsonrpc_cors: "null".into(),
 			arg_jsonrpc_apis: "web3,eth,net,parity,traces,rpc,secretstore".into(),
@@ -1829,12 +1829,12 @@ mod tests {
 			arg_jsonrpc_server_threads: Some(4),
 			arg_jsonrpc_threads: None, // DEPRECATED, does nothing
 			arg_jsonrpc_max_payload: None,
-			arg_poll_lifetime: 60u32,
+			arg_poll_lifetime: 60_u32,
 			flag_jsonrpc_allow_missing_blocks: false,
 
 			// WS
 			flag_no_ws: false,
-			arg_ws_port: 8546u16,
+			arg_ws_port: 8546_u16,
 			arg_ws_interface: "local".into(),
 			arg_ws_apis: "web3,eth,net,parity,traces,rpc,secretstore".into(),
 			arg_ws_origins: "none".into(),
@@ -1865,15 +1865,15 @@ mod tests {
 			arg_secretstore_nodes: "".into(),
 			arg_secretstore_server_set_contract: Some("registry".into()),
 			arg_secretstore_interface: "local".into(),
-			arg_secretstore_port: 8083u16,
+			arg_secretstore_port: 8083_u16,
 			arg_secretstore_http_interface: "local".into(),
-			arg_secretstore_http_port: 8082u16,
+			arg_secretstore_http_port: 8082_u16,
 			arg_secretstore_path: "$HOME/.parity/secretstore".into(),
 			arg_secretstore_http_cors: "null".into(),
 
 			// IPFS
 			flag_ipfs_api: false,
-			arg_ipfs_api_port: 5001u16,
+			arg_ipfs_api_port: 5001_u16,
 			arg_ipfs_api_interface: "local".into(),
 			arg_ipfs_api_cors: "null".into(),
 			arg_ipfs_api_hosts: "none".into(),
@@ -1883,16 +1883,16 @@ mod tests {
 			arg_engine_signer: Some("0xdeadbeefcafe0000000000000000000000000001".into()),
 			flag_force_sealing: true,
 			arg_reseal_on_txs: "all".into(),
-			arg_reseal_min_period: 4000u64,
-			arg_reseal_max_period: 60000u64,
+			arg_reseal_min_period: 4000_u64,
+			arg_reseal_max_period: 60000_u64,
 			flag_reseal_on_uncle: false,
-			arg_work_queue_size: 20usize,
+			arg_work_queue_size: 20_usize,
 			arg_tx_gas_limit: Some("10000000".into()),
-			arg_tx_time_limit: Some(100u64),
+			arg_tx_time_limit: Some(100_u64),
 			arg_relay_set: "cheap".into(),
-			arg_min_gas_price: Some(0u64),
+			arg_min_gas_price: Some(0_u64),
 			arg_usd_per_tx: "0.0001".into(),
-			arg_gas_price_percentile: 50usize,
+			arg_gas_price_percentile: 50_usize,
 			arg_usd_per_eth: "auto".into(),
 			arg_price_update_period: "hourly".into(),
 			arg_gas_floor_target: "8000000".into(),
@@ -1900,33 +1900,33 @@ mod tests {
 			arg_extra_data: Some("Parity".into()),
 			flag_tx_queue_no_unfamiliar_locals: false,
 			flag_tx_queue_no_early_reject: false,
-			arg_tx_queue_size: 8192usize,
+			arg_tx_queue_size: 8192_usize,
 			arg_tx_queue_per_sender: None,
-			arg_tx_queue_mem_limit: 4u32,
+			arg_tx_queue_mem_limit: 4_u32,
 			arg_tx_queue_locals: Some("0xdeadbeefcafe0000000000000000000000000000".into()),
 			arg_tx_queue_strategy: "gas_factor".into(),
-			arg_tx_queue_ban_count: Some(1u16),
-			arg_tx_queue_ban_time: Some(180u16),
+			arg_tx_queue_ban_count: Some(1_u16),
+			arg_tx_queue_ban_time: Some(180_u16),
 			flag_remove_solved: false,
 			arg_notify_work: Some("http://localhost:3001".into()),
 			flag_refuse_service_transactions: false,
 			flag_infinite_pending_block: false,
-			arg_max_round_blocks_to_import: 12usize,
+			arg_max_round_blocks_to_import: 12_usize,
 
 			flag_stratum: false,
 			arg_stratum_interface: "local".to_owned(),
-			arg_stratum_port: 8008u16,
+			arg_stratum_port: 8008_u16,
 			arg_stratum_secret: None,
 
 			// -- Footprint Options
 			arg_tracing: "auto".into(),
 			arg_pruning: "auto".into(),
-			arg_pruning_history: 64u64,
-			arg_pruning_memory: 500usize,
-			arg_cache_size_db: 64u32,
-			arg_cache_size_blocks: 8u32,
-			arg_cache_size_queue: 50u32,
-			arg_cache_size_state: 25u32,
+			arg_pruning_history: 64_u64,
+			arg_pruning_memory: 500_usize,
+			arg_cache_size_db: 64_u32,
+			arg_cache_size_blocks: 8_u32,
+			arg_cache_size_queue: 50_u32,
+			arg_cache_size_state: 25_u32,
 			arg_cache_size: Some(128),
 			flag_fast_and_loose: false,
 			arg_db_compaction: "ssd".into(),
@@ -2037,8 +2037,8 @@ mod tests {
 		assert_eq!(config, Config {
 			parity: Some(Operating {
 				mode: Some("dark".into()),
-				mode_timeout: Some(15u64),
-				mode_alarm: Some(10u64),
+				mode_timeout: Some(15_u64),
+				mode_alarm: Some(10_u64),
 				auto_update: None,
 				auto_update_delay: None,
 				auto_update_check_frequency: None,

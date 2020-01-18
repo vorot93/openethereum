@@ -55,8 +55,8 @@ impl<A> Future for ReadMessage<A> where A: AsyncRead {
 	type Error = io::Error;
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-		let (next, result) = match self.state {
-			ReadMessageState::ReadHeader(ref mut future) => {
+		let (next, result) = match &mut self.state {
+			ReadMessageState::ReadHeader(future) => {
 				let (read, header) = try_ready!(future.poll());
 				let header = match header {
 					Ok(header) => header,
@@ -70,7 +70,7 @@ impl<A> Future for ReadMessage<A> where A: AsyncRead {
 				let next = ReadMessageState::ReadPayload(future);
 				(next, Async::NotReady)
 			},
-			ReadMessageState::ReadPayload(ref mut future) => {
+			ReadMessageState::ReadPayload(future) => {
 				let (read, payload) = try_ready!(future.poll());
 				(ReadMessageState::Finished, Async::Ready((read, payload)))
 			},

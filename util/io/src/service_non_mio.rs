@@ -93,7 +93,7 @@ impl<Message> IoContext<Message> where Message: Send + Sync + 'static {
 
 	/// Broadcast a message to other IO clients
 	pub fn message(&self, message: Message) -> Result<(), IoError> {
-		if let Some(ref channel) = *self.shared.channel.lock() {
+		if let Some(channel) = *self.shared.channel.lock() {
 			channel.push(WorkTask::UserMessage(Arc::new(message)));
 		}
 		for thread in self.shared.threads.read().iter() {
@@ -133,8 +133,8 @@ impl<Message> IoChannel<Message> where Message: Send + Sync + 'static {
 	/// Send a message through the channel
 	pub fn send(&self, message: Message) -> Result<(), IoError> {
 		if let Some(shared) = self.shared.upgrade() {
-			match *shared.channel.lock() {
-				Some(ref channel) => channel.push(WorkTask::UserMessage(Arc::new(message))),
+			match shared.channel.lock() {
+				Some(channel) => channel.push(WorkTask::UserMessage(Arc::new(message))),
 				None => self.send_sync(message)?
 			};
 
@@ -164,7 +164,7 @@ impl<Message> IoChannel<Message> where Message: Send + Sync + 'static {
 	// Send low level io message
 	fn send_raw(&self, message: WorkTask<Message>) {
 		if let Some(shared) = self.shared.upgrade() {
-			if let Some(ref channel) = *shared.channel.lock() {
+			if let Some(channel) = *shared.channel.lock() {
 				channel.push(message);
 			}
 
@@ -216,10 +216,10 @@ enum WorkTask<Message> where Message: Send + Sized {
 
 impl<Message> Clone for WorkTask<Message> where Message: Send + Sized {
 	fn clone(&self) -> WorkTask<Message> {
-		match *self {
+		match self {
 			WorkTask::Shutdown => WorkTask::Shutdown,
 			WorkTask::TimerTrigger { handler_id, token } => WorkTask::TimerTrigger { handler_id, token },
-			WorkTask::UserMessage(ref msg) => WorkTask::UserMessage(msg.clone()),
+			WorkTask::UserMessage(msg) => WorkTask::UserMessage(msg.clone()),
 		}
 	}
 }
@@ -286,7 +286,7 @@ impl<Message> IoService<Message> where Message: Send + Sync + 'static {
 
 	/// Send a message over the network. Normaly `HostIo::send` should be used. This can be used from non-io threads.
 	pub fn send_message(&self, message: Message) -> Result<(), IoError> {
-		if let Some(ref channel) = *self.shared.channel.lock() {
+		if let Some(channel) = *self.shared.channel.lock() {
 			channel.push(WorkTask::UserMessage(Arc::new(message)));
 		}
 		for thread in self.shared.threads.read().iter() {

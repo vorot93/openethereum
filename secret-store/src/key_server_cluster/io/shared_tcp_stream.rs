@@ -28,7 +28,7 @@ pub struct SharedTcpStream {
 
 impl SharedTcpStream {
 	pub fn new(a: Arc<TcpStream>) -> Self {
-		SharedTcpStream {
+		Self {
 			io: a,
 		}
 	}
@@ -36,7 +36,7 @@ impl SharedTcpStream {
 
 impl From<TcpStream> for SharedTcpStream {
 	fn from(a: TcpStream) -> Self {
-		SharedTcpStream::new(Arc::new(a))
+		Self::new(Arc::new(a))
 	}
 }
 
@@ -66,6 +66,6 @@ impl Write for SharedTcpStream {
 
 impl Clone for SharedTcpStream {
 	fn clone(&self) -> Self {
-		SharedTcpStream::new(self.io.clone())
+		Self::new(self.io.clone())
 	}
 }

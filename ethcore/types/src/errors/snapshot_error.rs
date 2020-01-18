@@ -87,29 +87,29 @@ impl error::Error for SnapshotError {
 impl fmt::Display for SnapshotError {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		use self::SnapshotError::*;
-		match *self {
-			InvalidStartingBlock(ref id) => write!(f, "Invalid starting block: {:?}", id),
-			BlockNotFound(ref hash) => write!(f, "Block not found in chain: {}", hash),
+		match self {
+			InvalidStartingBlock(id) => write!(f, "Invalid starting block: {:?}", id),
+			BlockNotFound(hash) => write!(f, "Block not found in chain: {}", hash),
 			IncompleteChain => write!(f, "Incomplete blockchain."),
-			WrongStateRoot(ref expected, ref found) => write!(f, "Final block has wrong state root. Expected {:?}, got {:?}", expected, found),
-			WrongBlockHash(ref num, ref expected, ref found) =>
+			WrongStateRoot(expected, found) => write!(f, "Final block has wrong state root. Expected {:?}, got {:?}", expected, found),
+			WrongBlockHash(num, expected, found) =>
 				write!(f, "Block {} had wrong hash. expected {:?}, got {:?}", num, expected, found),
-			TooManyBlocks(ref expected, ref found) => write!(f, "Snapshot contained too many blocks. Expected {}, got {}", expected, found),
+			TooManyBlocks(expected, found) => write!(f, "Snapshot contained too many blocks. Expected {}, got {}", expected, found),
 			OldBlockPrunedDB => write!(f, "Attempted to create a snapshot at an old block while using \
 				a pruned database. Please re-run with the --pruning archive flag."),
-			MissingCode(ref missing) => write!(f, "Incomplete snapshot: {} contract codes not found.", missing.len()),
+			MissingCode(missing) => write!(f, "Incomplete snapshot: {} contract codes not found.", missing.len()),
 			UnrecognizedCodeState(state) => write!(f, "Unrecognized code encoding ({})", state),
 			RestorationAborted => write!(f, "Snapshot restoration aborted."),
-			Io(ref err) => err.fmt(f),
-			Decoder(ref err) => err.fmt(f),
-			Trie(ref err) => err.fmt(f),
-			VersionNotSupported(ref ver) => write!(f, "Snapshot version {} is not supprted.", ver),
+			Io(err) => err.fmt(f),
+			Decoder(err) => err.fmt(f),
+			Trie(err) => err.fmt(f),
+			VersionNotSupported(ver) => write!(f, "Snapshot version {} is not supprted.", ver),
 			ChunkTooSmall => write!(f, "Chunk size is too small."),
 			ChunkTooLarge => write!(f, "Chunk size is too large."),
 			SnapshotsUnsupported => write!(f, "Snapshots unsupported by consensus engine."),
 			SnapshotAborted => write!(f, "Snapshot was aborted."),
 			BadEpochProof(i) => write!(f, "Bad epoch proof for transition to epoch {}", i),
-			WrongChunkFormat(ref msg) => write!(f, "Wrong chunk format: {}", msg),
+			WrongChunkFormat(msg) => write!(f, "Wrong chunk format: {}", msg),
 			UnlinkedAncientBlockChain(parent_hash) => write!(f, "Unlinked ancient blocks chain at parent_hash={:#x}", parent_hash),
 		}
 	}
@@ -117,24 +117,24 @@ impl fmt::Display for SnapshotError {
 
 impl From<::std::io::Error> for SnapshotError {
 	fn from(err: ::std::io::Error) -> Self {
-		SnapshotError::Io(err)
+		Self::Io(err)
 	}
 }
 
 impl From<TrieError> for SnapshotError {
 	fn from(err: TrieError) -> Self {
-		SnapshotError::Trie(err)
+		Self::Trie(err)
 	}
 }
 
 impl From<DecoderError> for SnapshotError {
 	fn from(err: DecoderError) -> Self {
-		SnapshotError::Decoder(err)
+		Self::Decoder(err)
 	}
 }
 
 impl<E> From<Box<E>> for SnapshotError where SnapshotError: From<E> {
 	fn from(err: Box<E>) -> Self {
-		SnapshotError::from(*err)
+		Self::from(*err)
 	}
 }

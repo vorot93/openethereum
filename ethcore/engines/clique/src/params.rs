@@ -16,7 +16,7 @@
 
 //! Clique specific parameters.
 
-use ethjson;
+
 
 /// `Clique` params.
 pub struct CliqueParams {
@@ -33,7 +33,7 @@ impl From<ethjson::spec::CliqueParams> for CliqueParams {
 
 		assert!(epoch > 0);
 
-		CliqueParams {
+		Self {
 			period,
 			epoch,
 		}

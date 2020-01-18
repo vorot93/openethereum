@@ -87,7 +87,7 @@ impl<T> IoContext for T where T: ?Sized + NetworkContext {
 
 /// Basic context for the protocol.
 pub trait BasicContext {
-	/// Returns the relevant's peer persistent Id (aka NodeId).
+	/// Returns the relevant's peer persistent Id (aka `NodeId`).
 	fn persistent_peer_id(&self, peer: PeerId) -> Option<NodeId>;
 
 	/// Make a request from a peer.
@@ -99,7 +99,7 @@ pub trait BasicContext {
 	fn request_from(&self, peer: PeerId, request: Requests) -> Result<ReqId, Error>;
 
 	/// Make an announcement of new capabilities to the rest of the peers.
-	// TODO: maybe just put this on a timer in LightProtocol?
+	// TODO: maybe just put this on a timer in `LightProtocol`?
 	fn make_announcement(&self, announcement: Announcement);
 
 	/// Disconnect a peer.

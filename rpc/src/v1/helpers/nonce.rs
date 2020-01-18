@@ -39,8 +39,8 @@ impl Reservations {
 
 	/// Create new nonces manager with given executor.
 	pub fn new(executor: Executor) -> Self {
-		Reservations {
-			nonces: Default::default(),
+		Self {
+			nonces: HashMap::new(),
 			executor,
 		}
 	}
@@ -73,12 +73,12 @@ pub struct SenderReservations {
 impl SenderReservations {
 	/// Create new nonces manager with given executor.
 	pub fn new(executor: Executor) -> Self {
-		SenderReservations {
+		Self {
 			previous: None,
 			previous_ready: Arc::new(AtomicBool::new(true)),
 			executor,
-			prospective_value: Default::default(),
-			dropped: Default::default(),
+			prospective_value: U256::zero(),
+			dropped: Arc::new(AtomicUsize::new(0)),
 		}
 	}
 
@@ -147,7 +147,7 @@ impl Reserved {
 	/// Returns a prospective value of the nonce.
 	/// NOTE: This might be different than the one we resolve to.
 	/// Make sure to check if both nonces match or use the latter one.
-	pub fn prospective_value(&self) -> &U256 {
+	pub const fn prospective_value(&self) -> &U256 {
 		&self.prospective_value
 	}
 }
@@ -182,7 +182,7 @@ impl Drop for Reserved {
 			let next_sent = self.next_sent.clone();
 			self.dropped.fetch_add(1, atomic::Ordering::SeqCst);
 			// If Reserved is dropped just pipe previous and next together.
-			let previous = mem::replace(&mut self.previous, Either::B(future::ok(U256::default())));
+			let previous = mem::replace(&mut self.previous, Either::B(future::ok(U256::zero())));
 			self.executor.spawn(
 				previous
 				.map(move |nonce| {
@@ -213,12 +213,12 @@ impl Ready {
 	const RECV_PROOF: &'static str = "Receiver never dropped.";
 
 	/// Returns a value of the nonce.
-	pub fn value(&self) -> &U256 {
+	pub const fn value(&self) -> &U256 {
 		&self.value
 	}
 
 	/// Returns true if current value matches the prospective nonce.
-	pub fn matches_prospective(&self) -> bool {
+	pub const fn matches_prospective(&self) -> bool {
 		self.matches_prospective
 	}
 

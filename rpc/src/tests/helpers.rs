@@ -31,13 +31,14 @@ pub struct Server<T> {
 }
 
 impl<T> Server<T> {
-	pub fn new<F>(f: F) -> Server<T> where
+	pub fn new<F>(f: F) -> Self
+	where
 		F: FnOnce(TaskExecutor) -> T,
 	{
 		let event_loop = Runtime::with_thread_count(1);
 		let remote = event_loop.raw_executor();
 
-		Server {
+		Self {
 			server: f(remote),
 			event_loop,
 		}
@@ -65,7 +66,7 @@ impl Default for GuardedAuthCodes {
 		let tempdir = TempDir::new("").unwrap();
 		let path = tempdir.path().join("file");
 
-		GuardedAuthCodes {
+		Self {
 			authcodes: AuthCodes::from_file(&path).unwrap(),
 			_tempdir: tempdir,
 			path,

@@ -53,13 +53,13 @@ pub trait EngineInfo {
 
 /// Provides `reopen_block` method
 pub trait ReopenBlock {
-	/// Reopens an OpenBlock and updates uncles.
+	/// Reopens an `OpenBlock` and updates uncles.
 	fn reopen_block(&self, block: ClosedBlock) -> OpenBlock;
 }
 
 /// Provides `prepare_open_block` method
 pub trait PrepareOpenBlock {
-	/// Returns OpenBlock prepared for closing.
+	/// Returns `OpenBlock` prepared for closing.
 	fn prepare_open_block(&self,
 		author: Address,
 		gas_range_target: (U256, U256),

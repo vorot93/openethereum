@@ -61,7 +61,7 @@ impl MonoTime {
 
 impl Default for MonoTime {
 	fn default() -> Self {
-		MonoTime::new(SystemTime::now())
+		Self::new(SystemTime::now())
 	}
 }
 
@@ -140,7 +140,7 @@ pub struct FileLogsSerializer {
 
 impl FileLogsSerializer {
 	pub fn with_path<P: Into<PathBuf>>(logs_dir: P) -> Self {
-		FileLogsSerializer {
+		Self {
 			logs_dir: logs_dir.into(),
 		}
 	}
@@ -162,7 +162,7 @@ impl LogsSerializer for FileLogsSerializer {
 			Ok(logs) => Ok(logs),
 			Err(err) => {
 				error!(target: "privatetx", "Cannot deserialize logs from file: {}", err);
-				return Err(format!("Cannot deserialize logs from file: {:?}", err).into());
+				Err(format!("Cannot deserialize logs from file: {:?}", err).into())
 			}
 		}
 	}
@@ -193,7 +193,7 @@ pub struct Logging {
 impl Logging {
 	/// Creates the logging object
 	pub fn new(logs_serializer: Arc<dyn LogsSerializer>) -> Self {
-		let mut logging = Logging {
+		let mut logging = Self {
 			logs: RwLock::new(HashMap::new()),
 			logs_serializer,
 			mono_time: MonoTime::default(),
@@ -208,13 +208,13 @@ impl Logging {
 
 	/// Retrieves log for the corresponding tx hash
 	pub fn tx_log(&self, tx_hash: &H256) -> Option<TransactionLog> {
-		self.logs.read().get(&tx_hash).cloned()
+		self.logs.read().get(tx_hash).cloned()
 	}
 
 	/// Logs the creation of the private transaction
 	pub fn private_tx_created(&self, tx_hash: &H256, validators: &[Address]) {
 		let mut logs = self.logs.write();
-		if let Some(transaction_log) = logs.get_mut(&tx_hash) {
+		if let Some(transaction_log) = logs.get_mut(tx_hash) {
 			if transaction_log.status == PrivateTxStatus::PrivateStateSync {
 				// Transaction was already created before, its private state was being retrieved
 				transaction_log.status = PrivateTxStatus::Created;
@@ -253,7 +253,7 @@ impl Logging {
 	/// Private state retrieval started
 	pub fn private_state_request(&self, tx_hash: &H256) {
 		let mut logs = self.logs.write();
-		if let Some(transaction_log) = logs.get_mut(&tx_hash) {
+		if let Some(transaction_log) = logs.get_mut(tx_hash) {
 			transaction_log.status = PrivateTxStatus::PrivateStateSync;
 		}
 	}
@@ -261,7 +261,7 @@ impl Logging {
 	/// Private state retrieval failed
 	pub fn private_state_sync_failed(&self, tx_hash: &H256) {
 		let mut logs = self.logs.write();
-		if let Some(transaction_log) = logs.get_mut(&tx_hash) {
+		if let Some(transaction_log) = logs.get_mut(tx_hash) {
 			transaction_log.status = PrivateTxStatus::PrivateStateSyncFailed;
 		}
 	}
@@ -269,8 +269,8 @@ impl Logging {
 	/// Logs the validation of the private transaction by one of its validators
 	pub fn signature_added(&self, tx_hash: &H256, validator: &Address) {
 		let mut logs = self.logs.write();
-		if let Some(transaction_log) = logs.get_mut(&tx_hash) {
-			if let Some(ref mut validator_log) = transaction_log.validators.iter_mut().find(|log| log.account == *validator) {
+		if let Some(transaction_log) = logs.get_mut(tx_hash) {
+			if let Some(mut validator_log) = transaction_log.validators.iter_mut().find(|log| log.account == *validator) {
 				transaction_log.status = PrivateTxStatus::Validating;
 				validator_log.validation_timestamp = Some(self.mono_time.to_system_time());
 			}
@@ -280,7 +280,7 @@ impl Logging {
 	/// Logs the final deployment of the resulting public transaction
 	pub fn tx_deployed(&self, tx_hash: &H256, public_tx_hash: &H256) {
 		let mut logs = self.logs.write();
-		if let Some(log) = logs.get_mut(&tx_hash) {
+		if let Some(log) = logs.get_mut(tx_hash) {
 			log.status = PrivateTxStatus::Deployed;
 			log.deployment_timestamp = Some(self.mono_time.to_system_time());
 			log.public_tx_hash = Some(*public_tx_hash);
@@ -340,7 +340,7 @@ mod tests {
 
 	impl StringLogSerializer {
 		fn new(source: String) -> Self {
-			StringLogSerializer {
+			Self {
 				string_log: RwLock::new(source),
 			}
 		}
@@ -391,7 +391,7 @@ mod tests {
 		let logger = Logging::new(Arc::new(StringLogSerializer::new("".into())));
 		let private_tx = Transaction::default();
 		let hash = private_tx.hash(None);
-		logger.private_tx_created(&hash, &vec![Address::from_str("82a978b3f5962a5b0957d9ee9eef472ee55b42f1").unwrap()]);
+		logger.private_tx_created(&hash, &[Address::from_str("82a978b3f5962a5b0957d9ee9eef472ee55b42f1").unwrap()]);
 		logger.signature_added(&hash, &Address::from_str("82a978b3f5962a5b0957d9ee9eef472ee55b42f1").unwrap());
 		logger.tx_deployed(&hash, &hash);
 		let tx_log = logger.tx_log(&hash).unwrap();
@@ -416,7 +416,7 @@ mod tests {
 		let serializer = Arc::new(StringLogSerializer::new(serde_json::to_string(&vec![initial_log.clone()]).unwrap()));
 		let logger = Logging::new(serializer.clone());
 		let hash = H256::from_str("63c715e88f7291e66069302f6fcbb4f28a19ef5d7cbd1832d0c01e221c0061c6").unwrap();
-		logger.private_tx_created(&hash, &vec![Address::from_str("7ffbe3512782069be388f41be4d8eb350672d3a5").unwrap()]);
+		logger.private_tx_created(&hash, &[Address::from_str("7ffbe3512782069be388f41be4d8eb350672d3a5").unwrap()]);
 		logger.signature_added(&hash, &Address::from_str("7ffbe3512782069be388f41be4d8eb350672d3a5").unwrap());
 		logger.tx_deployed(&hash, &H256::from_str("de2209a8635b9cab9eceb67928b217c70ab53f6498e5144492ec01e6f43547d7").unwrap());
 		drop(logger);

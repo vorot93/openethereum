@@ -39,7 +39,7 @@ pub struct Modexp {
 	pub divisor: u64,
 }
 
-/// Pricing for constant alt_bn128 operations (ECADD and ECMUL)
+/// Pricing for constant `alt_bn128` operations (ECADD and ECMUL)
 #[derive(Debug, PartialEq, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct AltBn128ConstOperations {
@@ -47,7 +47,7 @@ pub struct AltBn128ConstOperations {
 	pub price: u64,
 }
 
-/// Pricing for alt_bn128_pairing.
+/// Pricing for `alt_bn128_pairing`.
 #[derive(Debug, PartialEq, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct AltBn128Pairing {
@@ -196,7 +196,7 @@ mod tests {
 		let builtin: Builtin = serde_json::from_str::<BuiltinCompat>(s).unwrap().into();
 		assert_eq!(builtin.name, "blake2_f");
 		assert_eq!(builtin.pricing, map![
-			0xffffff => PricingAt {
+			0x00ff_ffff => PricingAt {
 				info: None,
 				price: Pricing::Blake2F { gas_per_round: 123 }
 			}
@@ -216,7 +216,7 @@ mod tests {
 		let builtin: Builtin = serde_json::from_str::<BuiltinCompat>(s).unwrap().into();
 		assert_eq!(builtin.name, "alt_bn128_mul");
 		assert_eq!(builtin.pricing, map![
-			100500 => PricingAt {
+			100_500 => PricingAt {
 				info: None,
 				price: Pricing::AltBn128ConstOperations(AltBn128ConstOperations { 
 					price: 123,

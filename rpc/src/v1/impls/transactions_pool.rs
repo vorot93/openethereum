@@ -16,7 +16,7 @@ use futures::{Stream, sync::mpsc};
 
 type Client = Sink<(H256, TxStatus)>;
 
-/// Transactions pool PubSub implementation.
+/// Transactions pool `PubSub` implementation.
 pub struct TransactionsPoolClient {
 	handler: Arc<TransactionsNotificationHandler>,
 	transactions_pool_subscribers: Arc<RwLock<Subscribers<Client>>>,
@@ -44,7 +44,7 @@ impl TransactionsPoolClient {
 			.map_err(|e| warn!("Key server listener error: {:?}", e))
 		);
 
-		TransactionsPoolClient {
+		Self {
 			handler,
 			transactions_pool_subscribers,
 		}
@@ -56,7 +56,7 @@ impl TransactionsPoolClient {
 	}
 }
 
-/// Transactions pool PubSub Notification handler.
+/// Transactions pool `PubSub` Notification handler.
 pub struct TransactionsNotificationHandler {
 	executor: Executor,
 	transactions_pool_subscribers: Arc<RwLock<Subscribers<Client>>>,
@@ -64,7 +64,7 @@ pub struct TransactionsNotificationHandler {
 
 impl TransactionsNotificationHandler {
 	fn new(executor: Executor, transactions_pool_subscribers: Arc<RwLock<Subscribers<Client>>>) -> Self {
-		TransactionsNotificationHandler {
+		Self {
 			executor,
 			transactions_pool_subscribers,
 		}
@@ -81,7 +81,7 @@ impl TransactionsNotificationHandler {
 	pub fn notify_transaction(&self, tx_statuses: Arc<Vec<(H256, TxStatus)>>) {
 		for subscriber in self.transactions_pool_subscribers.read().values() {
 			for tx_status in tx_statuses.to_vec() {
-				Self::notify(&self.executor, subscriber, tx_status.clone());
+				Self::notify(&self.executor, subscriber, tx_status);
 			}
 		}
 	}

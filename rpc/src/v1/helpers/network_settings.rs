@@ -37,7 +37,7 @@ pub struct NetworkSettings {
 
 impl Default for NetworkSettings {
 	fn default() -> Self {
-		NetworkSettings {
+		Self {
 			name: "".into(),
 			chain: "foundation".into(),
 			is_dev_chain: false,

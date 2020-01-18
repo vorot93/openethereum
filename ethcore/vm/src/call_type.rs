@@ -35,12 +35,12 @@ pub enum CallType {
 
 impl Encodable for CallType {
 	fn rlp_append(&self, s: &mut RlpStream) {
-		let v = match *self {
-			CallType::None => 0u32,
-			CallType::Call => 1,
-			CallType::CallCode => 2,
-			CallType::DelegateCall => 3,
-			CallType::StaticCall => 4,
+		let v = match self {
+			Self::None => 0_u32,
+			Self::Call => 1,
+			Self::CallCode => 2,
+			Self::DelegateCall => 3,
+			Self::StaticCall => 4,
 		};
 		Encodable::rlp_append(&v, s);
 	}
@@ -49,11 +49,11 @@ impl Encodable for CallType {
 impl Decodable for CallType {
 	fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
 		rlp.as_val().and_then(|v| Ok(match v {
-			0u32 => CallType::None,
-			1 => CallType::Call,
-			2 => CallType::CallCode,
-			3 => CallType::DelegateCall,
-			4 => CallType::StaticCall,
+			0_u32 => Self::None,
+			1 => Self::Call,
+			2 => Self::CallCode,
+			3 => Self::DelegateCall,
+			4 => Self::StaticCall,
 			_ => return Err(DecoderError::Custom("Invalid value of CallType item")),
 		}))
 	}

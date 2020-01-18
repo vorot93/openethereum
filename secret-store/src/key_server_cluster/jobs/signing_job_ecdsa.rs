@@ -60,11 +60,11 @@ pub struct EcdsaPartialSigningResponse {
 
 impl EcdsaSigningJob {
 	pub fn new_on_slave(key_share: DocumentKeyShare, key_version: H256, nonce_public: Public, inv_nonce_share: Secret) -> Result<Self, Error> {
-		Ok(EcdsaSigningJob {
-			key_share: key_share,
-			key_version: key_version,
-			nonce_public: nonce_public,
-			inv_nonce_share: inv_nonce_share,
+		Ok(Self {
+			key_share,
+			key_version,
+			nonce_public,
+			inv_nonce_share,
 			request_id: None,
 			inversed_nonce_coeff: None,
 			message_hash: None,
@@ -72,11 +72,11 @@ impl EcdsaSigningJob {
 	}
 
 	pub fn new_on_master(key_share: DocumentKeyShare, key_version: H256, nonce_public: Public, inv_nonce_share: Secret, inversed_nonce_coeff: Secret, message_hash: H256) -> Result<Self, Error> {
-		Ok(EcdsaSigningJob {
-			key_share: key_share,
-			key_version: key_version,
-			nonce_public: nonce_public,
-			inv_nonce_share: inv_nonce_share,
+		Ok(Self {
+			key_share,
+			key_version,
+			nonce_public,
+			inv_nonce_share,
 			request_id: Some(math::generate_random_scalar()?),
 			inversed_nonce_coeff: Some(inversed_nonce_coeff),
 			message_hash: Some(message_hash),
@@ -96,13 +96,13 @@ impl JobExecutor for EcdsaSigningJob {
 			.expect("prepare_partial_request is only called on master nodes; request_id is filed in constructor on master nodes; qed");
 		let inversed_nonce_coeff = self.inversed_nonce_coeff.as_ref()
 			.expect("prepare_partial_request is only called on master nodes; inversed_nonce_coeff is filed in constructor on master nodes; qed");
-		let message_hash = self.message_hash.as_ref()
+		let message_hash = *self.message_hash.as_ref()
 			.expect("compute_response is only called on master nodes; message_hash is filed in constructor on master nodes; qed");
 
 		Ok(EcdsaPartialSigningRequest {
 			id: request_id.clone(),
 			inversed_nonce_coeff: inversed_nonce_coeff.clone(),
-			message_hash: message_hash.clone(),
+			message_hash,
 		})
 	}
 
@@ -120,7 +120,7 @@ impl JobExecutor for EcdsaSigningJob {
 
 		Ok(JobPartialRequestAction::Respond(EcdsaPartialSigningResponse {
 			request_id: partial_request.id,
-			partial_signature_s: partial_signature_s,
+			partial_signature_s,
 		}))
 	}
 

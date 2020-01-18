@@ -56,7 +56,7 @@ pub mod ids {
 }
 
 /// Signatures of all functions runtime supports. The actual dispatch happens at
-/// impl runtime::Runtime methods.
+/// impl `runtime::Runtime` methods.
 pub mod signatures {
 	use wasmi::{self, ValueType};
 	use wasmi::ValueType::*;
@@ -218,9 +218,9 @@ pub struct ImportResolver {
 
 impl ImportResolver {
 	/// New import resolver with specifed maximum amount of inital memory (in wasm pages = 64kb)
-	pub fn with_limit(max_memory: u32, schedule: &WasmCosts) -> ImportResolver {
-		ImportResolver {
-			max_memory: max_memory,
+	pub const fn with_limit(max_memory: u32, schedule: &WasmCosts) -> Self {
+		Self {
+			max_memory,
 			memory: RefCell::new(None),
 
 			have_create2: schedule.have_create2,

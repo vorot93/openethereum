@@ -20,6 +20,7 @@ use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrder};
 use std::sync::Arc;
 use std::collections::{HashMap, BTreeMap};
+use std::convert::TryInto;
 use blockchain::BlockProvider;
 use std::mem;
 
@@ -150,7 +151,7 @@ pub enum EachBlockWith {
 
 impl Default for TestBlockChainClient {
 	fn default() -> Self {
-		TestBlockChainClient::new()
+		Self::new()
 	}
 }
 
@@ -163,12 +164,12 @@ impl TestBlockChainClient {
 	/// Creates new test client with specified extra data for each block
 	pub fn new_with_extra_data(extra_data: Bytes) -> Self {
 		let spec = spec::new_test();
-		TestBlockChainClient::new_with_spec_and_extra(spec, extra_data)
+		Self::new_with_spec_and_extra(spec, extra_data)
 	}
 
 	/// Create test client with custom spec.
 	pub fn new_with_spec(spec: Spec) -> Self {
-		TestBlockChainClient::new_with_spec_and_extra(spec, Bytes::new())
+		Self::new_with_spec_and_extra(spec, Bytes::new())
 	}
 
 	/// Create test client with custom spec and extra data.
@@ -176,13 +177,13 @@ impl TestBlockChainClient {
 		let genesis_block = spec.genesis_block();
 		let genesis_hash = spec.genesis_header().hash();
 
-		let mut client = TestBlockChainClient {
+		let mut client = Self {
 			blocks: RwLock::new(HashMap::new()),
 			numbers: RwLock::new(HashMap::new()),
 			genesis_hash: H256::zero(),
-			extra_data: extra_data,
+			extra_data,
 			last_hash: RwLock::new(H256::zero()),
-			difficulty: RwLock::new(spec.genesis_header().difficulty().clone()),
+			difficulty: RwLock::new(*spec.genesis_header().difficulty()),
 			balances: RwLock::new(HashMap::new()),
 			nonces: RwLock::new(HashMap::new()),
 			storage: RwLock::new(HashMap::new()),
@@ -192,7 +193,7 @@ impl TestBlockChainClient {
 			logs: RwLock::new(Vec::new()),
 			queue_size: AtomicUsize::new(0),
 			miner: Arc::new(Miner::new_for_tests(&spec, None)),
-			spec: spec,
+			spec,
 			latest_block_timestamp: RwLock::new(10_000_000),
 			ancient_block: RwLock::new(None),
 			first_block: RwLock::new(None),
@@ -305,8 +306,8 @@ impl TestBlockChainClient {
 						value: U256::from(100),
 						data: "3331600055".from_hex().unwrap(),
 						gas: U256::from(100_000),
-						gas_price: U256::from(200_000_000_000u64),
-						nonce: nonce
+						gas_price: U256::from(200_000_000_000_u64),
+						nonce
 					};
 					let signed_tx = tx.sign(keypair.secret(), None);
 					txs.append(&signed_tx);
@@ -350,7 +351,7 @@ impl TestBlockChainClient {
 	pub fn block_hash_delta_minus(&mut self, delta: usize) -> H256 {
 		let blocks_read = self.numbers.read();
 		let index = blocks_read.len() - delta;
-		blocks_read[&index].clone()
+		blocks_read[&index]
 	}
 
 	fn block_hash(&self, id: BlockId) -> Option<H256> {
@@ -370,11 +371,11 @@ impl TestBlockChainClient {
 			value: U256::from(100),
 			data: "3331600055".from_hex().unwrap(),
 			gas: U256::from(100_000),
-			gas_price: gas_price,
+			gas_price,
 			nonce: U256::zero()
 		};
 		let signed_tx = tx.sign(keypair.secret(), None);
-		self.set_balance(signed_tx.sender(), 10_000_000_000_000_000_000u64.into());
+		self.set_balance(signed_tx.sender(), 10_000_000_000_000_000_000_u64.into());
 		let hash = signed_tx.hash();
 		let res = self.miner.import_external_transactions(self, vec![signed_tx.into()]);
 		let res = res.into_iter().next().unwrap();
@@ -384,7 +385,7 @@ impl TestBlockChainClient {
 
 	/// Inserts a transaction to miners transactions queue.
 	pub fn insert_transaction_to_queue(&self) -> H256 {
-		self.insert_transaction_with_gas_price_to_queue(U256::from(20_000_000_000u64))
+		self.insert_transaction_with_gas_price_to_queue(U256::from(20_000_000_000_u64))
 	}
 
 	/// Set reported history size.
@@ -414,12 +415,12 @@ impl PrepareOpenBlock for TestBlockChainClient {
 	fn prepare_open_block(&self, author: Address, gas_range_target: (U256, U256), extra_data: Bytes) -> Result<OpenBlock, Error> {
 		let engine = &*self.spec.engine;
 		let genesis_header = self.spec.genesis_header();
-		let db = self.spec.ensure_db_good(get_temp_state_db(), &Default::default()).unwrap();
+		let db = self.spec.ensure_db_good(get_temp_state_db(), &trie_vm_factories::Factories::default()).unwrap();
 
 		let last_hashes = vec![genesis_header.hash()];
 		let mut open_block = OpenBlock::new(
 			engine,
-			Default::default(),
+			trie_vm_factories::Factories::default(),
 			false,
 			db,
 			&genesis_header,
@@ -492,8 +493,8 @@ impl ChainInfo for TestBlockChainClient {
 		BlockChainInfo {
 			total_difficulty: *self.difficulty.read(),
 			pending_total_difficulty: *self.difficulty.read(),
-			genesis_hash: self.genesis_hash.clone(),
-			best_block_hash: self.last_hash.read().clone(),
+			genesis_hash: self.genesis_hash,
+			best_block_hash: *self.last_hash.read(),
 			best_block_number: number,
 			best_block_timestamp: number,
 			first_block_hash: self.first_block.read().as_ref().map(|x| x.0),
@@ -539,7 +540,7 @@ impl CallContract for TestBlockChainClient {
 		_address: Address,
 		_data: Bytes
 	) -> Result<Bytes, String> {
-		Ok(vec![])
+		Ok(Vec::new())
 	}
 }
 
@@ -566,34 +567,31 @@ impl ImportBlock for TestBlockChainClient {
 			panic!("Unexpected block number. Expected {}, got {}", self.blocks.read().len(), number);
 		}
 		if number > 0 {
-			match self.blocks.read().get(header.parent_hash()) {
-				Some(parent) => {
-					let parent = view!(BlockView, parent).header();
-					if parent.number() != (header.number() - 1) {
-						panic!("Unexpected block parent");
-					}
-				},
-				None => {
-					panic!("Unknown block parent {:?} for block {}", header.parent_hash(), number);
+			if let Some(parent) = self.blocks.read().get(header.parent_hash()) {
+				let parent = view!(BlockView, parent).header();
+				if parent.number() != (header.number() - 1) {
+					panic!("Unexpected block parent");
 				}
+			} else {
+				panic!("Unknown block parent {:?} for block {}", header.parent_hash(), number);
 			}
 		}
 		let len = self.numbers.read().len();
 		if number == len {
 			{
 				let mut difficulty = self.difficulty.write();
-				*difficulty = *difficulty + header.difficulty().clone();
+				*difficulty += *header.difficulty();
 			}
-			mem::replace(&mut *self.last_hash.write(), h.clone());
+			mem::replace(&mut *self.last_hash.write(), h);
 			self.blocks.write().insert(h.clone(), unverified.bytes);
 			self.numbers.write().insert(number, h.clone());
-			let mut parent_hash = header.parent_hash().clone();
+			let mut parent_hash = *header.parent_hash();
 			if number > 0 {
 				let mut n = number - 1;
 				while n > 0 && self.numbers.read()[&n] != parent_hash {
-					*self.numbers.write().get_mut(&n).unwrap() = parent_hash.clone();
+					*self.numbers.write().get_mut(&n).unwrap() = parent_hash;
 					n -= 1;
-					parent_hash = view!(BlockView, &self.blocks.read()[&parent_hash]).header().parent_hash().clone();
+					parent_hash = *view!(BlockView, &self.blocks.read()[&parent_hash]).header().parent_hash();
 				}
 			}
 		}
@@ -618,8 +616,8 @@ impl Call for TestBlockChainClient {
 
 	fn call_many(&self, txs: &[(SignedTransaction, CallAnalytics)], state: &mut Self::State, header: &Header) -> Result<Vec<Executed>, CallError> {
 		let mut res = Vec::with_capacity(txs.len());
-		for &(ref tx, analytics) in txs {
-			res.push(self.call(tx, analytics, state, header)?);
+		for (tx, analytics) in txs {
+			res.push(self.call(tx, *analytics, state, header)?);
 		}
 		Ok(res)
 	}
@@ -629,7 +627,7 @@ impl Call for TestBlockChainClient {
 	}
 }
 
-/// NewType wrapper around `()` to impersonate `State` in trait impls. State will not be used by
+/// Newtype wrapper around `()` to impersonate `State` in trait impls. State will not be used by
 /// test client, since all methods that accept state are mocked.
 pub struct TestState;
 
@@ -664,8 +662,8 @@ impl BadBlocks for TestBlockChainClient {
 		vec![
 			(Unverified {
 				header: Default::default(),
-				transactions: vec![],
-				uncles: vec![],
+				transactions: Vec::new(),
+				uncles: Vec::new(),
 				bytes: vec![1, 2, 3],
 			}, "Invalid block".into())
 		]
@@ -722,7 +720,7 @@ impl BlockChainClient for TestBlockChainClient {
 	fn storage_at(&self, address: &Address, position: &H256, state: StateOrBlock) -> Option<H256> {
 		match state {
 			StateOrBlock::Block(BlockId::Latest) =>
-				Some(self.storage.read().get(&(address.clone(), position.clone())).cloned().unwrap_or_default()),
+				Some(self.storage.read().get(&(*address, *position)).cloned().unwrap_or_default()),
 			_ => None,
 		}
 	}
@@ -759,9 +757,8 @@ impl BlockChainClient for TestBlockChainClient {
 	}
 
 	fn logs(&self, filter: Filter) -> Result<Vec<LocalizedLogEntry>, BlockId> {
-		match self.error_on_logs.read().as_ref() {
-			Some(id) => return Err(id.clone()),
-			None => (),
+		if let Some(id) = self.error_on_logs.read().as_ref() {
+			return Err(*id);
 		}
 
 		let mut logs = self.logs.read().clone();
@@ -781,8 +778,14 @@ impl BlockChainClient for TestBlockChainClient {
 			BlockId::Number(number) => Some(number),
 			BlockId::Earliest => Some(0),
 			BlockId::Latest => Some(self.chain_info().best_block_number),
-			BlockId::Hash(ref h) =>
-				self.numbers.read().iter().find(|&(_, hash)| hash == h).map(|e| *e.0 as u64)
+			BlockId::Hash(h) =>
+				self.numbers.read().iter().find_map(|(i, hash)| {
+					if *hash == h {
+						Some((*i).try_into().expect("Always fits into u64; qed"))
+					} else {
+						None
+					}
+				})
 		}
 	}
 
@@ -805,7 +808,7 @@ impl BlockChainClient for TestBlockChainClient {
 	fn block_status(&self, id: BlockId) -> BlockStatus {
 		match id {
 			BlockId::Number(number) if (number as usize) < self.blocks.read().len() => BlockStatus::InChain,
-			BlockId::Hash(ref hash) if self.blocks.read().get(hash).is_some() => BlockStatus::InChain,
+			BlockId::Hash(hash) if self.blocks.read().get(&hash).is_some() => BlockStatus::InChain,
 			BlockId::Latest | BlockId::Earliest => BlockStatus::InChain,
 			_ => BlockStatus::Unknown,
 		}
@@ -863,7 +866,7 @@ impl BlockChainClient for TestBlockChainClient {
 			let receipt = BlockReceipts::new(vec![Receipt::new(
 				TransactionOutcome::StateRoot(H256::zero()),
 				U256::zero(),
-				vec![])]);
+				Vec::new())]);
 			return Some(receipt);
 		}
 		None
@@ -908,7 +911,7 @@ impl BlockChainClient for TestBlockChainClient {
 		let best_num = self.chain_info().best_block_number;
 		PruningInfo {
 			earliest_chain: 1,
-			earliest_state: self.history.read().as_ref().map(|x| best_num - x).unwrap_or(0),
+			earliest_state: self.history.read().as_ref().map_or(0, |x| best_num - x),
 		}
 	}
 
@@ -920,8 +923,8 @@ impl BlockChainClient for TestBlockChainClient {
 			action,
 			gas: gas.unwrap_or(self.spec.gas_limit),
 			gas_price: gas_price.unwrap_or_else(U256::zero),
-			value: U256::default(),
-			data: data,
+			value: U256::zero(),
+			data,
 		};
 		let chain_id = Some(self.spec.chain_id());
 		let sig = self.spec.engine.sign(transaction.hash(chain_id)).unwrap();

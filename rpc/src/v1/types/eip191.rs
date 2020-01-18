@@ -49,9 +49,9 @@ impl<'de> Deserialize<'de> for EIP191Version {
 	{
 		let s = String::deserialize(deserializer)?;
 		let byte_version = match s.as_str() {
-			"0x00" => EIP191Version::PresignedTransaction,
-			"0x01" => EIP191Version::StructuredData,
-			"0x45" => EIP191Version::PersonalMessage,
+			"0x00" => Self::PresignedTransaction,
+			"0x01" => Self::StructuredData,
+			"0x45" => Self::PersonalMessage,
 			other => return Err(de::Error::custom(format!("Invalid byte version '{}'", other))),
 		};
 		Ok(byte_version)

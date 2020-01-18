@@ -27,7 +27,7 @@ use triehash::sec_trie_root;
 use parity_bytes::Bytes;
 use trie_db::TrieFactory;
 use ethtrie::Layout;
-use ethjson;
+
 use common_types::account_diff::*;
 use rlp::{self, RlpStream};
 use serde::{Serializer, Serialize};
@@ -65,14 +65,14 @@ impl PodAccount {
 		stream.append(&self.nonce);
 		stream.append(&self.balance);
 		stream.append(&sec_trie_root(self.storage.iter().map(|(k, v)| (k, rlp::encode(&v.into_uint())))));
-		stream.append(&keccak(&self.code.as_ref().unwrap_or(&vec![])));
+		stream.append(&keccak(&self.code.as_ref().unwrap_or(&Vec::new())));
 		stream.out()
 	}
 
 	/// Place additional data into given hash DB.
 	pub fn insert_additional(&self, db: &mut dyn HashDB<KeccakHasher, DBValue>, factory: &TrieFactory<Layout>) {
-		match self.code {
-			Some(ref c) if !c.is_empty() => { db.insert(hash_db::EMPTY_PREFIX, c); }
+		match &self.code {
+			Some(c) if !c.is_empty() => { db.insert(hash_db::EMPTY_PREFIX, c); }
 			_ => {}
 		}
 		let mut r = H256::zero();
@@ -87,7 +87,7 @@ impl PodAccount {
 
 impl From<ethjson::spec::Account> for PodAccount {
 	fn from(a: ethjson::spec::Account) -> Self {
-		PodAccount {
+		Self {
 			balance: a.balance.map_or_else(U256::zero, Into::into),
 			nonce: a.nonce.map_or_else(U256::zero, Into::into),
 			code: Some(a.code.map_or_else(Vec::new, Into::into)),
@@ -109,13 +109,13 @@ pub fn diff_pod(pre: Option<&PodAccount>, post: Option<&PodAccount>) -> Option<A
 			balance: Diff::Born(x.balance),
 			nonce: Diff::Born(x.nonce),
 			code: Diff::Born(x.code.as_ref().expect("account is newly created; newly created accounts must be given code; all caches should remain in place; qed").clone()),
-			storage: x.storage.iter().map(|(k, v)| (k.clone(), Diff::Born(v.clone()))).collect(),
+			storage: x.storage.iter().map(|(k, v)| (*k, Diff::Born(*v))).collect(),
 		}),
 		(Some(x), None) => Some(AccountDiff {
 			balance: Diff::Died(x.balance),
 			nonce: Diff::Died(x.nonce),
 			code: Diff::Died(x.code.as_ref().expect("account is deleted; only way to delete account is running SUICIDE; account must have had own code cached to make operation; all caches should remain in place; qed").clone()),
-			storage: x.storage.iter().map(|(k, v)| (k.clone(), Diff::Died(v.clone()))).collect(),
+			storage: x.storage.iter().map(|(k, v)| (*k, Diff::Died(*v))).collect(),
 		}),
 		(Some(pre), Some(post)) => {
 			let storage: Vec<_> = pre.storage.keys().merge(post.storage.keys())
@@ -129,7 +129,7 @@ pub fn diff_pod(pre: Option<&PodAccount>, post: Option<&PodAccount>) -> Option<A
 					_ => Diff::Same,
 				},
 				storage: storage.into_iter().map(|k|
-					(k.clone(), Diff::new(
+					(*k, Diff::new(
 						pre.storage.get(k).cloned().unwrap_or_else(H256::zero),
 						post.storage.get(k).cloned().unwrap_or_else(H256::zero)
 					))).collect(),
@@ -155,13 +155,13 @@ mod test {
 	#[test]
 	fn existence() {
 		let a = PodAccount {
-			balance: 69.into(), nonce: 0.into(), code: Some(vec![]), storage: map![], version: 0.into(),
+			balance: 69.into(), nonce: 0.into(), code: Some(Vec::new()), storage: map![], version: 0.into(),
 		};
 		assert_eq!(diff_pod(Some(&a), Some(&a)), None);
 		assert_eq!(diff_pod(None, Some(&a)), Some(AccountDiff{
 			balance: Diff::Born(69.into()),
 			nonce: Diff::Born(0.into()),
-			code: Diff::Born(vec![]),
+			code: Diff::Born(Vec::new()),
 			storage: map![],
 		}));
 	}
@@ -169,10 +169,10 @@ mod test {
 	#[test]
 	fn basic() {
 		let a = PodAccount {
-			balance: 69.into(), nonce: 0.into(), code: Some(vec![]), storage: map![], version: 0.into(),
+			balance: 69.into(), nonce: 0.into(), code: Some(Vec::new()), storage: map![], version: 0.into(),
 		};
 		let b = PodAccount {
-			balance: 42.into(), nonce: 1.into(), code: Some(vec![]), storage: map![], version: 0.into(),
+			balance: 42.into(), nonce: 1.into(), code: Some(Vec::new()), storage: map![], version: 0.into(),
 		};
 		assert_eq!(diff_pod(Some(&a), Some(&b)), Some(AccountDiff {
 			balance: Diff::Changed(69.into(), 42.into()),
@@ -185,7 +185,7 @@ mod test {
 	#[test]
 	fn code() {
 		let a = PodAccount {
-			balance: 0.into(), nonce: 0.into(), code: Some(vec![]), storage: map![], version: 0.into(),
+			balance: 0.into(), nonce: 0.into(), code: Some(Vec::new()), storage: map![], version: 0.into(),
 		};
 		let b = PodAccount {
 			balance: 0.into(), nonce: 1.into(), code: Some(vec![0]), storage: map![], version: 0.into(),
@@ -193,7 +193,7 @@ mod test {
 		assert_eq!(diff_pod(Some(&a), Some(&b)), Some(AccountDiff {
 			balance: Diff::Same,
 			nonce: Diff::Changed(0.into(), 1.into()),
-			code: Diff::Changed(vec![], vec![0]),
+			code: Diff::Changed(Vec::new(), vec![0]),
 			storage: map![],
 		}));
 	}
@@ -203,7 +203,7 @@ mod test {
 		let a = PodAccount {
 			balance: 0.into(),
 			nonce: 0.into(),
-			code: Some(vec![]),
+			code: Some(Vec::new()),
 			storage: map![
 				H256::from_low_u64_be(1) => H256::from_low_u64_be(1),
 				H256::from_low_u64_be(2) => H256::from_low_u64_be(2),
@@ -218,7 +218,7 @@ mod test {
 		let b = PodAccount {
 			balance: 0.into(),
 			nonce: 0.into(),
-			code: Some(vec![]),
+			code: Some(Vec::new()),
 			storage: map![
 				H256::from_low_u64_be(1) => H256::from_low_u64_be(1),
 				H256::from_low_u64_be(2) => H256::from_low_u64_be(3),

@@ -53,9 +53,9 @@ pub mod request;
 mod request_guard;
 mod response_guard;
 
-/// The initial backoff interval for OnDemand queries
+/// The initial backoff interval for `OnDemand` queries
 pub const DEFAULT_REQUEST_MIN_BACKOFF_DURATION: Duration = Duration::from_secs(10);
-/// The maximum request interval for OnDemand queries
+/// The maximum request interval for `OnDemand` queries
 pub const DEFAULT_REQUEST_MAX_BACKOFF_DURATION: Duration = Duration::from_secs(100);
 /// The default window length a response is evaluated
 pub const DEFAULT_RESPONSE_TIME_TO_LIVE: Duration = Duration::from_secs(10);
@@ -64,11 +64,11 @@ pub const DEFAULT_MAX_REQUEST_BACKOFF_ROUNDS: usize = 10;
 /// The default number failed request to be regarded as failure
 pub const DEFAULT_NUM_CONSECUTIVE_FAILED_REQUESTS: usize = 1;
 
-/// OnDemand related errors
+/// `OnDemand` related errors
 pub mod error {
 	use futures::sync::oneshot::Canceled;
 
-	/// OnDemand Error
+	/// `OnDemand` Error
 	#[derive(Debug, derive_more::Display, derive_more::From)]
 	pub enum Error {
 		/// Canceled oneshot channel
@@ -83,13 +83,13 @@ pub mod error {
 	impl std::error::Error for Error {
 		fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
 			match self {
-				Error::ChannelCanceled(err) => Some(err),
+				Self::ChannelCanceled(err) => Some(err),
 				_ => None,
 			}
 		}
 	}
 
-	/// OnDemand Result
+	/// `OnDemand` Result
 	pub type Result<T> = std::result::Result<T, Error>;
 }
 
@@ -179,7 +179,7 @@ impl Pending {
 	// verification.
 	// `idx` is the index of the request the response corresponds to.
 	fn update_header_refs(&mut self, idx: usize, response: &Response) {
-		if let Response::HeaderByHash(ref hdr) = *response {
+		if let Response::HeaderByHash(hdr) = response {
 				// fill the header for all requests waiting on this one.
 				// TODO: could be faster if we stored a map usize => Vec<usize>
 				// but typical use just has one header request that others
@@ -196,7 +196,7 @@ impl Pending {
 	fn supply_response(&mut self, cache: &Mutex<Cache>, response: &basic_request::Response)
 		-> Result<(), basic_request::ResponseError<self::request::Error>>
 	{
-		match self.requests.supply_response(&cache, response) {
+		match self.requests.supply_response(cache, response) {
 			Ok(response) => {
 				let idx = self.responses.len();
 				self.update_header_refs(idx, &response);
@@ -272,7 +272,7 @@ impl Pending {
 		);
 
 		let err = self::error::Error::BadResponse(err);
-		if self.sender.send(Err(err.into())).is_err() {
+		if self.sender.send(Err(err)).is_err() {
 			debug!(target: "on_demand", "Dropped oneshot channel receiver on no response");
 		}
 	}
@@ -280,7 +280,7 @@ impl Pending {
 	// returning a peer discovery timeout during query attempts
 	fn request_limit_reached(self) {
 		let err = self::error::Error::RequestLimit;
-		if self.sender.send(Err(err.into())).is_err() {
+		if self.sender.send(Err(err)).is_err() {
 			debug!(target: "on_demand", "Dropped oneshot channel receiver on time out");
 		}
 	}
@@ -296,13 +296,13 @@ fn guess_capabilities(requests: &[CheckedRequest]) -> Capabilities {
 	};
 
 	let update_since = |current: &mut Option<u64>, new|
-		*current = match *current {
-			Some(x) => Some(::std::cmp::min(x, new)),
+		*current = match current {
+			Some(x) => Some(std::cmp::min(*x, new)),
 			None => Some(new),
 		};
 
 	for request in requests {
-		match *request {
+		match request {
 			// TODO: might be worth returning a required block number for this also.
 			CheckedRequest::HeaderProof(_, _) =>
 				caps.serve_headers = true,
@@ -313,19 +313,19 @@ fn guess_capabilities(requests: &[CheckedRequest]) -> Capabilities {
 			CheckedRequest::TransactionIndex(_, _) => {} // hashes yield no info.
 			CheckedRequest::Signal(_, _) =>
 				caps.serve_headers = true,
-			CheckedRequest::Body(ref req, _) => if let Ok(ref hdr) = req.0.as_ref() {
+			CheckedRequest::Body(req, _) => if let Ok(hdr) = req.0.as_ref() {
 				update_since(&mut caps.serve_chain_since, hdr.number());
 			},
-			CheckedRequest::Receipts(ref req, _) => if let Ok(ref hdr) = req.0.as_ref() {
+			CheckedRequest::Receipts(req, _) => if let Ok(hdr) = req.0.as_ref() {
 				update_since(&mut caps.serve_chain_since, hdr.number());
 			},
-			CheckedRequest::Account(ref req, _) => if let Ok(ref hdr) = req.header.as_ref() {
+			CheckedRequest::Account(req, _) => if let Ok(hdr) = req.header.as_ref() {
 				update_since(&mut caps.serve_state_since, hdr.number());
 			},
-			CheckedRequest::Code(ref req, _) => if let Ok(ref hdr) = req.header.as_ref() {
+			CheckedRequest::Code(req, _) => if let Ok(hdr) = req.header.as_ref() {
 				update_since(&mut caps.serve_state_since, hdr.number());
 			},
-			CheckedRequest::Execution(ref req, _) => if let Ok(ref hdr) = req.header.as_ref() {
+			CheckedRequest::Execution(req, _) => if let Ok(hdr) = req.header.as_ref() {
 				update_since(&mut caps.serve_state_since, hdr.number());
 			},
 		}
@@ -396,11 +396,11 @@ impl OnDemandRequester for OnDemand {
 				// points to a request that returns a header and has the same back-reference
 				// for the block hash.
 				match header_producers.get(&idx) {
-					Some(ref f) if &field == *f => {}
+					Some(f) if field == *f => {}
 					_ => return Err(basic_request::NoSuchOutput),
 				}
 			}
-			if let CheckedRequest::HeaderByHash(ref req, _) = request {
+			if let CheckedRequest::HeaderByHash(req, _) = &request {
 				header_producers.insert(i, req.0);
 			}
 
@@ -408,7 +408,7 @@ impl OnDemandRequester for OnDemand {
 		}
 
 		let requests = builder.build();
-		let net_requests = requests.clone().map_requests(|req| req.into_net_request());
+		let net_requests = requests.clone().map_requests(CheckedRequest::into_net_request);
 		let capabilities = guess_capabilities(requests.requests());
 
 		self.submit_pending(ctx, Pending {
@@ -451,7 +451,6 @@ impl OnDemand {
 		request_backoff_rounds_max: usize,
 		request_number_of_consecutive_errors: usize,
 	) -> Self {
-
 		Self {
 			pending: RwLock::new(Vec::new()),
 			peers: RwLock::new(HashMap::new()),
@@ -487,7 +486,7 @@ impl OnDemand {
 		request_backoff_rounds_max: usize,
 		request_number_of_consecutive_errors: usize,
 	) -> Self {
-		let mut me = OnDemand::new(
+		let mut me = Self::new(
 			cache,
 			request_ttl,
 			request_backoff_start,
@@ -617,9 +616,9 @@ impl Handler for OnDemand {
 	fn on_announcement(&self, ctx: &dyn EventContext, announcement: &Announcement) {
 		{
 			let mut peers = self.peers.write();
-			if let Some(ref mut peer) = peers.get_mut(&ctx.peer()) {
-				peer.status.update_from(&announcement);
-				peer.capabilities.update_from(&announcement);
+			if let Some(peer) = peers.get_mut(&ctx.peer()) {
+				peer.status.update_from(announcement);
+				peer.capabilities.update_from(announcement);
 			}
 		}
 

@@ -108,11 +108,11 @@ fn send_private_transaction() {
 	let pm1 = Arc::new(Provider::new(
 			client1.clone(),
 			net.peer(1).miner.clone(),
-			signer.clone(),
+			signer,
 			Box::new(NoopEncryptor::default()),
 			validator_config,
 			IoChannel::to_handler(Arc::downgrade(&io_handler1)),
-			private_keys.clone(),
+			private_keys,
 			db.key_value().clone(),
 	));
 	pm1.add_notify(net.peers[1].clone());
@@ -122,11 +122,11 @@ fn send_private_transaction() {
 	let mut private_create_tx = Transaction::default();
 	private_create_tx.action = Action::Create;
 	private_create_tx.data = private_contract_test;
-	private_create_tx.gas = 200000.into();
-	let private_create_tx_signed = private_create_tx.sign(&s0.secret(), None);
+	private_create_tx.gas = 200_000.into();
+	let private_create_tx_signed = private_create_tx.sign(s0.secret(), None);
 	let validators = vec![s1.address()];
 	let (public_tx, _) = pm0.public_creation_transaction(BlockId::Latest, &private_create_tx_signed, &validators, 0.into()).unwrap();
-	let public_tx = public_tx.sign(&s0.secret(), chain_id);
+	let public_tx = public_tx.sign(s0.secret(), chain_id);
 
 	let public_tx_copy = public_tx.clone();
 	push_block_with_transactions(&client0, &[public_tx]);
@@ -136,11 +136,11 @@ fn send_private_transaction() {
 
 	//Create private transaction for modifying state
 	let mut private_tx = Transaction::default();
-	private_tx.action = Action::Call(address.clone());
+	private_tx.action = Action::Call(address);
 	private_tx.data = "bc64b76d2a00000000000000000000000000000000000000000000000000000000000000".from_hex().unwrap(); //setX(42)
-	private_tx.gas = 120000.into();
+	private_tx.gas = 120_000.into();
 	private_tx.nonce = 1.into();
-	let private_tx = private_tx.sign(&s0.secret(), None);
+	let private_tx = private_tx.sign(s0.secret(), None);
 	assert!(pm0.create_private_transaction(private_tx).is_ok());
 
 	//send private transaction message to validator
@@ -173,8 +173,8 @@ fn send_private_transaction() {
 #[test]
 fn sync_private_state() {
 	// Setup two clients
-	let s0 = KeyPair::from_secret_slice(&keccak("1").as_bytes()).unwrap();
-	let s1 = KeyPair::from_secret_slice(&keccak("0").as_bytes()).unwrap();
+	let s0 = KeyPair::from_secret_slice(keccak("1").as_bytes()).unwrap();
+	let s1 = KeyPair::from_secret_slice(keccak("0").as_bytes()).unwrap();
 
 	let signer = Arc::new(ethcore_private_tx::KeyPairSigner(vec![s0.clone(), s1.clone()]));
 
@@ -232,11 +232,11 @@ fn sync_private_state() {
 	let pm1 = Arc::new(Provider::new(
 			client1.clone(),
 			net.peer(1).miner.clone(),
-			signer.clone(),
+			signer,
 			Box::new(NoopEncryptor::default()),
 			validator_config,
 			IoChannel::to_handler(Arc::downgrade(&io_handler1)),
-			private_keys.clone(),
+			private_keys,
 			db1.key_value().clone(),
 	));
 	pm1.add_notify(net.peers[1].clone());
@@ -249,11 +249,11 @@ fn sync_private_state() {
 	let mut private_create_tx = Transaction::default();
 	private_create_tx.action = Action::Create;
 	private_create_tx.data = private_contract_test;
-	private_create_tx.gas = 200000.into();
-	let private_create_tx_signed = private_create_tx.sign(&s0.secret(), None);
+	private_create_tx.gas = 200_000.into();
+	let private_create_tx_signed = private_create_tx.sign(s0.secret(), None);
 	let validators = vec![s1.address()];
 	let (public_tx, _) = pm0.public_creation_transaction(BlockId::Latest, &private_create_tx_signed, &validators, 0.into()).unwrap();
-	let public_tx = public_tx.sign(&s0.secret(), chain_id);
+	let public_tx = public_tx.sign(s0.secret(), chain_id);
 
 	let public_tx_copy = public_tx.clone();
 	push_block_with_transactions(&client0, &[public_tx]);
@@ -263,11 +263,11 @@ fn sync_private_state() {
 
 	//Create private transaction for modifying state
 	let mut private_tx = Transaction::default();
-	private_tx.action = Action::Call(address.clone());
+	private_tx.action = Action::Call(address);
 	private_tx.data = "bc64b76d2a00000000000000000000000000000000000000000000000000000000000000".from_hex().unwrap(); //setX(42)
-	private_tx.gas = 120000.into();
+	private_tx.gas = 120_000.into();
 	private_tx.nonce = 1.into();
-	let private_tx = private_tx.sign(&s0.secret(), None);
+	let private_tx = private_tx.sign(s0.secret(), None);
 	let _create_res = pm0.create_private_transaction(private_tx);
 
 	//send private transaction message to validator
@@ -284,7 +284,7 @@ fn sync_private_state() {
 	// Second node requests the state from the first one
 	net.sync();
 
-	let synced_hash = validator_handler.synced_hash.lock().clone();
+	let synced_hash = *validator_handler.synced_hash.lock();
 	assert!(pm1.private_state_synced(&synced_hash).is_ok());
 
 	// Second node has private state up-to-date and can verify the private transaction

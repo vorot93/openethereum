@@ -256,7 +256,7 @@ pub fn decrypt_message(key: &KeyPair, payload: Vec<u8>) -> Result<Vec<u8>, Error
 pub fn fix_shared_key(shared_secret: &Secret) -> Result<KeyPair, Error> {
 	// secret key created in agree function is invalid, as it is not calculated mod EC.field.n
 	// => let's do it manually
-	let shared_secret: H256 = (**shared_secret).into();
+	let shared_secret: H256 = **shared_secret;
 	let shared_secret: U256 = shared_secret.into_uint();
 	let shared_secret: H256 = BigEndianHash::from_uint(&(shared_secret % *CURVE_ORDER));
 	let shared_key_pair = KeyPair::from_secret_slice(shared_secret.as_bytes())?;
@@ -281,7 +281,7 @@ pub fn deserialize_header(data: &[u8]) -> Result<MessageHeader, Error> {
 	}
 
 	Ok(MessageHeader {
-		version: version,
+		version,
 		kind: reader.read_u64::<LittleEndian>()?,
 		size: reader.read_u16::<LittleEndian>()?,
 	})
@@ -290,7 +290,7 @@ pub fn deserialize_header(data: &[u8]) -> Result<MessageHeader, Error> {
 /// Build serialized message from header && payload
 fn build_serialized_message(mut header: MessageHeader, payload: Vec<u8>) -> Result<SerializedMessage, Error> {
 	let payload_len = payload.len();
-	if payload_len > u16::MAX as usize {
+	if payload_len > u16::max_value() as usize {
 		return Err(Error::InvalidMessage);
 	}
 	header.size = payload.len() as u16;
@@ -328,33 +328,33 @@ pub mod tests {
 			let self_key_pair = Random.generate().unwrap();
 			let peer_key_pair = Random.generate().unwrap();
 			let shared_key_pair = fix_shared_key(&agree(self_session_key_pair.secret(), peer_session_key_pair.public()).unwrap()).unwrap();
-			TestIo {
-				self_key_pair: self_key_pair,
-				self_session_key_pair: self_session_key_pair,
-				peer_key_pair: peer_key_pair,
-				peer_session_key_pair: peer_session_key_pair,
-				shared_key_pair: shared_key_pair,
+			Self {
+				self_key_pair,
+				self_session_key_pair,
+				peer_key_pair,
+				peer_session_key_pair,
+				shared_key_pair,
 				input_buffer: io::Cursor::new(Vec::new()),
 			}
 		}
 
-		pub fn self_key_pair(&self) -> &KeyPair {
+		pub const fn self_key_pair(&self) -> &KeyPair {
 			&self.self_key_pair
 		}
 
-		pub fn self_session_key_pair(&self) -> &KeyPair {
+		pub const fn self_session_key_pair(&self) -> &KeyPair {
 			&self.self_session_key_pair
 		}
 
-		pub fn peer_key_pair(&self) -> &KeyPair {
+		pub const fn peer_key_pair(&self) -> &KeyPair {
 			&self.peer_key_pair
 		}
 
-		pub fn peer_session_key_pair(&self) -> &KeyPair {
+		pub const fn peer_session_key_pair(&self) -> &KeyPair {
 			&self.peer_session_key_pair
 		}
 
-		pub fn shared_key_pair(&self) -> &KeyPair {
+		pub const fn shared_key_pair(&self) -> &KeyPair {
 			&self.shared_key_pair
 		}
 

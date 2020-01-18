@@ -27,7 +27,7 @@ pub struct Config {
 
 impl Default for Config {
 	fn default() -> Self {
-		Config {
+		Self {
 			pref_cache_size: 1 << 14,
 			max_cache_size: 1 << 20,
 		}

@@ -71,12 +71,12 @@ pub fn execute(cmd: ExportHsyncCmd) -> Result<String, String> {
 	cmd.dirs.create_dirs(false, false)?;
 
 	// TODO: configurable cache size.
-	let cache = LightDataCache::new(Default::default(), Duration::from_secs(60 * GAS_CORPUS_EXPIRATION_MINUTES));
+	let cache = LightDataCache::new(light::cache::CacheSizes::default(), Duration::from_secs(60 * GAS_CORPUS_EXPIRATION_MINUTES));
 	let cache = Arc::new(Mutex::new(cache));
 
 	// start client and create transaction queue.
 	let mut config = light_client::Config {
-		queue: Default::default(),
+		queue: verification::QueueConfig::default(),
 		chain_column: ::ethcore_db::COL_LIGHT_CHAIN,
 		verify_full: true,
 		check_seal: true,
@@ -87,7 +87,7 @@ pub fn execute(cmd: ExportHsyncCmd) -> Result<String, String> {
 
 	// initialize database.
 	let db = db::open_db_light(
-		&db_dirs.client_path(algorithm).to_str().expect("DB path could not be converted to string."),
+		db_dirs.client_path(algorithm).to_str().expect("DB path could not be converted to string."),
 		&cmd.cache_config,
 		&cmd.compaction,
 	).map_err(|e| format!("Failed to open database {:?}", e))?;

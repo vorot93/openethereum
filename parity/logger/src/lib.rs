@@ -16,6 +16,54 @@
 
 //! Logger for parity executables
 
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
+
 extern crate ansi_term;
 extern crate arrayvec;
 extern crate atty;
@@ -49,7 +97,7 @@ pub struct Config {
 
 impl Default for Config {
 	fn default() -> Self {
-		Config {
+		Self {
 			mode: None,
 			color: !cfg!(windows),
 			file: None,
@@ -58,7 +106,7 @@ impl Default for Config {
 }
 
 lazy_static! {
-	static ref ROTATING_LOGGER : Mutex<Weak<RotatingLogger>> = Mutex::new(Default::default());
+	static ref ROTATING_LOGGER : Mutex<Weak<RotatingLogger>> = Mutex::new(Weak::new());
 }
 
 /// Sets up the logger
@@ -80,7 +128,7 @@ pub fn setup_log(config: &Config) -> Result<Arc<RotatingLogger>, String> {
 		builder.parse(&lvl);
 	}
 
-	if let Some(ref s) = config.mode {
+	if let Some(s) = &config.mode {
 		levels.push_str(s);
 		builder.parse(s);
 	}
@@ -110,10 +158,7 @@ pub fn setup_log(config: &Config) -> Result<Arc<RotatingLogger>, String> {
 
 		let removed_color = kill_color(with_color.as_ref());
 
-		let ret = match enable_color {
-			true => with_color,
-			false => removed_color.clone(),
-		};
+		let ret = if enable_color { with_color } else { removed_color.clone() };
 
 		if let Some(mut file) = maybe_file.as_ref() {
 			// ignore errors - there's nothing we can do

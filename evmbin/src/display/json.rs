@@ -22,7 +22,7 @@ use std::mem;
 use ethereum_types::{U256, H256, BigEndianHash};
 use parity_bytes::ToPretty;
 use serde::Serialize;
-use trace;
+
 
 use crate::{
 	display,
@@ -87,7 +87,7 @@ pub struct MessageFailure<'a> {
 }
 
 impl Informant {
-	fn with_informant_in_depth<F: Fn(&mut Informant)>(informant: &mut Informant, depth: usize, f: F) {
+	fn with_informant_in_depth<F: Fn(&mut Self)>(informant: &mut Self, depth: usize, f: F) {
 		if depth == 0 {
 			f(informant);
 		} else {
@@ -95,14 +95,14 @@ impl Informant {
 		}
 	}
 
-	fn informant_trace(informant: &Informant, gas_used: U256) -> String {
-		let info = ::evm::Instruction::from_u8(informant.instruction).map(|i| i.info());
+	fn informant_trace(informant: &Self, gas_used: U256) -> String {
+		let info = evm::Instruction::from_u8(informant.instruction).map(evm::Instruction::info);
 
 		let trace_data =
 			TraceData {
 				pc: informant.pc,
 				op: informant.instruction,
-				op_name: info.map(|i| i.name).unwrap_or(""),
+				op_name: info.map_or("", |i| i.name),
 				gas: &format!("{:#x}", gas_used.saturating_add(informant.gas_cost)),
 				gas_cost: &format!("{:#x}", informant.gas_cost),
 				memory: &format!("0x{}", informant.memory.to_hex()),
@@ -123,7 +123,7 @@ impl vm::Informant for Informant {
 		let message_init =
 			MessageInitial {
 				action,
-				test: &name,
+				test: name,
 			}
 		;
 
@@ -135,7 +135,7 @@ impl vm::Informant for Informant {
 		self.gas_used = gas;
 	}
 
-	fn clone_sink(&self) -> Self::Sink { () }
+	fn clone_sink(&self) -> Self::Sink {  }
 
 	fn finish(result: vm::RunResult<Self::Output>, _sink: &mut Self::Sink) {
 		match result {
@@ -180,7 +180,7 @@ impl trace::VMTracer for Informant {
 
 	fn trace_next_instruction(&mut self, pc: usize, instruction: u8, _current_gas: U256) -> bool {
 		let subdepth = self.subdepth;
-		Self::with_informant_in_depth(self, subdepth, |informant: &mut Informant| {
+		Self::with_informant_in_depth(self, subdepth, |informant: &mut Self| {
 			informant.pc = pc;
 			informant.instruction = instruction;
 			informant.unmatched = true;
@@ -190,7 +190,7 @@ impl trace::VMTracer for Informant {
 
 	fn trace_prepare_execute(&mut self, pc: usize, instruction: u8, gas_cost: U256, mem_written: Option<(usize, usize)>, store_written: Option<(U256, U256)>) {
 		let subdepth = self.subdepth;
-		Self::with_informant_in_depth(self, subdepth, |informant: &mut Informant| {
+		Self::with_informant_in_depth(self, subdepth, |informant: &mut Self| {
 			informant.pc = pc;
 			informant.instruction = instruction;
 			informant.gas_cost = gas_cost;
@@ -201,9 +201,9 @@ impl trace::VMTracer for Informant {
 
 	fn trace_executed(&mut self, gas_used: U256, stack_push: &[U256], mem: &[u8]) {
 		let subdepth = self.subdepth;
-		Self::with_informant_in_depth(self, subdepth, |informant: &mut Informant| {
-			let store_diff = informant.store_written.clone();
-			let info = ::evm::Instruction::from_u8(informant.instruction).map(|i| i.info());
+		Self::with_informant_in_depth(self, subdepth, |informant: &mut Self| {
+			let store_diff = informant.store_written;
+			let info = evm::Instruction::from_u8(informant.instruction).map(evm::Instruction::info);
 
 			let trace = Self::informant_trace(informant, gas_used);
 			informant.traces.push(trace);
@@ -212,12 +212,12 @@ impl trace::VMTracer for Informant {
 			informant.gas_used = gas_used;
 
 			let len = informant.stack.len();
-			let info_args = info.map(|i| i.args).unwrap_or(0);
+			let info_args = info.map_or(0, |i| i.args);
 			informant.stack.truncate(if len > info_args { len - info_args } else { 0 });
 			informant.stack.extend_from_slice(stack_push);
 
 			// TODO [ToDr] Align memory?
-			if let Some((pos, size)) = informant.mem_written.clone() {
+			if let Some((pos, size)) = informant.mem_written {
 				if informant.memory.len() < (pos + size) {
 					informant.memory.resize(pos + size, 0);
 				}
@@ -229,15 +229,15 @@ impl trace::VMTracer for Informant {
 			}
 
 			if !informant.subtraces.is_empty() {
-				informant.traces.extend(mem::replace(&mut informant.subtraces, vec![]));
+				informant.traces.extend(mem::replace(&mut informant.subtraces, Vec::new()));
 			}
 		});
 	}
 
 	fn prepare_subtrace(&mut self, code: &[u8]) {
 		let subdepth = self.subdepth;
-		Self::with_informant_in_depth(self, subdepth, |informant: &mut Informant| {
-			let mut vm = Informant::default();
+		Self::with_informant_in_depth(self, subdepth, |informant: &mut Self| {
+			let mut vm = Self::default();
 			vm.depth = informant.depth + 1;
 			vm.code = code.to_vec();
 			vm.gas_used = informant.gas_used;
@@ -249,7 +249,7 @@ impl trace::VMTracer for Informant {
 	fn done_subtrace(&mut self) {
 		self.subdepth -= 1;
 		let subdepth = self.subdepth;
-		Self::with_informant_in_depth(self, subdepth, |informant: &mut Informant| {
+		Self::with_informant_in_depth(self, subdepth, |informant: &mut Self| {
 			if let Some(subtraces) = informant.subinfos.pop().expect("prepare/done_subtrace are not balanced").drain() {
 				informant.subtraces.extend(subtraces);
 			}
@@ -263,12 +263,12 @@ impl trace::VMTracer for Informant {
 			let gas_used = self.gas_used;
 			let subdepth = self.subdepth;
 
-			Self::with_informant_in_depth(&mut self, subdepth, |informant: &mut Informant| {
+			Self::with_informant_in_depth(&mut self, subdepth, |informant: &mut Self| {
 				let trace = Self::informant_trace(informant, gas_used);
 				informant.traces.push(trace);
 			});
 		} else if !self.subtraces.is_empty() {
-			self.traces.extend(mem::replace(&mut self.subtraces, vec![]));
+			self.traces.extend(mem::replace(&mut self.subtraces, Vec::new()));
 		}
 		Some(self.traces)
 	}
@@ -277,7 +277,7 @@ impl trace::VMTracer for Informant {
 #[cfg(test)]
 mod tests {
 	use serde::{Deserialize, Serialize};
-	use serde_json;
+	
 
 	use super::*;
 	use crate::info::tests::run_test;
@@ -323,9 +323,9 @@ mod tests {
 	}
 
 	fn compare_json(traces: Option<Vec<String>>, expected: &str) {
-		let expected = expected.split("\n")
-			.map(|x| x.trim())
-			.map(|x| x.to_owned())
+		let expected = expected.split('\n')
+			.map(str::trim)
+			.map(ToOwned::to_owned)
 			.filter(|x| !x.is_empty())
 			.collect::<Vec<_>>();
 		assert_traces_eq(&traces.unwrap(), &expected);

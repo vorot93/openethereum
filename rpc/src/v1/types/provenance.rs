@@ -46,19 +46,19 @@ pub enum Origin {
 
 impl Default for Origin {
 	fn default() -> Self {
-		Origin::Unknown
+		Self::Unknown
 	}
 }
 
 impl fmt::Display for Origin {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match *self {
-			Origin::Rpc(ref origin) => write!(f, "{} via RPC", origin),
-			Origin::Ipc(ref session) => write!(f, "IPC (session: {})", session),
-			Origin::Ws { ref session } => write!(f, "WebSocket (session: {})", session),
-			Origin::Signer { ref session } => write!(f, "Secure Session (session: {})", session),
-			Origin::CApi => write!(f, "C API"),
-			Origin::Unknown => write!(f, "unknown origin"),
+		match self {
+			Self::Rpc(origin) => write!(f, "{} via RPC", origin),
+			Self::Ipc(session) => write!(f, "IPC (session: {})", session),
+			Self::Ws { session } => write!(f, "WebSocket (session: {})", session),
+			Self::Signer { session } => write!(f, "Secure Session (session: {})", session),
+			Self::CApi => write!(f, "C API"),
+			Self::Unknown => write!(f, "unknown origin"),
 		}
 	}
 }

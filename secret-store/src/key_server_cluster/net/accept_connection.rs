@@ -33,7 +33,7 @@ pub fn accept_connection(stream: TcpStream, self_key_pair: Arc<dyn SigningKeyPai
 
 	let accept = AcceptConnection {
 		handshake: accept_handshake(stream, self_key_pair),
-		address: address,
+		address,
 	};
 
 	deadline(Duration::new(5, 0), accept).expect("Failed to create timeout")

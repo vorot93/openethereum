@@ -41,7 +41,7 @@ pub struct AncientVerifier {
 impl AncientVerifier {
 	/// Create a new ancient block verifier with the given engine.
 	pub fn new(engine: Arc<dyn Engine>) -> Self {
-		AncientVerifier {
+		Self {
 			cur_verifier: RwLock::new(None),
 			engine,
 		}
@@ -56,10 +56,11 @@ impl AncientVerifier {
 		chain: &BlockChain,
 	) -> Result<(), EthcoreError> {
 		// perform verification
-		let verified = if let Some(ref cur_verifier) = *self.cur_verifier.read() {
-			match rng.gen::<f32>() <= HEAVY_VERIFY_RATE {
-				true => cur_verifier.verify_heavy(header)?,
-				false => cur_verifier.verify_light(header)?,
+		let verified = if let Some(cur_verifier) = self.cur_verifier.read().as_ref() {
+			if rng.gen::<f32>() <= HEAVY_VERIFY_RATE {
+				cur_verifier.verify_heavy(header)?;
+			} else {
+				cur_verifier.verify_light(header)?;
 			}
 			true
 		} else {
@@ -81,7 +82,7 @@ impl AncientVerifier {
 
 		// ancient import will only use transitions obtained from the snapshot.
 		if let Some(transition) = chain.epoch_transition(header.number(), header.hash()) {
-			let v = self.engine.epoch_verifier(&header, &transition.proof).known_confirmed()?;
+			let v = self.engine.epoch_verifier(header, &transition.proof).known_confirmed()?;
 			*self.cur_verifier.write() = Some(v);
 		}
 
@@ -93,11 +94,11 @@ impl AncientVerifier {
 	{
 		trace!(target: "client", "Initializing ancient block restoration.");
 		let current_epoch_data = chain.epoch_transitions()
-			.take_while(|&(_, ref t)| t.block_number < header.number())
+			.take_while(|(_, t)| t.block_number < header.number())
 			.last()
 			.map(|(_, t)| t.proof)
 			.expect("At least one epoch entry (genesis) always stored; qed");
 
-		self.engine.epoch_verifier(&header, &current_epoch_data).known_confirmed()
+		self.engine.epoch_verifier(header, &current_epoch_data).known_confirmed()
 	}
 }

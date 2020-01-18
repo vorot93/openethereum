@@ -30,18 +30,19 @@ use machine::transaction_ext::Transaction;
 fn do_json_test<H: FnMut(&str, HookType)>(path: &Path, json_data: &[u8], start_stop_hook: &mut H) -> Vec<String> {
 	// Block number used to run the tests.
 	// Make sure that all the specified features are activated.
-	const BLOCK_NUMBER: u64 = 0x6ffffffffffffe;
+	const BLOCK_NUMBER: u64 = 0x006f_ffff_ffff_fffe;
 
 	let tests = ethjson::test_helpers::transaction::Test::load(json_data)
-		.expect(&format!("Could not parse JSON transaction test data from {}", path.display()));
+		.unwrap_or_else(|_| panic!("Could not parse JSON transaction test data from {}", path.display()));
 	let mut failed = Vec::new();
-	for (name, test) in tests.into_iter() {
+	for (name, test) in tests {
 		start_stop_hook(&name, HookType::OnStart);
 
 		for (spec_name, result) in test.post_state {
-			let spec = match EvmTestClient::fork_spec_from_json(&spec_name) {
-				Some(spec) => spec,
-				None => {
+			let spec = {
+				if let Some(spec) = EvmTestClient::fork_spec_from_json(&spec_name) {
+					spec
+				} else {
 					println!("   - {} | {:?} Ignoring tests because of missing spec", name, spec_name);
 					continue;
 				}

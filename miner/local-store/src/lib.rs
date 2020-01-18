@@ -16,6 +16,54 @@
 
 //! Manages local node data: pending local transactions, sync security level
 
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
+
 use std::io;
 use std::sync::Arc;
 use std::time::Duration;
@@ -32,9 +80,9 @@ use kvdb::KeyValueDB;
 use log::{debug, trace, warn};
 use rlp::Rlp;
 use serde_derive::{Serialize, Deserialize};
-use serde_json;
 
-const LOCAL_TRANSACTIONS_KEY: &'static [u8] = &*b"LOCAL_TXS";
+
+const LOCAL_TRANSACTIONS_KEY: &[u8] = &*b"LOCAL_TXS";
 
 const UPDATE_TIMER: TimerToken = 0;
 const UPDATE_TIMEOUT: Duration = Duration::from_secs(15 * 60); // once every 15 minutes.
@@ -48,8 +96,8 @@ enum Condition {
 impl From<TransactionCondition> for Condition {
 	fn from(cond: TransactionCondition) -> Self {
 		match cond {
-			TransactionCondition::Number(num) => Condition::Number(num),
-			TransactionCondition::Timestamp(tm) => Condition::Timestamp(tm),
+			TransactionCondition::Number(num) => Self::Number(num),
+			TransactionCondition::Timestamp(tm) => Self::Timestamp(tm),
 		}
 	}
 }
@@ -57,8 +105,8 @@ impl From<TransactionCondition> for Condition {
 impl Into<TransactionCondition> for Condition {
 	fn into(self) -> TransactionCondition {
 		match self {
-			Condition::Number(num) => TransactionCondition::Number(num),
-			Condition::Timestamp(tm) => TransactionCondition::Timestamp(tm),
+			Self::Number(num) => TransactionCondition::Number(num),
+			Self::Timestamp(tm) => TransactionCondition::Timestamp(tm),
 		}
 	}
 }
@@ -80,19 +128,18 @@ impl TransactionEntry {
 		};
 
 		let hash = tx.hash();
-		match SignedTransaction::new(tx) {
-			Ok(tx) => Some(PendingTransaction::new(tx, self.condition.map(Into::into))),
-			Err(_) => {
-				warn!(target: "local_store", "Bad signature on persistent transaction: {}", hash);
-				return None
-			}
+		if let Ok(tx) = SignedTransaction::new(tx) {
+			Some(PendingTransaction::new(tx, self.condition.map(Into::into)))
+		} else {
+			warn!(target: "local_store", "Bad signature on persistent transaction: {}", hash);
+			None
 		}
 	}
 }
 
 impl From<PendingTransaction> for TransactionEntry {
 	fn from(pending: PendingTransaction) -> Self {
-		TransactionEntry {
+		Self {
 			rlp_bytes: ::rlp::encode(&pending.transaction),
 			condition: pending.condition.map(Into::into),
 		}
@@ -217,20 +264,20 @@ mod tests {
 		let db = Arc::new(::kvdb_memorydb::create(1));
 
 		{
-			let store = super::create(db.clone(), 0, Dummy(vec![]));
-			assert_eq!(store.pending_transactions().unwrap(), vec![])
+			let store = super::create(db.clone(), 0, Dummy(Vec::new()));
+			assert_eq!(store.pending_transactions().unwrap(), Vec::new())
 		}
 
 		{
-			let store = super::create(db.clone(), 0, Dummy(vec![]));
-			assert_eq!(store.pending_transactions().unwrap(), vec![])
+			let store = super::create(db, 0, Dummy(Vec::new()));
+			assert_eq!(store.pending_transactions().unwrap(), Vec::new())
 		}
 	}
 
 	#[test]
 	fn with_condition() {
 		let keypair = Brain::new("abcd".into()).generate().unwrap();
-		let transactions: Vec<_> = (0..10u64).map(|nonce| {
+		let transactions: Vec<_> = (0..10_u64).map(|nonce| {
 			let mut tx = Transaction::default();
 			tx.nonce = nonce.into();
 
@@ -248,24 +295,24 @@ mod tests {
 		{
 			// nothing written yet, will write pending.
 			let store = super::create(db.clone(), 0, Dummy(transactions.clone()));
-			assert_eq!(store.pending_transactions().unwrap(), vec![])
+			assert_eq!(store.pending_transactions().unwrap(), Vec::new())
 		}
 		{
 			// pending written, will write nothing.
-			let store = super::create(db.clone(), 0, Dummy(vec![]));
+			let store = super::create(db.clone(), 0, Dummy(Vec::new()));
 			assert_eq!(store.pending_transactions().unwrap(), transactions)
 		}
 		{
 			// pending removed, will write nothing.
-			let store = super::create(db.clone(), 0, Dummy(vec![]));
-			assert_eq!(store.pending_transactions().unwrap(), vec![])
+			let store = super::create(db, 0, Dummy(Vec::new()));
+			assert_eq!(store.pending_transactions().unwrap(), Vec::new())
 		}
 	}
 
 	#[test]
 	fn skips_bad_transactions() {
 		let keypair = Brain::new("abcd".into()).generate().unwrap();
-		let mut transactions: Vec<_> = (0..10u64).map(|nonce| {
+		let mut transactions: Vec<_> = (0..10_u64).map(|nonce| {
 			let mut tx = Transaction::default();
 			tx.nonce = nonce.into();
 
@@ -286,11 +333,11 @@ mod tests {
 		{
 			// nothing written, will write bad.
 			let store = super::create(db.clone(), 0, Dummy(transactions.clone()));
-			assert_eq!(store.pending_transactions().unwrap(), vec![])
+			assert_eq!(store.pending_transactions().unwrap(), Vec::new())
 		}
 		{
 			// try to load transactions. The last transaction, which is invalid, will be skipped.
-			let store = super::create(db.clone(), 0, Dummy(vec![]));
+			let store = super::create(db, 0, Dummy(Vec::new()));
 			let loaded = store.pending_transactions().unwrap();
 			transactions.pop();
 			assert_eq!(loaded, transactions);

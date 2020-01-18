@@ -137,9 +137,12 @@ pub fn extract_transaction_at_index(block: encoded::Block, index: usize) -> Opti
 fn extract_header(res: &[OnDemandResponse], header: HeaderRef) -> Option<encoded::Header> {
 	match header {
 		HeaderRef::Stored(hdr) => Some(hdr),
-		HeaderRef::Unresolved(idx, _) => match res.get(idx) {
-			Some(&OnDemandResponse::HeaderByHash(ref hdr)) => Some(hdr.clone()),
-			_ => None,
+		HeaderRef::Unresolved(idx, _) => {
+			if let Some(OnDemandResponse::HeaderByHash(hdr)) = res.get(idx) {
+				Some(hdr.clone())
+			} else {
+				None
+			}
 		},
 	}
 }
@@ -235,7 +238,7 @@ where
 
 		Either::B(self.send_requests(reqs, move |mut res| match res.pop() {
 			Some(OnDemandResponse::Account(maybe_account)) => {
-				if let Some(ref acc) = maybe_account {
+				if let Some(acc) = &maybe_account {
 					let mut txq = tx_queue.write();
 					txq.cull(address, acc.nonce);
 				}
@@ -388,12 +391,15 @@ where
 					// match them with their numbers for easy sorting later.
 					let bit_combos = filter.bloom_possibilities();
 					let receipts_futures: Vec<_> = headers.drain(..)
-						.filter(|ref hdr| {
+						.filter_map(|hdr| {
 							let hdr_bloom = hdr.log_bloom();
-							bit_combos.iter().any(|bloom| hdr_bloom.contains_bloom(bloom))
+							if bit_combos.iter().any(|bloom| hdr_bloom.contains_bloom(bloom)) {
+								let (num, hash, req) = (hdr.number(), hdr.hash(), request::BlockReceipts(hdr.into()));
+								Some(on_demand.request(ctx, req).expect(NO_INVALID_BACK_REFS_PROOF).map(move |x| (num, hash, x)))
+							} else {
+								None
+							}
 						})
-						.map(|hdr| (hdr.number(), hdr.hash(), request::BlockReceipts(hdr.into())))
-						.map(|(num, hash, req)| on_demand.request(ctx, req).expect(NO_INVALID_BACK_REFS_PROOF).map(move |x| (num, hash, x)))
 						.collect();
 
 					// as the receipts come in, find logs within them which match the filter.
@@ -443,17 +449,17 @@ where
 			// retrieve transaction hash.
 			.and_then(move |mut result| {
 				let mut blocks = BTreeMap::new();
-				for log in result.iter() {
-						let block_hash = log.block_hash.as_ref().expect("Previously initialized with value; qed");
-						blocks.entry(*block_hash).or_insert_with(|| {
-							fetcher_block.block(BlockId::Hash(*block_hash))
-						});
+				for log in &result {
+					let block_hash = log.block_hash.as_ref().expect("Previously initialized with value; qed");
+					blocks.entry(*block_hash).or_insert_with(|| {
+						fetcher_block.block(BlockId::Hash(*block_hash))
+					});
 				}
 				// future get blocks (unordered it)
 				stream::futures_unordered(blocks.into_iter().map(|(_, v)| v)).collect().map(move |blocks| {
 					let transactions_per_block: BTreeMap<_, _> = blocks.iter()
 						.map(|block| (block.hash(), block.transactions())).collect();
-					for log in result.iter_mut() {
+					for log in &mut result {
 						let log_index = log.transaction_index.expect("Previously initialized with value; qed");
 						let block_hash = log.block_hash.expect("Previously initialized with value; qed");
 						let tx_hash = transactions_per_block.get(&block_hash)
@@ -514,7 +520,7 @@ where
 							Ok(future::Loop::Break(transaction))
 						}
 					}
-					Err(ref e) if e == &errors::unknown_block() => {
+					Err(e) if e == errors::unknown_block() => {
 						// block by number not in the canonical chain.
 						Ok(future::Loop::Break(None))
 					}
@@ -610,8 +616,8 @@ where
 				let block_number = |id| match id {
 					BlockId::Earliest => 0,
 					BlockId::Latest => best_number,
-					BlockId::Hash(ref h) =>
-						header_map.get(h).map(types::encoded::Header::number)
+					BlockId::Hash(h) =>
+						header_map.get(&h).map(types::encoded::Header::number)
 						.expect("from_block and to_block headers are fetched by hash; this closure is only called on from_block and to_block; qed"),
 					BlockId::Number(x) => x,
 				};
@@ -625,9 +631,12 @@ where
 				return Either::A(future::err(errors::request_rejected_param_limit(max, "blocks")));
 			}
 
-			let to_header_hint = match to_block {
-				BlockId::Hash(ref h) => header_map.remove(h),
-				_ => None,
+			let to_header_hint = {
+				if let BlockId::Hash(h) = &to_block {
+					header_map.remove(h)
+				} else {
+					None
+				}
 			};
 			let headers_fut = fetcher.headers_range(from_block_num, to_block_num, to_header_hint);
 			Either::B(headers_fut.map(move |headers| {
@@ -642,7 +651,7 @@ where
 	}
 
 	fn headers_by_hash(&self, hashes: &[H256]) -> impl Future<Item = H256FastMap<encoded::Header>, Error = Error> {
-		let mut refs = H256FastMap::with_capacity_and_hasher(hashes.len(), Default::default());
+		let mut refs = H256FastMap::with_capacity_and_hasher(hashes.len(), std::hash::BuildHasherDefault::default());
 		let mut reqs = Vec::with_capacity(hashes.len());
 
 		for hash in hashes {
@@ -721,10 +730,10 @@ where
 			}.into());
 
 			Either::B(fetcher.send_requests(reqs, |mut res| {
-				match res.last_mut() {
-					Some(&mut OnDemandResponse::HeaderWithAncestors(ref mut res_headers)) =>
-						headers.extend(res_headers.drain(..)),
-					_ => panic!("reqs has at least one entry; each request maps to a response; qed"),
+				if let Some(OnDemandResponse::HeaderWithAncestors(res_headers)) = res.last_mut() {
+					headers.extend(res_headers.drain(..))
+				} else {
+					unreachable!("reqs has at least one entry; each request maps to a response; qed")
 				};
 				future::Loop::Continue(headers)
 			}))
@@ -771,7 +780,30 @@ where
 	S: LightSyncProvider + LightNetworkDispatcher + ManageNetwork + 'static,
 	OD: OnDemandRequester + 'static
 {
-	if !gas_known {
+	if gas_known {
+		trace!(target: "light_fetch", "Placing execution request for {} gas in on_demand",
+			params.tx.gas);
+
+		let request = request::TransactionProof {
+			tx: params.tx.fake_sign(params.from),
+			header: params.hdr.into(),
+			env_info: params.env_info,
+			engine: params.engine,
+		};
+
+		let on_demand = params.on_demand;
+		let proved_future = params.sync.with_context(move |ctx| {
+			on_demand
+				.request(ctx, request)
+				.expect("no back-references; therefore all back-refs valid; qed")
+				.map_err(errors::on_demand_error)
+		});
+
+		match proved_future {
+			Some(fut) => Box::new(fut) as Box<dyn Future<Item = _, Error = _> + Send>,
+			None => Box::new(future::err(errors::network_disabled())) as Box<dyn Future<Item = _, Error = _> + Send>,
+		}
+	} else {
 		Box::new(future::loop_fn(params, |mut params| {
 			execute_read_only_tx(true, params.clone()).and_then(move |res| {
 				match res {
@@ -807,28 +839,5 @@ where
 				}
 			})
 		})) as Box<dyn Future<Item = _, Error = _> + Send>
-	} else {
-		trace!(target: "light_fetch", "Placing execution request for {} gas in on_demand",
-			params.tx.gas);
-
-		let request = request::TransactionProof {
-			tx: params.tx.fake_sign(params.from),
-			header: params.hdr.into(),
-			env_info: params.env_info,
-			engine: params.engine,
-		};
-
-		let on_demand = params.on_demand;
-		let proved_future = params.sync.with_context(move |ctx| {
-			on_demand
-				.request(ctx, request)
-				.expect("no back-references; therefore all back-refs valid; qed")
-				.map_err(errors::on_demand_error)
-		});
-
-		match proved_future {
-			Some(fut) => Box::new(fut) as Box<dyn Future<Item = _, Error = _> + Send>,
-			None => Box::new(future::err(errors::network_disabled())) as Box<dyn Future<Item = _, Error = _> + Send>,
-		}
 	}
 }

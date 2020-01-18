@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
+#![allow(clippy::cast_ptr_alignment)]
+
 use compute::Light;
 use either::Either;
 use keccak::{H256, keccak_512};
@@ -37,9 +39,9 @@ type Cache = Either<Vec<Node>, MmapMut>;
 fn byte_size(cache: &Cache) -> usize {
 	use self::Either::{Left, Right};
 
-	match *cache {
-		Left(ref vec) => vec.len() * NODE_BYTES,
-		Right(ref mmap) => mmap.len(),
+	match cache {
+		Left(vec) => vec.len() * NODE_BYTES,
+		Right(mmap) => mmap.len(),
 	}
 }
 
@@ -49,9 +51,9 @@ fn new_buffer(path: &Path, num_nodes: usize, ident: &H256, optimize_for: Optimiz
 		OptimizeFor::Memory => make_memmapped_cache(path, num_nodes, ident).ok(),
 	};
 
-	memmap.map(Either::Right).unwrap_or_else(|| {
+	memmap.map_or_else(|| {
 		Either::Left(make_memory_cache(num_nodes, ident))
-	})
+	}, Either::Right)
 }
 
 #[derive(Clone)]
@@ -81,7 +83,7 @@ impl NodeCacheBuilder {
 	}
 
 	pub fn new<T: Into<Option<OptimizeFor>>>(optimize_for: T, progpow_transition: u64) -> Self {
-		NodeCacheBuilder {
+		Self {
 			seedhash: Arc::new(Mutex::new(SeedHashCompute::default())),
 			optimize_for: optimize_for.into().unwrap_or_default(),
 			progpow_transition
@@ -113,9 +115,9 @@ impl NodeCacheBuilder {
 			Ok(NodeCache {
 				builder: self.clone(),
 				epoch: epoch(block_number),
-				cache_dir: cache_dir,
+				cache_dir,
 				cache_path: path,
-				cache: cache,
+				cache,
 			})
 		} else {
 			Err(io::Error::new(
@@ -146,7 +148,7 @@ impl NodeCacheBuilder {
 		NodeCache {
 			builder: self.clone(),
 			epoch: epoch(block_number),
-			cache_dir: cache_dir.into(),
+			cache_dir,
 			cache_path: path,
 			cache: nodes,
 		}
@@ -163,9 +165,8 @@ impl NodeCache {
 			cache_path(self.cache_dir.as_ref(), &self.builder.epoch_to_ident(ep))
 		})
 		{
-			fs::remove_file(last).unwrap_or_else(|error| match error.kind() {
-				io::ErrorKind::NotFound => (),
-				_ => warn!("Error removing stale DAG cache: {:?}", error),
+			fs::remove_file(last).unwrap_or_else(|error| if let io::ErrorKind::NotFound = error.kind() {} else {
+				warn!("Error removing stale DAG cache: {:?}", error);
 			});
 		}
 
@@ -210,8 +211,8 @@ fn cache_path<'a, P: Into<Cow<'a, Path>>>(path: P, ident: &H256) -> PathBuf {
 fn consume_cache(cache: &mut Cache, path: &Path) -> io::Result<()> {
 	use std::fs::OpenOptions;
 
-	match *cache {
-		Either::Left(ref mut vec) => {
+	match cache {
+		Either::Left(vec) => {
 			let mut file = OpenOptions::new()
 				.read(true)
 				.write(true)
@@ -224,7 +225,7 @@ fn consume_cache(cache: &mut Cache, path: &Path) -> io::Result<()> {
 
 			file.write_all(buf).map(|_| ())
 		}
-		Either::Right(ref mmap) => {
+		Either::Right(mmap) => {
 			mmap.flush()
 		}
 	}
@@ -279,9 +280,9 @@ fn read_from_path(path: &Path) -> io::Result<Vec<Node>> {
 
 impl AsRef<[Node]> for NodeCache {
 	fn as_ref(&self) -> &[Node] {
-		match self.cache {
-			Either::Left(ref vec) => vec,
-			Either::Right(ref mmap) => unsafe {
+		match &self.cache {
+			Either::Left(vec) => vec,
+			Either::Right(mmap) => unsafe {
 				let bytes = mmap.as_ptr();
 				// This isn't a safety issue, so we can keep this a debug lint. We don't care about
 				// people manually messing with the files unless it can cause unsafety, but if we're
@@ -308,8 +309,8 @@ unsafe fn initialize_memory(memory: *mut Node, num_nodes: usize, ident: &H256) {
 
 	for i in 1..num_nodes {
 		// We use raw pointers here, see above
-		let dst = memory.offset(i as _) as *mut u8;
-		let src = memory.offset(i as isize - 1) as *mut u8;
+		let dst = memory.add(i) as *mut u8;
+		let src = memory.add(i - 1) as *mut u8;
 
 		keccak_512::unchecked(dst, NODE_BYTES, src, NODE_BYTES);
 	}

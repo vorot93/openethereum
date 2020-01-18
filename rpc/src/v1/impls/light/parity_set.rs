@@ -21,7 +21,7 @@ use std::io;
 use std::sync::Arc;
 
 use ethereum_types::{H160, H256, U256};
-use fetch::{self, Fetch};
+use fetch::{self, Abort, Fetch};
 use hash::keccak_buffer;
 use light::client::LightChainClient;
 use sync::ManageNetwork;
@@ -42,7 +42,7 @@ pub struct ParitySetClient<F> {
 impl<F: Fetch> ParitySetClient<F> {
 	/// Creates new `ParitySetClient` with given `Fetch`.
 	pub fn new(client: Arc<dyn LightChainClient>, net: Arc<dyn ManageNetwork>, fetch: F) -> Self {
-		ParitySetClient {
+		Self {
 			client,
 			net,
 			fetch,
@@ -130,7 +130,7 @@ impl<F: Fetch> ParitySet for ParitySetClient<F> {
 	}
 
 	fn hash_content(&self, url: String) -> BoxFuture<H256> {
-		let future = self.fetch.get(&url, Default::default()).then(move |result| {
+		let future = self.fetch.get(&url, Abort::default()).then(move |result| {
 			result
 				.map_err(errors::fetch)
 				.and_then(move |response| {

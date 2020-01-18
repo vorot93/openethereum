@@ -43,9 +43,9 @@ impl VersionInfo {
 	/// Get information for this (currently running) binary.
 	pub fn this() -> Self {
 		let raw = raw_package_info();
-		VersionInfo {
+		Self {
 			track: raw.0.into(),
-			version: { let mut v = Version::parse(raw.1).expect("Environment variables are known to be valid; qed"); v.build = vec![]; v.pre = vec![]; v },
+			version: { let mut v = Version::parse(raw.1).expect("Environment variables are known to be valid; qed"); v.build = Vec::new(); v.pre = Vec::new(); v },
 			hash: raw.2.parse::<H160>().unwrap_or_else(|_| H160::zero()),
 		}
 	}
@@ -53,13 +53,13 @@ impl VersionInfo {
 	/// Compose the information from the provided raw fields.
 	pub fn from_raw(semver: u32, track: u8, hash: H160) -> Self {
 		let t = track.into();
-		VersionInfo {
+		Self {
 			version: Version {
 				major: u64::from(semver >> 16),
 				minor: u64::from((semver >> 8) & 0xff),
 				patch: u64::from(semver & 0xff),
-				build: vec![],
-				pre: vec![],
+				build: Vec::new(),
+				pre: Vec::new(),
 			},
 			track: t,
 			hash,

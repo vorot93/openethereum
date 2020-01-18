@@ -150,12 +150,12 @@ fn returns_chain_info() {
 #[test]
 fn returns_logs() {
 	let dummy_block = get_good_dummy_block();
-	let client = get_test_client_with_blocks(vec![dummy_block.clone()]);
+	let client = get_test_client_with_blocks(vec![dummy_block]);
 	let logs = client.logs(Filter {
 		from_block: BlockId::Earliest,
 		to_block: BlockId::Latest,
 		address: None,
-		topics: vec![],
+		topics: Vec::new(),
 		limit: None,
 	}).unwrap();
 	assert_eq!(logs.len(), 0);
@@ -164,12 +164,12 @@ fn returns_logs() {
 #[test]
 fn returns_logs_with_limit() {
 	let dummy_block = get_good_dummy_block();
-	let client = get_test_client_with_blocks(vec![dummy_block.clone()]);
+	let client = get_test_client_with_blocks(vec![dummy_block]);
 	let logs = client.logs(Filter {
 		from_block: BlockId::Earliest,
 		to_block: BlockId::Latest,
 		address: None,
-		topics: vec![],
+		topics: Vec::new(),
 		limit: None,
 	}).unwrap();
 	assert_eq!(logs.len(), 0);
@@ -257,7 +257,7 @@ fn can_mine() {
 	let dummy_blocks = get_good_dummy_block_seq(2);
 	let client = get_test_client_with_blocks(vec![dummy_blocks[0].clone()]);
 
-	let b = client.prepare_open_block(Address::zero(), (3141562.into(), 31415620.into()), vec![]).unwrap().close().unwrap();
+	let b = client.prepare_open_block(Address::zero(), (3_141_562.into(), 31_415_620.into()), Vec::new()).unwrap().close().unwrap();
 
 	assert_eq!(*b.header.parent_hash(), view!(BlockView, &dummy_blocks[0]).header_view().hash());
 }
@@ -280,10 +280,10 @@ fn change_history_size() {
 		).unwrap();
 
 		for _ in 0..20 {
-			let mut b = client.prepare_open_block(Address::zero(), (3141562.into(), 31415620.into()), vec![]).unwrap();
+			let mut b = client.prepare_open_block(Address::zero(), (3_141_562.into(), 31_415_620.into()), Vec::new()).unwrap();
 			b.block_mut().state_mut().add_balance(&address, &5.into(), CleanupMode::NoEmpty).unwrap();
 			b.block_mut().state_mut().commit().unwrap();
-			let b = b.close_and_lock().unwrap().seal(&*test_spec.engine, vec![]).unwrap();
+			let b = b.close_and_lock().unwrap().seal(&*test_spec.engine, Vec::new()).unwrap();
 			client.import_sealed_block(b).unwrap(); // account change is in the journal overlay
 		}
 	}
@@ -339,10 +339,10 @@ fn transaction_proof() {
 	let address = Address::random();
 	let test_spec = spec::new_test();
 	for _ in 0..20 {
-		let mut b = client.prepare_open_block(Address::zero(), (3141562.into(), 31415620.into()), vec![]).unwrap();
+		let mut b = client.prepare_open_block(Address::zero(), (3_141_562.into(), 31_415_620.into()), Vec::new()).unwrap();
 		b.block_mut().state_mut().add_balance(&address, &5.into(), CleanupMode::NoEmpty).unwrap();
 		b.block_mut().state_mut().commit().unwrap();
-		let b = b.close_and_lock().unwrap().seal(&*test_spec.engine, vec![]).unwrap();
+		let b = b.close_and_lock().unwrap().seal(&*test_spec.engine, Vec::new()).unwrap();
 		client.import_sealed_block(b).unwrap(); // account change is in the journal overlay
 	}
 
@@ -365,8 +365,8 @@ fn transaction_proof() {
 	let machine = test_spec.engine.machine();
 	let env_info = client.latest_env_info();
 	let schedule = machine.schedule(env_info.number);
-	let mut state = State::from_existing(backend, root, 0.into(), factories.clone()).unwrap();
-	Executive::new(&mut state, &env_info, &machine, &schedule)
+	let mut state = State::from_existing(backend, root, 0.into(), factories).unwrap();
+	Executive::new(&mut state, &env_info, machine, &schedule)
 		.transact(&transaction, TransactOptions::with_no_tracing().dont_check_nonce()).unwrap();
 
 	assert_eq!(state.balance(&Address::zero()).unwrap(), 5.into());
@@ -397,10 +397,7 @@ fn reset_blockchain() {
 fn import_export_hex() {
 	let client = get_test_client_with_blocks(get_good_dummy_block_seq(19));
 	let block_rlps: Vec<String> = (15..20)
-		.filter_map(|num| client.block(BlockId::Number(num)))
-		.map(|header| {
-			header.raw().to_hex()
-		})
+		.filter_map(|num| client.block(BlockId::Number(num)).map(|header| header.raw().to_hex()))
 		.collect();
 
 	let mut out = Vec::new();
@@ -414,7 +411,7 @@ fn import_export_hex() {
 
 	let written = from_utf8(&out)
 		.unwrap()
-		.split("\n")
+		.split('\n')
 		// last line is empty, ignore it.
 		.take(5)
 		.collect::<Vec<_>>();

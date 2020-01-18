@@ -29,36 +29,82 @@
 //! struct MyHandler;
 //!
 //! impl NetworkProtocolHandler for MyHandler {
-//!		fn initialize(&self, io: &NetworkContext) {
-//!			io.register_timer(0, Duration::from_secs(1));
-//!		}
+//!     fn initialize(&self, io: &NetworkContext) {
+//!         io.register_timer(0, Duration::from_secs(1));
+//!     }
 //!
-//!		fn read(&self, io: &NetworkContext, peer: &PeerId, packet_id: u8, data: &[u8]) {
-//!			println!("Received {} ({} bytes) from {}", packet_id, data.len(), peer);
-//!		}
+//!     fn read(&self, io: &NetworkContext, peer: &PeerId, packet_id: u8, data: &[u8]) {
+//!         println!("Received {} ({} bytes) from {}", packet_id, data.len(), peer);
+//!     }
 //!
-//!		fn connected(&self, io: &NetworkContext, peer: &PeerId) {
-//!			println!("Connected {}", peer);
-//!		}
+//!     fn connected(&self, io: &NetworkContext, peer: &PeerId) {
+//!         println!("Connected {}", peer);
+//!     }
 //!
-//!		fn disconnected(&self, io: &NetworkContext, peer: &PeerId) {
-//!			println!("Disconnected {}", peer);
-//!		}
+//!     fn disconnected(&self, io: &NetworkContext, peer: &PeerId) {
+//!         println!("Disconnected {}", peer);
+//!     }
 //! }
 //!
-//! fn main () {
-//! 	let mut service = NetworkService::new(NetworkConfiguration::new_local(), None).expect("Error creating network service");
-//! 	service.start().expect("Error starting service");
-//! 	service.register_protocol(Arc::new(MyHandler), *b"myp", &[(1u8, 1u8)]);
+//! let mut service = NetworkService::new(NetworkConfiguration::new_local(), None).expect("Error creating network service");
+//! service.start().expect("Error starting service");
+//! service.register_protocol(Arc::new(MyHandler), *b"myp", &[(1u8, 1u8)]);
 //!
-//! 	// Wait for quit condition
-//! 	// ...
-//! 	// Drop the service
-//! }
+//! // Wait for quit condition
+//! // ...
+//! // Drop the service
 //! ```
 
 //TODO: use Poll from mio
 #![allow(deprecated)]
+
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
 
 pub use ethcore_io::TimerToken;
 pub use host::NetworkContext;

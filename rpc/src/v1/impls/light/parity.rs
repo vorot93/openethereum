@@ -80,7 +80,7 @@ where
 		ws_address: Option<Host>,
 		gas_price_percentile: usize,
 	) -> Self {
-		ParityClient {
+		Self {
 			light_dispatch,
 			logger,
 			settings,
@@ -115,7 +115,7 @@ where
 	}
 
 	fn min_gas_price(&self) -> Result<U256> {
-		Ok(U256::default())
+		Ok(U256::zero())
 	}
 
 	fn extra_data(&self) -> Result<Bytes> {
@@ -123,11 +123,11 @@ where
 	}
 
 	fn gas_floor_target(&self) -> Result<U256> {
-		Ok(U256::default())
+		Ok(U256::zero())
 	}
 
 	fn gas_ceil_target(&self) -> Result<U256> {
-		Ok(U256::default())
+		Ok(U256::zero())
 	}
 
 	fn dev_logs(&self) -> Result<Vec<String>> {
@@ -186,9 +186,10 @@ where
 	}
 
 	fn unsigned_transactions_count(&self) -> Result<usize> {
-		match self.signer {
-			None => Err(errors::signer_disabled()),
-			Some(ref signer) => Ok(signer.len()),
+		if let Some(signer) = &self.signer {
+			Ok(signer.len())
+		} else {
+			Err(errors::signer_disabled())
 		}
 	}
 

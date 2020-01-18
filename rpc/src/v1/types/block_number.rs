@@ -42,12 +42,12 @@ pub enum BlockNumber {
 
 impl Default for BlockNumber {
 	fn default() -> Self {
-		BlockNumber::Latest
+		Self::Latest
 	}
 }
 
 impl<'a> Deserialize<'a> for BlockNumber {
-	fn deserialize<D>(deserializer: D) -> Result<BlockNumber, D::Error> where D: Deserializer<'a> {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'a> {
 		deserializer.deserialize_any(BlockNumberVisitor)
 	}
 }
@@ -55,16 +55,16 @@ impl<'a> Deserialize<'a> for BlockNumber {
 impl BlockNumber {
 	/// Convert block number to min block target.
 	pub fn to_min_block_num(&self) -> Option<u64> {
-		match *self {
-			BlockNumber::Num(ref x) => Some(*x),
+		match self {
+			Self::Num(x) => Some(*x),
 			_ => None,
 		}
 	}
 }
 
-/// BlockNumber to BlockId conversion
+/// `BlockNumber` to `BlockId` conversion
 ///
-/// NOTE use only for light clients.
+/// NOTE: use only for light clients.
 pub trait LightBlockNumber {
 	/// Convert block number to block id.
 	fn to_block_id(self) -> BlockId;
@@ -76,11 +76,11 @@ impl LightBlockNumber for BlockNumber {
 		// Since light clients don't produce pending blocks
 		// (they don't have state) we can safely fallback to `Latest`.
 		match self {
-			BlockNumber::Hash { hash, .. } => BlockId::Hash(hash),
-			BlockNumber::Num(n) => BlockId::Number(n),
-			BlockNumber::Earliest => BlockId::Earliest,
-			BlockNumber::Latest => BlockId::Latest,
-			BlockNumber::Pending => {
+			Self::Hash { hash, .. } => BlockId::Hash(hash),
+			Self::Num(n) => BlockId::Number(n),
+			Self::Earliest => BlockId::Earliest,
+			Self::Latest => BlockId::Latest,
+			Self::Pending => {
 				warn!("`Pending` is deprecated and may be removed in future versions. Falling back to `Latest`");
 				BlockId::Latest
 			}
@@ -90,14 +90,14 @@ impl LightBlockNumber for BlockNumber {
 
 impl Serialize for BlockNumber {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
-		match *self {
-			BlockNumber::Hash{ hash, require_canonical } => serializer.serialize_str(
+		match self {
+			Self::Hash{ hash, require_canonical } => serializer.serialize_str(
 				&format!("{{ 'hash': '{}', 'requireCanonical': '{}'  }}", hash, require_canonical)
 			),
-			BlockNumber::Num(ref x) => serializer.serialize_str(&format!("0x{:x}", x)),
-			BlockNumber::Latest => serializer.serialize_str("latest"),
-			BlockNumber::Earliest => serializer.serialize_str("earliest"),
-			BlockNumber::Pending => serializer.serialize_str("pending"),
+			Self::Num(x) => serializer.serialize_str(&format!("0x{:x}", x)),
+			Self::Latest => serializer.serialize_str("latest"),
+			Self::Earliest => serializer.serialize_str("earliest"),
+			Self::Pending => serializer.serialize_str("pending"),
 		}
 	}
 }
@@ -156,7 +156,7 @@ impl<'a> Visitor<'a> for BlockNumberVisitor {
 			return Ok(BlockNumber::Hash { hash, require_canonical })
 		}
 
-		return Err(Error::custom("Invalid input"))
+		Err(Error::custom("Invalid input"))
 	}
 
 	fn visit_str<E>(self, value: &str) -> Result<Self::Value, E> where E: Error {

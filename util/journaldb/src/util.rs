@@ -17,7 +17,7 @@
 use ethereum_types::H256;
 use rlp::{RlpStream, Encodable, Rlp, DecoderError};
 
-const PADDING : [u8; 10] = [ 0u8; 10 ];
+const PADDING : [u8; 10] = [ 0_u8; 10 ];
 
 pub struct DatabaseKey {
 	pub era: u64,

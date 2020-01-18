@@ -80,7 +80,7 @@ pub struct AuthCodes<T: TimeProvider = DefaultTimeProvider> {
 impl AuthCodes<DefaultTimeProvider> {
 
 	/// Reads `AuthCodes` from file and creates new instance using `DefaultTimeProvider`.
-	pub fn from_file(file: &Path) -> io::Result<AuthCodes> {
+	pub fn from_file(file: &Path) -> io::Result<Self> {
 		let content = {
 			if let Ok(mut file) = fs::File::open(file) {
 				let mut s = String::new();
@@ -113,7 +113,7 @@ impl AuthCodes<DefaultTimeProvider> {
 				}
 			})
 			.collect();
-		Ok(AuthCodes {
+		Ok(Self {
 			codes,
 			now: time_provider,
 		})
@@ -138,7 +138,7 @@ impl<T: TimeProvider> AuthCodes<T> {
 
 	/// Creates a new `AuthCodes` store with given `TimeProvider`.
 	pub fn new(codes: Vec<String>, now: T) -> Self {
-		AuthCodes {
+		Self {
 			codes: codes.into_iter().map(|code| Code {
 				code,
 				created_at: time::Duration::from_secs(now.now()),
@@ -230,7 +230,7 @@ mod tests {
 		// given
 		let code = "initial";
 		let time = 99;
-		let mut codes = AuthCodes::new(vec![], || 100);
+		let mut codes = AuthCodes::new(Vec::new(), || 100);
 
 		// when
 		let res1 = codes.is_valid(&generate_hash(code, time), time);

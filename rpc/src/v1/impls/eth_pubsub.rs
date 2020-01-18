@@ -50,7 +50,7 @@ use types::{
 
 type Client = Sink<pubsub::Result>;
 
-/// Eth PubSub implementation.
+/// Eth `PubSub` implementation.
 pub struct EthPubSubClient<C> {
 	handler: Arc<ChainNotificationHandler<C>>,
 	heads_subscribers: Arc<RwLock<Subscribers<Client>>>,
@@ -115,7 +115,7 @@ impl<C> EthPubSubClient<C>
 			})
 		);
 
-		EthPubSubClient {
+		Self {
 			handler,
 			sync_subscribers,
 			heads_subscribers,
@@ -152,11 +152,11 @@ where
 			cache,
 			gas_price_percentile,
 		};
-		EthPubSubClient::new(Arc::new(fetch), executor, pool_receiver)
+		Self::new(Arc::new(fetch), executor, pool_receiver)
 	}
 }
 
-/// PubSub Notification handler.
+/// `PubSub` Notification handler.
 pub struct ChainNotificationHandler<C> {
 	client: Arc<C>,
 	executor: Executor,
@@ -177,7 +177,7 @@ impl<C> ChainNotificationHandler<C> {
 
 	fn notify_heads(&self, headers: &[(encoded::Header, BTreeMap<String, String>)]) {
 		for subscriber in self.heads_subscribers.read().values() {
-			for &(ref header, ref extra_info) in headers {
+			for (header, extra_info) in headers {
 				Self::notify(&self.executor, subscriber, pubsub::Result::Header(Box::new(RichHeader {
 					inner: header.into(),
 					extra_info: extra_info.clone(),
@@ -198,12 +198,12 @@ impl<C> ChainNotificationHandler<C> {
 		T: IntoFuture<Item = Vec<Log>, Error = Error>,
 		T::Future: Send + 'static,
 	{
-		for &(ref subscriber, ref filter) in self.logs_subscribers.read().values() {
+		for (subscriber, filter) in self.logs_subscribers.read().values() {
 			let logs = futures::future::join_all(enacted
 				.iter()
-				.map(|&(hash, ref ex)| {
+				.map(|(hash, ex)| {
 					let mut filter = filter.clone();
-					filter.from_block = BlockId::Hash(hash);
+					filter.from_block = BlockId::Hash(*hash);
 					filter.to_block = filter.from_block;
 					logs(filter, ex).into_future()
 				})
@@ -214,7 +214,7 @@ impl<C> ChainNotificationHandler<C> {
 			let subscriber = subscriber.clone();
 			self.executor.spawn(logs
 				.map(move |logs| {
-					let logs = logs.into_iter().flat_map(|log| log).collect();
+					let logs = logs.into_iter().flatten().collect();
 
 					for log in limit_logs(logs, limit) {
 						Self::notify(&executor, &subscriber, pubsub::Result::Log(Box::new(log)))
@@ -254,7 +254,7 @@ where
 	}
 
 	fn logs(&self, filter: EthFilter) -> BoxFuture<Vec<Log>> {
-		Box::new(LightFetch::logs(self, filter)) as BoxFuture<_>
+		Box::new(Self::logs(self, filter)) as BoxFuture<_>
 	}
 }
 
@@ -262,8 +262,7 @@ impl<C: LightClient> LightChainNotify for ChainNotificationHandler<C> {
 	fn new_headers(&self, enacted: &[H256]) {
 		let headers = enacted
 			.iter()
-			.filter_map(|hash| self.client.block_header(BlockId::Hash(*hash)))
-			.map(|header| (header, Default::default()))
+			.filter_map(|hash| self.client.block_header(BlockId::Hash(*hash)).map(|header| (header, BTreeMap::new())))
 			.collect::<Vec<_>>();
 
 		self.notify_heads(&headers);
@@ -273,19 +272,21 @@ impl<C: LightClient> LightChainNotify for ChainNotificationHandler<C> {
 
 impl<C: BlockChainClient> ChainNotify for ChainNotificationHandler<C> {
 	fn new_blocks(&self, new_blocks: NewBlocks) {
-		if self.heads_subscribers.read().is_empty() && self.logs_subscribers.read().is_empty() { return }
 		const EXTRA_INFO_PROOF: &str = "Object exists in in blockchain (fetched earlier), extra_info is always available if object exists; qed";
+
+		if self.heads_subscribers.read().is_empty() && self.logs_subscribers.read().is_empty() { return }
 		let headers = new_blocks.route.route()
 			.iter()
-			.filter_map(|&(hash, ref typ)| {
+			.filter_map(|(hash, typ)| {
 				match typ {
 					ChainRouteType::Retracted => None,
-					ChainRouteType::Enacted => self.client.block_header(BlockId::Hash(hash))
+					ChainRouteType::Enacted => {
+						self.client.block_header(BlockId::Hash(*hash)).map(|header| {
+							let hash = header.hash();
+							(header, self.client.block_extra_info(BlockId::Hash(hash)).expect(EXTRA_INFO_PROOF))
+						})
+					}
 				}
-			})
-			.map(|header| {
-				let hash = header.hash();
-				(header, self.client.block_extra_info(BlockId::Hash(hash)).expect(EXTRA_INFO_PROOF))
 			})
 			.collect::<Vec<_>>();
 

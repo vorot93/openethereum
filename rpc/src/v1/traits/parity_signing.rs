@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-//! ParitySigning rpc interface.
+//! `ParitySigning` rpc interface.
 use jsonrpc_core::{BoxFuture, Result};
 use jsonrpc_derive::rpc;
 

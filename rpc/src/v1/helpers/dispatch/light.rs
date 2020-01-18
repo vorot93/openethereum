@@ -65,7 +65,7 @@ where
 {
 	/// Create a new `LightDispatcher` from its requisite parts.
 	///
-	/// For correct operation, the OnDemand service is assumed to be registered as a network handler,
+	/// For correct operation, the `OnDemand` service is assumed to be registered as a network handler,
 	pub fn new(
 		sync: Arc<S>,
 		client: Arc<dyn LightChainClient>,
@@ -75,7 +75,7 @@ where
 		nonces: Arc<Mutex<nonce::Reservations>>,
 		gas_price_percentile: usize,
 	) -> Self {
-		LightDispatcher {
+		Self {
 			sync,
 			client,
 			on_demand,
@@ -194,7 +194,7 @@ where
 				.and_then(move |maybe_account| {
 					let cost = filled.value.saturating_add(filled.gas.saturating_mul(filled.gas_price));
 					match maybe_account {
-						Some(ref account) if cost > account.balance => {
+						Some(account) if cost > account.balance => {
 							Err(errors::transaction(TransactionError::InsufficientBalance {
 								balance: account.balance,
 								cost,
@@ -262,12 +262,11 @@ where
 		return Box::new(future::ok(cached))
 	}
 
-	let cache = cache.clone();
 	let eventual_corpus = sync.with_context(|ctx| {
 		// get some recent headers with gas used,
 		// and request each of the blocks from the network.
 		let block_requests = client.ancestry_iter(BlockId::Latest)
-			.filter(|hdr| hdr.gas_used() != U256::default())
+			.filter(|hdr| hdr.gas_used() != U256::zero())
 			.take(GAS_PRICE_SAMPLE_SIZE)
 			.map(|hdr| request::Body(hdr.into()))
 			.collect::<Vec<_>>();
@@ -277,7 +276,7 @@ where
 			.expect("no back-references; therefore all back-references are valid; qed")
 			.map(|bodies| {
 				bodies.into_iter().fold(Vec::new(), |mut v, block| {
-					for t in block.transaction_views().iter() {
+					for t in &block.transaction_views() {
 						v.push(t.gas_price())
 					}
 					v

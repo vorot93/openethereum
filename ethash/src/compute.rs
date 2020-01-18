@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Ethash implementation
-//! See https://github.com/ethereum/wiki/wiki/Ethash
+//! `Ethash` implementation
+//! See <https://github.com/ethereum/wiki/wiki/Ethash>
 
 // TODO: fix endianess for big endian
 
@@ -31,7 +31,7 @@ use std::path::Path;
 
 const MIX_WORDS: usize = ETHASH_MIX_BYTES / 4;
 const MIX_NODES: usize = MIX_WORDS / NODE_WORDS;
-pub const FNV_PRIME: u32 = 0x01000193;
+pub const FNV_PRIME: u32 = 0x0100_0193;
 
 /// Computation result
 pub struct ProofOfWork {
@@ -68,15 +68,15 @@ impl Light {
 			Algorithm::Hashimoto
 		};
 
-		Light { block_number, cache, algorithm }
+		Self { block_number, cache, algorithm }
 	}
 
 	/// Calculate the light boundary data
 	/// `header_hash` - The header hash to pack into the mix
 	/// `nonce` - The nonce to pack into the mix
 	pub fn compute(&self, header_hash: &H256, nonce: u64, block_number: u64) -> ProofOfWork {
-		match self.algorithm {
-			Algorithm::Progpow(ref c_dag) => {
+		match &self.algorithm {
+			Algorithm::Progpow(c_dag) => {
 				let (value, mix_hash) = progpow(
 					*header_hash,
 					nonce,
@@ -106,9 +106,10 @@ impl Light {
 			Algorithm::Hashimoto
 		};
 
-		Ok(Light { block_number, cache, algorithm })
+		Ok(Self { block_number, cache, algorithm })
 	}
 
+	#[allow(clippy::wrong_self_convention)]
 	pub fn to_file(&mut self) -> io::Result<&Path> {
 		self.cache.flush()?;
 		Ok(self.cache.cache_path())
@@ -116,11 +117,12 @@ impl Light {
 }
 
 pub fn slow_hash_block_number(block_number: u64) -> H256 {
-	SeedHashCompute::resume_compute_seedhash([0u8; 32], 0, block_number / ETHASH_EPOCH_LENGTH)
+	SeedHashCompute::resume_compute_seedhash([0_u8; 32], 0, block_number / ETHASH_EPOCH_LENGTH)
 }
 
-fn fnv_hash(x: u32, y: u32) -> u32 {
-	return x.wrapping_mul(FNV_PRIME) ^ y;
+#[inline]
+const fn fnv_hash(x: u32, y: u32) -> u32 {
+	x.wrapping_mul(FNV_PRIME) ^ y
 }
 
 /// Difficulty quick check for POW preverification
@@ -132,10 +134,10 @@ fn fnv_hash(x: u32, y: u32) -> u32 {
 pub fn quick_get_difficulty(header_hash: &H256, nonce: u64, mix_hash: &H256, progpow: bool) -> H256 {
 	unsafe {
 		if progpow {
-			let seed = keccak_f800_short(*header_hash, nonce, [0u32; 8]);
+			let seed = keccak_f800_short(*header_hash, nonce, [0_u32; 8]);
 			keccak_f800_long(*header_hash, seed, mem::transmute(*mix_hash))
 		} else {
-			let mut buf = [0u8; 64 + 32];
+			let mut buf = [0_u8; 64 + 32];
 
 			let hash_len = header_hash.len();
 			buf[..hash_len].copy_from_slice(header_hash);
@@ -144,7 +146,7 @@ pub fn quick_get_difficulty(header_hash: &H256, nonce: u64, mix_hash: &H256, pro
 			keccak_512::unchecked(buf.as_mut_ptr(), 64, buf.as_ptr(), 40);
 			buf[64..].copy_from_slice(mix_hash);
 
-			let mut hash = [0u8; 32];
+			let mut hash = [0_u8; 32];
 			keccak_256::unchecked(hash.as_mut_ptr(), hash.len(), buf.as_ptr(), buf.len());
 
 			hash
@@ -199,7 +201,7 @@ fn hash_compute(light: &Light, full_size: usize, header_hash: &H256, nonce: u64)
 	let mut buf: MixBuf = MixBuf {
 		half_mix: unsafe {
 			// Pack `header_hash` and `nonce` together
-			let mut out = [0u8; NODE_BYTES];
+			let mut out = [0_u8; NODE_BYTES];
 
 			let hash_len = header_hash.len();
 			out[..hash_len].copy_from_slice(header_hash);
@@ -215,7 +217,7 @@ fn hash_compute(light: &Light, full_size: usize, header_hash: &H256, nonce: u64)
 
 			Node { bytes: out }
 		},
-		compress_bytes: [0u8; MIX_WORDS],
+		compress_bytes: [0_u8; MIX_WORDS],
 	};
 
 	let mut mix: [_; MIX_NODES] = [buf.half_mix.clone(), buf.half_mix.clone()];
@@ -240,14 +242,14 @@ fn hash_compute(light: &Light, full_size: usize, header_hash: &H256, nonce: u64)
 		};
 
 		// MIX_NODES
-		for n in 0..2 {
+		for (n, m) in mix.iter_mut().enumerate().take(2) {
 			let tmp_node = calculate_dag_item(
 				index * MIX_NODES as u32 + n as u32,
 				cache,
 			);
 
 			// NODE_WORDS
-			for (a, b) in mix[n].as_words_mut().iter_mut().zip(tmp_node.as_words()) {
+			for (a, b) in m.as_words_mut().iter_mut().zip(tmp_node.as_words()) {
 				*a = fnv_hash(*a, *b);
 			}
 		}
@@ -269,14 +271,14 @@ fn hash_compute(light: &Light, full_size: usize, header_hash: &H256, nonce: u64)
 
 		// Compress mix
 		debug_assert_eq!(MIX_WORDS / 4, 8);
-		for i in 0..8 {
+		for (i, c) in compress.iter_mut().enumerate().take(8) {
 			let w = i * 4;
 
-			let mut reduction = mix_words[w + 0];
+			let mut reduction = mix_words[w];
 			reduction = reduction.wrapping_mul(FNV_PRIME) ^ mix_words[w + 1];
 			reduction = reduction.wrapping_mul(FNV_PRIME) ^ mix_words[w + 2];
 			reduction = reduction.wrapping_mul(FNV_PRIME) ^ mix_words[w + 3];
-			compress[i] = reduction;
+			*c = reduction;
 		}
 	}
 
@@ -299,7 +301,7 @@ fn hash_compute(light: &Light, full_size: usize, header_hash: &H256, nonce: u64)
 		buf.compress_bytes
 	};
 
-	ProofOfWork { mix_hash: mix_hash, value: value }
+	ProofOfWork { mix_hash, value }
 }
 
 pub fn calculate_dag_item(node_index: u32, cache: &[Node]) -> Node {
@@ -334,26 +336,26 @@ mod test {
 	#[test]
 	fn test_get_cache_size() {
 		// https://github.com/ethereum/wiki/wiki/Ethash/ef6b93f9596746a088ea95d01ca2778be43ae68f#data-sizes
-		assert_eq!(16776896usize, get_cache_size(0));
-		assert_eq!(16776896usize, get_cache_size(1));
-		assert_eq!(16776896usize, get_cache_size(ETHASH_EPOCH_LENGTH - 1));
-		assert_eq!(16907456usize, get_cache_size(ETHASH_EPOCH_LENGTH));
-		assert_eq!(16907456usize, get_cache_size(ETHASH_EPOCH_LENGTH + 1));
-		assert_eq!(284950208usize, get_cache_size(2046 * ETHASH_EPOCH_LENGTH));
-		assert_eq!(285081536usize, get_cache_size(2047 * ETHASH_EPOCH_LENGTH));
-		assert_eq!(285081536usize, get_cache_size(2048 * ETHASH_EPOCH_LENGTH - 1));
+		assert_eq!(16_776_896_usize, get_cache_size(0));
+		assert_eq!(16_776_896_usize, get_cache_size(1));
+		assert_eq!(16_776_896_usize, get_cache_size(ETHASH_EPOCH_LENGTH - 1));
+		assert_eq!(16_907_456_usize, get_cache_size(ETHASH_EPOCH_LENGTH));
+		assert_eq!(16_907_456_usize, get_cache_size(ETHASH_EPOCH_LENGTH + 1));
+		assert_eq!(284_950_208_usize, get_cache_size(2046 * ETHASH_EPOCH_LENGTH));
+		assert_eq!(285_081_536_usize, get_cache_size(2047 * ETHASH_EPOCH_LENGTH));
+		assert_eq!(285_081_536_usize, get_cache_size(2048 * ETHASH_EPOCH_LENGTH - 1));
 	}
 
 	#[test]
 	fn test_get_data_size() {
 		// https://github.com/ethereum/wiki/wiki/Ethash/ef6b93f9596746a088ea95d01ca2778be43ae68f#data-sizes
-		assert_eq!(1073739904usize, get_data_size(0));
-		assert_eq!(1073739904usize, get_data_size(1));
-		assert_eq!(1073739904usize, get_data_size(ETHASH_EPOCH_LENGTH - 1));
-		assert_eq!(1082130304usize, get_data_size(ETHASH_EPOCH_LENGTH));
-		assert_eq!(1082130304usize, get_data_size(ETHASH_EPOCH_LENGTH + 1));
-		assert_eq!(18236833408usize, get_data_size(2046 * ETHASH_EPOCH_LENGTH));
-		assert_eq!(18245220736usize, get_data_size(2047 * ETHASH_EPOCH_LENGTH));
+		assert_eq!(1_073_739_904_usize, get_data_size(0));
+		assert_eq!(1_073_739_904_usize, get_data_size(1));
+		assert_eq!(1_073_739_904_usize, get_data_size(ETHASH_EPOCH_LENGTH - 1));
+		assert_eq!(1_082_130_304_usize, get_data_size(ETHASH_EPOCH_LENGTH));
+		assert_eq!(1_082_130_304_usize, get_data_size(ETHASH_EPOCH_LENGTH + 1));
+		assert_eq!(18_236_833_408_usize, get_data_size(2046 * ETHASH_EPOCH_LENGTH));
+		assert_eq!(18_245_220_736_usize, get_data_size(2047 * ETHASH_EPOCH_LENGTH));
 	}
 
 	#[test]
@@ -368,7 +370,7 @@ mod test {
 			0x6b, 0xdf, 0x8b, 0x19, 0x71, 0x04, 0x8c, 0x71, 0xff, 0x93, 0x7b, 0xb2, 0xd3, 0x2a,
 			0x64, 0x31, 0xab, 0x6d,
 		];
-		let nonce = 0xd7b3ac70a301a249;
+		let nonce = 0xd7b3_ac70_a301_a249;
 		let boundary_good = [
 			0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x3e, 0x9b, 0x6c, 0x69, 0xbc, 0x2c, 0xe2, 0xa2,
 			0x4a, 0x8e, 0x95, 0x69, 0xef, 0xc7, 0xd7, 0x1b, 0x33, 0x35, 0xdf, 0x36, 0x8c, 0x9a,
@@ -400,11 +402,11 @@ mod test {
 			0x4a, 0x8e, 0x95, 0x69, 0xef, 0xc7, 0xd7, 0x1b, 0x33, 0x35, 0xdf, 0x36, 0x8c, 0x9a,
 			0xe9, 0x7e, 0x53, 0x84,
 		];
-		let nonce = 0xd7b3ac70a301a249;
+		let nonce = 0xd7b3_ac70_a301_a249;
 
 		let tempdir = TempDir::new("").unwrap();
 		// difficulty = 0x085657254bd9u64;
-		let light = NodeCacheBuilder::new(None, u64::max_value()).light(tempdir.path(), 486382);
+		let light = NodeCacheBuilder::new(None, u64::max_value()).light(tempdir.path(), 486_382);
 		let result = light_compute(&light, &hash, nonce);
 		assert_eq!(result.mix_hash[..], mix_hash[..]);
 		assert_eq!(result.value[..], boundary[..]);

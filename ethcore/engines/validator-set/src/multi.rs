@@ -44,8 +44,8 @@ pub struct Multi {
 
 impl Multi {
 	pub fn new(set_map: BTreeMap<BlockNumber, Box<dyn ValidatorSet>>) -> Self {
-		assert!(set_map.get(&0u64).is_some(), "ValidatorSet has to be specified from block 0.");
-		Multi {
+		assert!(set_map.get(&0_u64).is_some(), "ValidatorSet has to be specified from block 0.");
+		Self {
 			sets: set_map,
 			block_number: RwLock::new(Box::new(move |_| Err("No client!".into()))),
 		}
@@ -86,8 +86,10 @@ impl Multi {
 
 impl ValidatorSet for Multi {
 	fn default_caller(&self, block_id: BlockId) -> Box<Call> {
-		self.correct_set(block_id).map(|set| set.default_caller(block_id))
-			.unwrap_or_else(|| Box::new(|_, _| Err("No validator set for given ID.".into())))
+		self.correct_set(block_id).map_or_else(
+			|| Box::new(|_, _| Err("No validator set for given ID.".into())) as Box<Call>,
+			|set| set.default_caller(block_id)
+		)
 	}
 
 	fn generate_engine_transactions(&self, _first: bool, header: &Header, call: &mut SystemCall)
@@ -189,7 +191,7 @@ mod tests {
 	use ethereum_types::Address;
 	use parity_crypto::publickey::Secret;
 	use keccak_hash::keccak;
-	use spec;
+	
 
 	use crate::ValidatorSet;
 	use super::Multi;
@@ -198,7 +200,7 @@ mod tests {
 	fn uses_current_set() {
 		let tap = Arc::new(AccountProvider::transient_provider());
 		let s0: Secret = keccak("0").into();
-		let v0 = tap.insert_account(s0.clone(), &"".into()).unwrap();
+		let v0 = tap.insert_account(s0, &"".into()).unwrap();
 		let v1 = tap.insert_account(keccak("1").into(), &"".into()).unwrap();
 		let client = generate_dummy_client_with_spec(spec::new_validator_multi);
 		client.engine().register_client(Arc::downgrade(&client) as _);
@@ -221,7 +223,7 @@ mod tests {
 		client.transact(TransactionRequest::call(Default::default(), Default::default())).unwrap();
 		EngineClient::update_sealing(&*client, ForceUpdateSealing::No);
 		assert_eq!(client.chain_info().best_block_number, 1);
-		let signer = Box::new((tap.clone(), v1, "".into()));
+		let signer = Box::new((tap, v1, "".into()));
 		client.miner().set_author(miner::Author::Sealer(signer));
 		EngineClient::update_sealing(&*client, ForceUpdateSealing::No);
 		assert_eq!(client.chain_info().best_block_number, 2);

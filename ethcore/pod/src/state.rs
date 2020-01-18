@@ -20,7 +20,7 @@ use std::collections::BTreeMap;
 use ethereum_types::{H256, Address};
 use triehash::sec_trie_root;
 use common_types::state_diff::StateDiff;
-use ethjson;
+
 use serde::Serialize;
 
 use crate::account::PodAccount;
@@ -31,7 +31,7 @@ pub struct PodState(BTreeMap<Address, PodAccount>);
 
 impl PodState {
 	/// Get the underlying map.
-	pub fn get(&self) -> &BTreeMap<Address, PodAccount> {
+	pub const fn get(&self) -> &BTreeMap<Address, PodAccount> {
 		&self.0
 	}
 
@@ -41,24 +41,24 @@ impl PodState {
 	}
 
 	/// Drain object to get the underlying map.
+	#[allow(clippy::missing_const_for_fn)]
 	pub fn drain(self) -> BTreeMap<Address, PodAccount> {
 		self.0
 	}
 }
 
 impl From<ethjson::spec::State> for PodState {
-	fn from(s: ethjson::spec::State) -> PodState {
+	fn from(s: ethjson::spec::State) -> Self {
 		let state: BTreeMap<_,_> = s.into_iter()
-			.filter(|pair| !pair.1.is_empty())
-			.map(|(addr, acc)| (addr.into(), PodAccount::from(acc)))
+			.filter_map(|(addr, acc)| if acc.is_empty() { None } else { Some((addr.into(), PodAccount::from(acc))) })
 			.collect();
-		PodState(state)
+		Self(state)
 	}
 }
 
 impl From<BTreeMap<Address, PodAccount>> for PodState {
 	fn from(s: BTreeMap<Address, PodAccount>) -> Self {
-		PodState(s)
+		Self(s)
 	}
 }
 
@@ -99,7 +99,7 @@ mod test {
 			Address::from_low_u64_be(1) => AccountDiff{
 				balance: Diff::Died(69.into()),
 				nonce: Diff::Died(0.into()),
-				code: Diff::Died(vec![]),
+				code: Diff::Died(Vec::new()),
 				storage: map![],
 			}
 		]});
@@ -107,7 +107,7 @@ mod test {
 			Address::from_low_u64_be(1) => AccountDiff{
 				balance: Diff::Born(69.into()),
 				nonce: Diff::Born(0.into()),
-				code: Diff::Born(vec![]),
+				code: Diff::Born(Vec::new()),
 				storage: map![],
 			}
 		]});
@@ -144,7 +144,7 @@ mod test {
 			Address::from_low_u64_be(2) => AccountDiff {
 				balance: Diff::Born(69.into()),
 				nonce: Diff::Born(0.into()),
-				code: Diff::Born(vec![]),
+				code: Diff::Born(Vec::new()),
 				storage: map![],
 			}
 		]});
@@ -152,7 +152,7 @@ mod test {
 			Address::from_low_u64_be(2) => AccountDiff {
 				balance: Diff::Died(69.into()),
 				nonce: Diff::Died(0.into()),
-				code: Diff::Died(vec![]),
+				code: Diff::Died(Vec::new()),
 				storage: map![],
 			}
 		]});

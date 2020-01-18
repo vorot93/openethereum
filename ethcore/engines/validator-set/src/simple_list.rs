@@ -46,10 +46,11 @@ impl SimpleList {
 		} else if validator_count != 0 && validator_count % 2 == 0 {
 			warn!(target: "engine", "Running AuRa with an even number of validators ({}) is not recommended (risk of network split).", validator_count);
 		}
-		SimpleList { validators }
+		Self { validators }
 	}
 
 	/// Convert into inner representation.
+	#[allow(clippy::missing_const_for_fn)]
 	pub fn into_inner(self) -> Vec<Address> {
 		self.validators
 	}
@@ -63,7 +64,7 @@ impl ::std::ops::Deref for SimpleList {
 
 impl From<Vec<Address>> for SimpleList {
 	fn from(validators: Vec<Address>) -> Self {
-		SimpleList::new(validators)
+		Self::new(validators)
 	}
 }
 
@@ -83,9 +84,10 @@ impl ValidatorSet for SimpleList {
 	}
 
 	fn is_epoch_end(&self, first: bool, _chain_head: &Header) -> Option<Vec<u8>> {
-		match first {
-			true => Some(Vec::new()), // allow transition to fixed list, and instantly
-			false => None,
+		if first {
+			Some(Vec::new()) // allow transition to fixed list, and instantly
+		} else {
+			None
 		}
 	}
 
@@ -110,7 +112,7 @@ impl ValidatorSet for SimpleList {
 			panic!("Cannot operate with an empty validator set.");
 		}
 
-		self.validators.get(nonce % validator_n).expect("There are validator_n authorities; taking number modulo validator_n gives number in validator_n range; qed").clone()
+		*self.validators.get(nonce % validator_n).expect("There are validator_n authorities; taking number modulo validator_n gives number in validator_n range; qed")
 	}
 
 	fn count_with_caller(&self, _bh: &H256, _: &Call) -> usize {
@@ -135,7 +137,7 @@ mod tests {
 	fn simple_list() {
 		let a1 = Address::from_str("cd1722f3947def4cf144679da39c4c32bdc35681").unwrap();
 		let a2 = Address::from_str("0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6").unwrap();
-		let list = SimpleList::new(vec![a1.clone(), a2.clone()]);
+		let list = SimpleList::new(vec![a1, a2]);
 		assert!(list.contains(&Default::default(), &a1));
 		assert_eq!(list.get(&Default::default(), 0), a1);
 		assert_eq!(list.get(&Default::default(), 1), a2);

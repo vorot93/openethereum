@@ -16,6 +16,54 @@
 
 //! Wasm Interpreter
 
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
+
 extern crate byteorder;
 extern crate ethereum_types;
 #[macro_use] extern crate log;
@@ -53,21 +101,21 @@ pub enum Error {
 
 impl From<InterpreterError> for Error {
 	fn from(e: InterpreterError) -> Self {
-		Error::Interpreter(e)
+		Self::Interpreter(e)
 	}
 }
 
 impl From<Trap> for Error {
 	fn from(e: Trap) -> Self {
-		Error::Trap(e)
+		Self::Trap(e)
 	}
 }
 
 impl From<Error> for vm::Error {
 	fn from(e: Error) -> Self {
 		match e {
-			Error::Interpreter(e) => vm::Error::Wasm(format!("Wasm runtime error: {:?}", e)),
-			Error::Trap(e) => vm::Error::Wasm(format!("Wasm contract trap: {:?}", e)),
+			Error::Interpreter(e) => Self::Wasm(format!("Wasm runtime error: {:?}", e)),
+			Error::Trap(e) => Self::Wasm(format!("Wasm contract trap: {:?}", e)),
 		}
 	}
 }
@@ -78,14 +126,14 @@ pub struct WasmInterpreter {
 }
 
 impl WasmInterpreter {
-	pub fn new(params: ActionParams) -> Self {
-		WasmInterpreter { params }
+	pub const fn new(params: ActionParams) -> Self {
+		Self { params }
 	}
 }
 
 impl From<runtime::Error> for vm::Error {
 	fn from(e: runtime::Error) -> Self {
-		vm::Error::Wasm(format!("Wasm runtime error: {:?}", e))
+		Self::Wasm(format!("Wasm runtime error: {:?}", e))
 	}
 }
 
@@ -96,7 +144,7 @@ enum ExecutionOutcome {
 }
 
 impl WasmInterpreter {
-	pub fn run(self: Box<WasmInterpreter>, ext: &mut dyn vm::Ext) -> vm::Result<GasLeft> {
+	pub fn run(self: Box<Self>, ext: &mut dyn vm::Ext) -> vm::Result<GasLeft> {
 		let (module, data) = parser::payload(&self.params, ext.schedule().wasm())?;
 
 		let loaded_module = wasmi::Module::from_parity_wasm_module(module).map_err(Error::Interpreter)?;
@@ -111,7 +159,7 @@ impl WasmInterpreter {
 		let adjusted_gas = self.params.gas * U256::from(ext.schedule().wasm().opcodes_div) /
 			U256::from(ext.schedule().wasm().opcodes_mul);
 
-		if adjusted_gas > ::std::u64::MAX.into()
+		if adjusted_gas > u64::max_value().into()
 		{
 			return Err(vm::Error::Wasm("Wasm interpreter cannot run contracts with gas (wasm adjusted) >= 2^64".to_owned()));
 		}
@@ -149,12 +197,12 @@ impl WasmInterpreter {
 			let invoke_result = module_instance.invoke_export("call", &[], &mut runtime);
 
 			let mut execution_outcome = ExecutionOutcome::NotSpecial;
-			if let Err(InterpreterError::Trap(ref trap)) = invoke_result {
-				if let wasmi::TrapKind::Host(ref boxed) = *trap.kind() {
-					let ref runtime_err = boxed.downcast_ref::<runtime::Error>()
+			if let Err(InterpreterError::Trap(trap)) = &invoke_result {
+				if let wasmi::TrapKind::Host(boxed) = &*trap.kind() {
+					let runtime_err = &boxed.downcast_ref::<runtime::Error>()
 						.expect("Host errors other than runtime::Error never produced; qed");
 
-					match **runtime_err {
+					match *runtime_err {
 						runtime::Error::Suicide => { execution_outcome = ExecutionOutcome::Suicide; },
 						runtime::Error::Return => { execution_outcome = ExecutionOutcome::Return; },
 						_ => {}
@@ -183,7 +231,7 @@ impl WasmInterpreter {
 		} else {
 			let len = result.len();
 			Ok(GasLeft::NeedsReturn {
-				gas_left: gas_left,
+				gas_left,
 				data: ReturnData::new(
 					result,
 					0,
@@ -196,7 +244,7 @@ impl WasmInterpreter {
 }
 
 impl vm::Exec for WasmInterpreter {
-	fn exec(self: Box<WasmInterpreter>, ext: &mut dyn vm::Ext) -> vm::ExecTrapResult<GasLeft> {
+	fn exec(self: Box<Self>, ext: &mut dyn vm::Ext) -> vm::ExecTrapResult<GasLeft> {
 		Ok(self.run(ext))
 	}
 }

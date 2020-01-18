@@ -24,7 +24,7 @@ use registrar::RegistrarClient;
 use types::ids::BlockId;
 use ethabi::FunctionOutputDecoder;
 
-const ACL_CHECKER_CONTRACT_REGISTRY_NAME: &'static str = "secretstore_acl_checker";
+const ACL_CHECKER_CONTRACT_REGISTRY_NAME: &str = "secretstore_acl_checker";
 
 use_contract!(keys_acl_contract, "res/keys_acl.json");
 
@@ -63,7 +63,7 @@ pub struct SecretStoreKeys<C> where C: CallContract + RegistrarClient + Send + S
 impl<C> SecretStoreKeys<C> where C: CallContract + RegistrarClient + Send + Sync + 'static {
 	/// Create provider
 	pub fn new(client: Arc<C>, key_server_account: Option<Address>) -> Self {
-		SecretStoreKeys {
+		Self {
 			client,
 			key_server_account,
 			keys_acl_contract: RwLock::new(None),
@@ -79,19 +79,13 @@ impl<C> KeyProvider for SecretStoreKeys<C>
 	}
 
 	fn available_keys(&self, block: BlockId, account: &Address) -> Option<Vec<Address>> {
-		match *self.keys_acl_contract.read() {
-			Some(acl_contract_address) => {
-				let (data, decoder) = keys_acl_contract::functions::available_keys::call(*account);
-				if let Ok(value) = self.client.call_contract(block, acl_contract_address, data) {
-					decoder.decode(&value).ok().map(|key_values| {
-						key_values.iter().map(key_to_address).collect()
-					})
-				} else {
-					None
-				}
-			}
-			None => None,
-		}
+		let acl_contract_address = *self.keys_acl_contract.read().as_ref()?;
+		let (data, decoder) = keys_acl_contract::functions::available_keys::call(*account);
+		let value = self.client.call_contract(block, acl_contract_address, data).ok()?;
+
+		let key_values = decoder.decode(&value).ok()?;
+		
+		Some(key_values.iter().map(key_to_address).collect())
 	}
 
 	fn update_acl_contract(&self) {
@@ -116,14 +110,14 @@ pub struct StoringKeyProvider {
 
 impl StoringKeyProvider {
 	/// Store available keys
-	pub fn set_available_keys(&self, keys: &Vec<Address>) {
-		*self.available_keys.write() = Some(keys.clone())
+	pub fn set_available_keys(&self, keys: &[Address]) {
+		*self.available_keys.write() = Some(keys.to_vec())
 	}
 }
 
 impl Default for StoringKeyProvider {
 	fn default() -> Self {
-		StoringKeyProvider {
+		Self {
 			available_keys: RwLock::new(None),
 			key_server_account: Some(Address::zero()),
 		}
@@ -156,8 +150,8 @@ mod tests {
 	}
 
 	impl DummyRegistryClient {
-		pub fn new(registry_address: Option<Address>) -> Self {
-			DummyRegistryClient {
+		pub const fn new(registry_address: Option<Address>) -> Self {
+			Self {
 				registry_address
 			}
 		}
@@ -180,7 +174,7 @@ mod tests {
 			_address: Address,
 			_data: Bytes
 		) -> Result<Bytes, String> {
-			Ok(vec![])
+			Ok(Vec::new())
 		}
 	}
 

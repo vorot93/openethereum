@@ -23,14 +23,12 @@ pub struct PlainNodeKeyPair {
 }
 
 impl PlainNodeKeyPair {
-	pub fn new(key_pair: KeyPair) -> Self {
-		PlainNodeKeyPair {
-			key_pair: key_pair,
-		}
+	pub const fn new(key_pair: KeyPair) -> Self {
+		Self { key_pair }
 	}
 
 	#[cfg(test)]
-	pub fn key_pair(&self) -> &KeyPair {
+	pub const fn key_pair(&self) -> &KeyPair {
 		&self.key_pair
 	}
 }

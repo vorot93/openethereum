@@ -41,7 +41,7 @@ use keccak_hash::keccak;
 use kvdb::DBTransaction;
 use log::{debug, error, info, trace, warn};
 use parking_lot::{Mutex, RwLock, RwLockReadGuard};
-use snappy;
+
 use trie_db::TrieError;
 
 use crate::{SnapshotClient, SnapshotWriter};
@@ -59,10 +59,10 @@ use super::{
 pub struct Guard(bool, PathBuf);
 
 impl Guard {
-	fn new(path: PathBuf) -> Self { Guard(true, path) }
+	const fn new(path: PathBuf) -> Self { Self(true, path) }
 
 	#[cfg(any(test, feature = "test-helpers"))]
-	pub fn benign() -> Self { Guard(false, PathBuf::default()) }
+	pub fn benign() -> Self { Self(false, PathBuf::default()) }
 
 	fn disarm(mut self) { self.0 = false }
 }
@@ -131,9 +131,9 @@ impl Restoration {
 
 		let secondary = chunker.rebuilder(chain, raw_db.clone(), &manifest)?;
 
-		let final_state_root = manifest.state_root.clone();
+		let final_state_root = manifest.state_root;
 
-		Ok(Restoration {
+		Ok(Self {
 			manifest,
 			state_chunks_left: state_chunks,
 			block_chunks_left: block_chunks,
@@ -159,7 +159,7 @@ impl Restoration {
 
 			self.state.feed(&self.snappy_buffer[..len], flag)?;
 
-			if let Some(ref mut writer) = self.writer.as_mut() {
+			if let Some(writer) = self.writer.as_mut() {
 				writer.write_state_chunk(hash, chunk)?;
 				trace!(target: "snapshot", "Wrote {}/{} bytes of state to db/disk. Current state root: {:?}", len, chunk.len(), self.state.state_root());
 			}
@@ -181,7 +181,7 @@ impl Restoration {
 			let len = snappy::decompress_into(chunk, &mut self.snappy_buffer)?;
 
 			self.secondary.feed(&self.snappy_buffer[..len], engine, flag)?;
-			if let Some(ref mut writer) = self.writer.as_mut() {
+			if let Some(writer) = self.writer.as_mut() {
 				 writer.write_block_chunk(hash, chunk)?;
 			}
 
@@ -268,7 +268,7 @@ pub struct Service<C: Send + Sync + 'static> {
 impl<C> Service<C> where C: SnapshotClient + ChainInfo {
 	/// Create a new snapshot service from the given parameters.
 	pub fn new(params: ServiceParams<C>) -> Result<Self, Error> {
-		let mut service = Service {
+		let mut service = Self {
 			restoration: Mutex::new(None),
 			restoration_db_handler: params.restoration_db_handler,
 			snapshot_root: params.snapshot_root,
@@ -436,21 +436,18 @@ impl<C> Service<C> where C: SnapshotClient + ChainInfo {
 			let block_receipts = self.client.block_receipts(&block.hash());
 			let parent_total_difficulty = self.client.block_total_difficulty(BlockId::Hash(parent_hash));
 
-			match (block_receipts, parent_total_difficulty) {
-				(Some(block_receipts), Some(parent_total_difficulty)) => {
-					let block_receipts = block_receipts.receipts;
+			if let (Some(block_receipts), Some(parent_total_difficulty)) = (block_receipts, parent_total_difficulty) {
+				let block_receipts = block_receipts.receipts;
 
-					next_chain.insert_unordered_block(&mut batch, block, block_receipts, Some(parent_total_difficulty), false, true);
-					count += 1;
-				},
-				_ => {
-					// We couldn't reach the targeted hash
-					error!(target: "snapshot", "migrate_blocks: failed to find receipts and parent total difficulty; cannot reach the target_hash ({:#x}). Block #{}, parent_hash={:#x}, parent_total_difficulty={:?}, start_hash={:#x}, ancient_block_number={:?}, best_block_number={:?}",
-						target_hash, block_number, parent_hash, parent_total_difficulty,
-						start_hash, cur_chain_info.ancient_block_number, cur_chain_info.best_block_number,
-					);
-					return Err(UnlinkedAncientBlockChain(parent_hash).into());
-				},
+				next_chain.insert_unordered_block(&mut batch, block, block_receipts, Some(parent_total_difficulty), false, true);
+				count += 1;
+				} else {
+				// We couldn't reach the targeted hash
+				error!(target: "snapshot", "migrate_blocks: failed to find receipts and parent total difficulty; cannot reach the target_hash ({:#x}). Block #{}, parent_hash={:#x}, parent_total_difficulty={:?}, start_hash={:#x}, ancient_block_number={:?}, best_block_number={:?}",
+					target_hash, block_number, parent_hash, parent_total_difficulty,
+					start_hash, cur_chain_info.ancient_block_number, cur_chain_info.best_block_number,
+				);
+				return Err(UnlinkedAncientBlockChain(parent_hash).into());
 			}
 
 			// Writing changes to DB and logging every now and then
@@ -518,7 +515,7 @@ impl<C> Service<C> where C: SnapshotClient + ChainInfo {
 			let writer = LooseWriter::new(temp_dir.clone())?;
 
 			let guard = Guard::new(temp_dir.clone());
-			let _ = client.take_snapshot(writer, BlockId::Number(num), &self.progress)?;
+			client.take_snapshot(writer, BlockId::Number(num), &self.progress)?;
 			info!("Finished taking snapshot at #{}, in {:.0?}", num, start_time.elapsed());
 
 			// destroy the old snapshot reader.
@@ -586,9 +583,10 @@ impl<C> Service<C> where C: SnapshotClient + ChainInfo {
 		fs::create_dir_all(&rest_dir)?;
 
 		// make new restoration.
-		let writer = match recover {
-			true => Some(LooseWriter::new(recovery_temp)?),
-			false => None
+		let writer = if recover {
+			Some(LooseWriter::new(recovery_temp)?)
+		} else {
+			None
 		};
 
 		let params = RestorationParams {
@@ -665,7 +663,7 @@ impl<C> Service<C> where C: SnapshotClient + ChainInfo {
 		let file = file?;
 		let path = file.path();
 
-		let mut file = File::open(path.clone())?;
+		let mut file = File::open(path)?;
 		let filesize = file.metadata()?.len();
 		let mut buffer = Vec::with_capacity(filesize as usize + 1); // +1 for EOF
 		file.read_to_end(&mut buffer)?;
@@ -696,9 +694,7 @@ impl<C> Service<C> where C: SnapshotClient + ChainInfo {
 		let recover = rest.as_ref().map_or(false, |rest| rest.writer.is_some());
 
 		// destroy the restoration before replacing databases and snapshot.
-		rest.take()
-			.map(|r| r.finalize())
-			.unwrap_or(Ok(()))?;
+		rest.take().map_or(Ok(()), Restoration::finalize)?;
 
 		let migrated_blocks = self.migrate_blocks()?;
 		info!(target: "snapshot", "Migrated {} ancient blocks from the old DB", migrated_blocks);
@@ -761,31 +757,32 @@ impl<C> Service<C> where C: SnapshotClient + ChainInfo {
 				},
 				RestorationStatus::Ongoing { .. } | RestorationStatus::Initializing { .. } => {
 					let (res, db) = {
-						let rest = match *restoration {
-							Some(ref mut r) => r,
+						let rest = match restoration {
+							Some(r) => r,
 							None => return Ok(()),
 						};
 
-						(match is_state {
-							true => rest.feed_state(hash, chunk, &self.restoring_snapshot),
-							false => rest.feed_blocks(hash, chunk, &*self.engine, &self.restoring_snapshot),
+						(if is_state {
+							rest.feed_state(hash, chunk, &self.restoring_snapshot)
+						} else {
+							rest.feed_blocks(hash, chunk, &*self.engine, &self.restoring_snapshot)
 						}.map(|_| rest.is_done()), rest.db.clone())
 					};
 
 					let res = match res {
 						Ok(is_done) => {
-							match is_state {
-								true => self.state_chunks.fetch_add(1, Ordering::SeqCst),
-								false => self.block_chunks.fetch_add(1, Ordering::SeqCst),
+							if is_state {
+								self.state_chunks.fetch_add(1, Ordering::SeqCst);
+							} else {
+								self.block_chunks.fetch_add(1, Ordering::SeqCst);
 							};
 
-							match is_done {
-								true => {
-									db.key_value().flush()?;
-									drop(db);
-									return self.finalize_restoration(&mut *restoration);
-								},
-								false => Ok(())
+							if is_done {
+								db.key_value().flush()?;
+								drop(db);
+								return self.finalize_restoration(&mut *restoration);
+							} else {
+								Ok(())
 							}
 						}
 						Err(e) => Err(e)
@@ -824,23 +821,18 @@ impl<C: Send + Sync> SnapshotService for Service<C> {
 	fn completed_chunks(&self) -> Option<Vec<H256>> {
 		let restoration = self.restoration.lock();
 
-		match *restoration {
-			Some(ref restoration) => {
-				let completed_chunks = restoration.manifest.block_hashes
-					.iter()
-					.filter(|h| !restoration.block_chunks_left.contains(h))
-					.chain(
-						restoration.manifest.state_hashes
-							.iter()
-							.filter(|h| !restoration.state_chunks_left.contains(h))
-					)
-					.map(|h| *h)
-					.collect();
-
-				Some(completed_chunks)
-			},
-			None => None,
-		}
+		restoration.as_ref().map(|restoration| {
+			restoration.manifest.block_hashes
+				.iter()
+				.filter(|h| !restoration.block_chunks_left.contains(h))
+				.chain(
+					restoration.manifest.state_hashes
+						.iter()
+						.filter(|h| !restoration.state_chunks_left.contains(h))
+				)
+				.copied()
+				.collect()
+		})
 	}
 
 	fn chunk(&self, hash: H256) -> Option<Bytes> {
@@ -850,19 +842,19 @@ impl<C: Send + Sync> SnapshotService for Service<C> {
 	fn status(&self) -> RestorationStatus {
 		let mut cur_status = self.status.lock();
 
-		match *cur_status {
-			RestorationStatus::Initializing { ref mut chunks_done, .. } => {
+		match &mut *cur_status {
+			RestorationStatus::Initializing { chunks_done, .. } => {
 				*chunks_done = self.state_chunks.load(Ordering::SeqCst) as u32 +
 					self.block_chunks.load(Ordering::SeqCst) as u32;
 			}
-			RestorationStatus::Ongoing { ref mut state_chunks_done, ref mut block_chunks_done, .. } => {
+			RestorationStatus::Ongoing { state_chunks_done, block_chunks_done, .. } => {
 				*state_chunks_done = self.state_chunks.load(Ordering::SeqCst) as u32;
 				*block_chunks_done = self.block_chunks.load(Ordering::SeqCst) as u32;
 			},
 			_ => (),
 		}
 
-		cur_status.clone()
+		*cur_status
 	}
 
 	fn begin_restore(&self, manifest: ManifestData) {

@@ -83,10 +83,10 @@ impl<ConsensusExecutor, ConsensusTransport, ComputationExecutor, ComputationTran
 		let consensus_job = JobSession::new(params.meta.clone(), params.consensus_executor, params.consensus_transport);
 		debug_assert!(consensus_job.state() == JobSessionState::Inactive);
 
-		Ok(ConsensusSession {
+		Ok(Self {
 			state: ConsensusSessionState::WaitingForInitialization,
 			meta: params.meta,
-			consensus_job: consensus_job,
+			consensus_job,
 			consensus_group: BTreeSet::new(),
 			computation_job: None,
 		})
@@ -105,8 +105,7 @@ impl<ConsensusExecutor, ConsensusTransport, ComputationExecutor, ComputationTran
 	/// Get all nodes, which has not rejected consensus request.
 	pub fn consensus_non_rejected_nodes(&self) -> BTreeSet<NodeId> {
 		self.consensus_job.responses().iter()
-			.filter(|r| *r.1)
-			.map(|r| r.0)
+			.filter_map(|(id, b)| if *b { Some(id) } else { None })
 			.chain(self.consensus_job.requests())
 			.filter(|n| **n != self.meta.self_node_id)
 			.cloned()
@@ -246,10 +245,10 @@ impl<ConsensusExecutor, ConsensusTransport, ComputationExecutor, ComputationTran
 				// error from master node before establishing consensus
 				// => unreachable
 				self.state = ConsensusSessionState::Failed;
-				(false, Err(if !error.is_non_fatal() {
-					Error::ConsensusUnreachable
-				} else {
+				(false, Err(if error.is_non_fatal() {
 					Error::ConsensusTemporaryUnreachable
+				} else {
+					Error::ConsensusUnreachable
 				}))
 			},
 			ConsensusSessionState::EstablishingConsensus => {
@@ -269,11 +268,7 @@ impl<ConsensusExecutor, ConsensusTransport, ComputationExecutor, ComputationTran
 					.expect("WaitingForPartialResults state is only set when computation_job is created; qed")
 					.on_node_error(node, error.clone())
 					.is_err();
-				if !is_computation_node {
-					// it is not used by current computation job
-					// => no restart required
-					(false, Ok(()))
-				} else {
+				if is_computation_node {
 					// it is used by current computation job
 					// => restart is required if there are still enough nodes
 					self.consensus_group.clear();
@@ -282,6 +277,10 @@ impl<ConsensusExecutor, ConsensusTransport, ComputationExecutor, ComputationTran
 					let consensus_result = self.consensus_job.on_node_error(node, error);
 					let is_consensus_established = self.consensus_job.state() == JobSessionState::Finished;
 					(is_consensus_established, consensus_result)
+				} else {
+					// it is not used by current computation job
+					// => no restart required
+					(false, Ok(()))
 				}
 			},
 			// in all other cases - just ignore error
@@ -354,10 +353,9 @@ impl<ConsensusExecutor, ConsensusTransport, ComputationExecutor, ComputationTran
 	/// Process basic consensus message.
 	pub fn on_consensus_message(&mut self, sender: &NodeId, message: &ConsensusMessage) -> Result<(), Error> {
 		let consensus_result = match message {
-
-			&ConsensusMessage::InitializeConsensusSession(ref message) =>
+			ConsensusMessage::InitializeConsensusSession(message) =>
 				self.consensus_job.on_partial_request(sender, message.requester.clone().into()).map(|_| ()),
-			&ConsensusMessage::ConfirmConsensusInitialization(ref message) =>
+			ConsensusMessage::ConfirmConsensusInitialization(message) =>
 				self.consensus_job.on_partial_response(sender, message.is_confirmed),
 		};
 		self.process_result(consensus_result)
@@ -377,10 +375,10 @@ mod tests {
 	type SquaredSumConsensusSession = ConsensusSession<KeyAccessJob, DummyJobTransport<Requester, bool>, SquaredSumJobExecutor, DummyJobTransport<u32, u32>>;
 
 	fn make_master_consensus_session(threshold: usize, requester: Option<KeyPair>, acl_storage: Option<DummyAclStorage>) -> SquaredSumConsensusSession {
-		let secret = requester.map(|kp| kp.secret().clone()).unwrap_or(Random.generate().unwrap().secret().clone());
+		let secret = requester.map_or_else(|| Random.generate().unwrap().secret().clone(), |kp| kp.secret().clone());
 		SquaredSumConsensusSession::new(ConsensusSessionParams {
 			meta: make_master_session_meta(threshold),
-			consensus_executor: KeyAccessJob::new_on_master(SessionId::default(), Arc::new(acl_storage.unwrap_or(DummyAclStorage::default())),
+			consensus_executor: KeyAccessJob::new_on_master(SessionId::default(), Arc::new(acl_storage.unwrap_or_default()),
 				sign(&secret, &SessionId::default()).unwrap().into()),
 			consensus_transport: DummyJobTransport::default(),
 		}).unwrap()
@@ -389,7 +387,7 @@ mod tests {
 	fn make_slave_consensus_session(threshold: usize, acl_storage: Option<DummyAclStorage>) -> SquaredSumConsensusSession {
 		SquaredSumConsensusSession::new(ConsensusSessionParams {
 			meta: make_slave_session_meta(threshold),
-			consensus_executor: KeyAccessJob::new_on_slave(SessionId::default(), Arc::new(acl_storage.unwrap_or(DummyAclStorage::default()))),
+			consensus_executor: KeyAccessJob::new_on_slave(SessionId::default(), Arc::new(acl_storage.unwrap_or_default())),
 			consensus_transport: DummyJobTransport::default(),
 		}).unwrap()
 	}

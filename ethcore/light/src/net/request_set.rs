@@ -46,7 +46,7 @@ pub struct RequestSet {
 
 impl Default for RequestSet {
 	fn default() -> Self {
-		RequestSet {
+		Self {
 			counter: 0,
 			cumulative_cost: 0.into(),
 			base: None,
@@ -60,7 +60,7 @@ impl RequestSet {
 	/// Push requests onto the stack.
 	pub fn insert(&mut self, req_id: ReqId, req: Requests, cost: U256, now: Instant) {
 		let counter = self.counter;
-		self.cumulative_cost = self.cumulative_cost + cost;
+		self.cumulative_cost += cost;
 
 		self.ids.insert(req_id, counter);
 		self.reqs.insert(counter, Entry(req, cost));
@@ -87,7 +87,7 @@ impl RequestSet {
 			_ => {}
 		}
 
-		self.cumulative_cost = self.cumulative_cost - cost;
+		self.cumulative_cost -= cost;
 		Some(req)
 	}
 
@@ -121,14 +121,14 @@ impl RequestSet {
 	/// The cumulative cost of all requests in the set.
 	// this may be useful later for load balancing.
 	#[allow(dead_code)]
-	pub fn cumulative_cost(&self) -> U256 { self.cumulative_cost }
+	pub const fn cumulative_cost(&self) -> U256 { self.cumulative_cost }
 }
 
 // helper to calculate timeout for a specific set of requests.
 // it's a base amount + some amount per request.
 fn compute_timeout(reqs: &Requests) -> Duration {
 	Duration::from_millis(reqs.requests().iter().fold(timeout::BASE, |tm, req| {
-		tm + match *req {
+		tm + match req {
 			Request::Headers(_) => timeout::HEADERS,
 			Request::HeaderProof(_) => timeout::HEADER_PROOF,
 			Request::TransactionIndex(_) => timeout::TRANSACTION_INDEX,

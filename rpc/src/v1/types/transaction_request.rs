@@ -65,14 +65,13 @@ impl fmt::Display for TransactionRequest {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		let eth = self.value.unwrap_or_default();
 		match self.to {
-			Some(ref to) => write!(
+			Some(to) => write!(
 				f,
 				"{} ETH from {} to 0x{:?}",
 				Colour::White.bold().paint(format_ether(eth)),
 				Colour::White.bold().paint(
-					self.from.as_ref()
-						.map(|f| format!("0x{:?}", f))
-						.unwrap_or_else(|| "?".to_string())),
+					self.from.as_ref().map_or_else(|| "?".to_string(), |f| format!("0x{:?}", f))
+				),
 				to
 			),
 			None => write!(
@@ -80,9 +79,8 @@ impl fmt::Display for TransactionRequest {
 				"{} ETH from {} for contract creation",
 				Colour::White.bold().paint(format_ether(eth)),
 				Colour::White.bold().paint(
-					self.from.as_ref()
-						.map(|f| format!("0x{:?}", f))
-						.unwrap_or_else(|| "?".to_string())),
+					self.from.as_ref().map_or_else(|| "?".to_string(), |f| format!("0x{:?}", f))
+				),
 			),
 		}
 	}
@@ -90,7 +88,7 @@ impl fmt::Display for TransactionRequest {
 
 impl From<helpers::TransactionRequest> for TransactionRequest {
 	fn from(r: helpers::TransactionRequest) -> Self {
-		TransactionRequest {
+		Self {
 			from: r.from.map(Into::into),
 			to: r.to.map(Into::into),
 			gas_price: r.gas_price.map(Into::into),
@@ -105,7 +103,7 @@ impl From<helpers::TransactionRequest> for TransactionRequest {
 
 impl From<helpers::FilledTransactionRequest> for TransactionRequest {
 	fn from(r: helpers::FilledTransactionRequest) -> Self {
-		TransactionRequest {
+		Self {
 			from: Some(r.from),
 			to: r.to,
 			gas_price: Some(r.gas_price),
@@ -250,12 +248,12 @@ mod tests {
 
 	#[test]
 	fn test_format_ether() {
-		assert_eq!(&format_ether(U256::from(1000000000000000000u64)), "1");
-		assert_eq!(&format_ether(U256::from(500000000000000000u64)), "0.5");
-		assert_eq!(&format_ether(U256::from(50000000000000000u64)), "0.05");
-		assert_eq!(&format_ether(U256::from(5000000000000000u64)), "0.005");
-		assert_eq!(&format_ether(U256::from(2000000000000000000u64)), "2");
-		assert_eq!(&format_ether(U256::from(2500000000000000000u64)), "2.5");
-		assert_eq!(&format_ether(U256::from(10000000000000000000u64)), "10");
+		assert_eq!(&format_ether(U256::from(1_000_000_000_000_000_000_u64)), "1");
+		assert_eq!(&format_ether(U256::from(500_000_000_000_000_000_u64)), "0.5");
+		assert_eq!(&format_ether(U256::from(50_000_000_000_000_000_u64)), "0.05");
+		assert_eq!(&format_ether(U256::from(5_000_000_000_000_000_u64)), "0.005");
+		assert_eq!(&format_ether(U256::from(2_000_000_000_000_000_000_u64)), "2");
+		assert_eq!(&format_ether(U256::from(2_500_000_000_000_000_000_u64)), "2.5");
+		assert_eq!(&format_ether(U256::from(10_000_000_000_000_000_000_u64)), "10");
 	}
 }

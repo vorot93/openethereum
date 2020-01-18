@@ -44,7 +44,7 @@ impl fmt::Debug for RateCalculator {
 
 impl Default for RateCalculator {
 	fn default() -> Self {
-		RateCalculator {
+		Self {
 			era: time::Instant::now(),
 			samples: [0; RATE_SECONDS],
 		}
@@ -70,10 +70,7 @@ impl RateCalculator {
 	}
 
 	fn current_rate(&self) -> usize {
-		let now = match self.elapsed() {
-			i if i >= RATE_SECONDS as u64 => RATE_SECONDS,
-			i => i as usize + 1,
-		};
+		let now = std::cmp::min(RATE_SECONDS as u64, self.elapsed() + 1) as usize;
 		let sum: usize = self.samples[0..now].iter().map(|x| *x as usize).sum();
 		sum / now
 	}
@@ -95,7 +92,7 @@ struct StatsCalculator<T = u32> {
 
 impl<T: Default + Copy> Default for StatsCalculator<T> {
 	fn default() -> Self {
-		StatsCalculator {
+		Self {
 			filled: false,
 			idx: 0,
 			samples: [T::default(); STATS_SAMPLES],
@@ -109,6 +106,7 @@ impl<T: fmt::Display + Default + Copy + Ord> fmt::Debug for StatsCalculator<T> {
 	}
 }
 
+#[allow(clippy::indexing_slicing)]
 impl<T: Default + Copy + Ord> StatsCalculator<T> {
 	pub fn add(&mut self, sample: T) {
 		self.idx += 1;
@@ -192,7 +190,7 @@ pub struct Middleware<T: ActivityNotifier = ClientNotifier> {
 impl<T: ActivityNotifier> Middleware<T> {
 	/// Create new Middleware with stats counter and activity notifier.
 	pub fn new(stats: Arc<RpcStats>, notifier: T) -> Self {
-		Middleware {
+		Self {
 			stats,
 			notifier,
 		}
@@ -212,9 +210,12 @@ impl<M: core::Metadata, T: ActivityNotifier> core::Middleware<M> for Middleware<
 		self.notifier.active();
 		self.stats.count_request();
 
-		let id = match request {
-			core::Request::Single(core::Call::MethodCall(ref call)) => Some(call.id.clone()),
-			_ => None,
+		let id = {
+			if let core::Request::Single(core::Call::MethodCall(call)) = &request {
+				Some(call.id.clone())
+			} else {
+				None
+			}
 		};
 		let stats = self.stats.clone();
 
@@ -260,7 +261,7 @@ mod tests {
 		let rate = avg.rate();
 
 		// then
-		assert_eq!(rate, 3usize);
+		assert_eq!(rate, 3_usize);
 	}
 
 	#[test]

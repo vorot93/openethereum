@@ -24,7 +24,7 @@ use cid::{ToCid, Codec};
 use common_types::ids::{BlockId, TransactionId};
 use ethereum_types::H256;
 use multihash::{self, Hash};
-use rlp;
+
 
 type Reason = &'static str;
 
@@ -59,7 +59,7 @@ impl IpfsHandler {
 
 		if mh.alg != Hash::Keccak256 { return Err(Error::UnsupportedHash); }
 
-		let hash = H256::from_slice(&mh.digest);
+		let hash = H256::from_slice(mh.digest);
 
 		match cid.codec {
 			Codec::EthereumBlock => self.block(hash),
@@ -67,7 +67,7 @@ impl IpfsHandler {
 			Codec::EthereumTx => self.transaction(hash),
 			Codec::EthereumStateTrie => self.state_trie(hash),
 			Codec::Raw => self.contract_code(hash),
-			_ => return Err(Error::UnsupportedCid),
+			_ => Err(Error::UnsupportedCid),
 		}
 	}
 
@@ -111,9 +111,13 @@ impl IpfsHandler {
 
 /// Get a query parameter's value by name.
 fn get_param<'a>(query: &'a str, name: &str) -> Option<&'a str> {
-	query.split('&')
-		.find(|part| part.starts_with(name) && part[name.len()..].starts_with("="))
-		.map(|part| &part[name.len() + 1..])
+	query.split('&').find_map(|part| {
+		if part.starts_with(name) && part[name.len()..].starts_with('=') {
+			Some(&part[name.len() + 1..])
+		} else {
+			None
+		}
+	})
 }
 
 #[cfg(test)]
@@ -178,7 +182,7 @@ mod tests {
 		// `eth-state-trie` with Keccak-256
 		let cid = "z45oqTS7kR2n2peRGJQ4VCJEeaG9sorqcCyfmznZPJM7FMdhQCT";
 
-		assert_eq!(Err(Error::StateRootNotFound), handler.route_cid(&cid));
+		assert_eq!(Err(Error::StateRootNotFound), handler.route_cid(cid));
 	}
 
 	#[test]
@@ -188,7 +192,7 @@ mod tests {
 		// `raw` with Keccak-256
 		let cid = "zb34WAp1Q5fhtLGZ3w3jhnTWaNbVV5ZZvGq4vuJQzERj6Pu3H";
 
-		assert_eq!(Err(Error::ContractNotFound), handler.route_cid(&cid));
+		assert_eq!(Err(Error::ContractNotFound), handler.route_cid(cid));
 	}
 
 	#[test]
@@ -208,7 +212,7 @@ mod tests {
 		// `bitcoin-block` with Keccak-256
 		let cid = "z4HFyHvb8CarYARyxz4cCcPaciduXd49TFPCKLhYmvNxf7Auvwu";
 
-		assert_eq!(Err(Error::UnsupportedCid), handler.route_cid(&cid));
+		assert_eq!(Err(Error::UnsupportedCid), handler.route_cid(cid));
 	}
 
 	#[test]

@@ -33,6 +33,7 @@
 //! - On bad block/response, punish peer and reset.
 
 use std::collections::{HashMap, HashSet};
+use std::convert::TryFrom;
 use std::mem;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -99,8 +100,8 @@ struct Peer {
 
 impl Peer {
 	// Create a new peer.
-	fn new(chain_info: ChainInfo) -> Self {
-		Peer {
+	const fn new(chain_info: ChainInfo) -> Self {
+		Self {
 			status: chain_info,
 		}
 	}
@@ -125,75 +126,75 @@ enum AncestorSearch {
 impl AncestorSearch {
 	fn begin(best_num: u64) -> Self {
 		match best_num {
-			0 => AncestorSearch::Genesis,
-			_ => AncestorSearch::Queued(best_num),
+			0 => Self::Genesis,
+			_ => Self::Queued(best_num),
 		}
 	}
 
-	fn process_response<L>(self, ctx: &dyn ResponseContext, client: &L) -> AncestorSearch
+	fn process_response<L>(self, ctx: &dyn ResponseContext, client: &L) -> Self
 		where L: AsLightClient
 	{
 		let client = client.as_light_client();
 		let first_num = client.chain_info().first_block_number.unwrap_or(0);
 		match self {
-			AncestorSearch::Awaiting(id, start, req) => {
+			Self::Awaiting(id, start, req) => {
 				if &id == ctx.req_id() {
 					match response::verify(ctx.data(), &req) {
 						Ok(headers) => {
 							for header in &headers {
 								if client.is_known(&header.hash()) {
 									debug!(target: "sync", "Found common ancestor with best chain");
-									return AncestorSearch::FoundCommon(header.number(), header.hash());
+									return Self::FoundCommon(header.number(), header.hash());
 								}
 
 								if header.number() < first_num {
 									debug!(target: "sync", "Prehistoric common ancestor with best chain.");
-									return AncestorSearch::Prehistoric;
+									return Self::Prehistoric;
 								}
 							}
 
 							let probe = start - headers.len() as u64;
 							if probe == 0 {
-								AncestorSearch::Genesis
+								Self::Genesis
 							} else {
-								AncestorSearch::Queued(probe)
+								Self::Queued(probe)
 							}
 						}
 						Err(e) => {
 							trace!(target: "sync", "Bad headers response from {}: {}", ctx.responder(), e);
 
 							ctx.punish_responder();
-							AncestorSearch::Queued(start)
+							Self::Queued(start)
 						}
 					}
 				} else {
-					AncestorSearch::Awaiting(id, start, req)
+					Self::Awaiting(id, start, req)
 				}
 			}
 			other => other,
 		}
 	}
 
-	fn requests_abandoned(self, req_ids: &[ReqId]) -> AncestorSearch {
+	fn requests_abandoned(self, req_ids: &[ReqId]) -> Self {
 		match self {
-			AncestorSearch::Awaiting(id, start, req) => {
-				if req_ids.iter().find(|&x| x == &id).is_some() {
-					AncestorSearch::Queued(start)
+			Self::Awaiting(id, start, req) => {
+				if req_ids.iter().any(|x| *x == id) {
+					Self::Queued(start)
 				} else {
-					AncestorSearch::Awaiting(id, start, req)
+					Self::Awaiting(id, start, req)
 				}
 			}
 			other => other,
 		}
 	}
 
-	fn dispatch_request<F>(self, mut dispatcher: F) -> AncestorSearch
+	fn dispatch_request<F>(self, mut dispatcher: F) -> Self
 		where F: FnMut(HeadersRequest) -> Option<ReqId>
 	{
 		const BATCH_SIZE: u64 = 64;
 
 		match self {
-			AncestorSearch::Queued(start) => {
+			Self::Queued(start) => {
 				let batch_size = ::std::cmp::min(start, BATCH_SIZE);
 				trace!(target: "sync", "Requesting {} reverse headers from {} to find common ancestor",
 					batch_size, start);
@@ -206,8 +207,8 @@ impl AncestorSearch {
 				};
 
 				match dispatcher(req.clone()) {
-					Some(req_id) => AncestorSearch::Awaiting(req_id, start, req),
-					None => AncestorSearch::Queued(start),
+					Some(req_id) => Self::Awaiting(req_id, start, req),
+					None => Self::Queued(start),
 				}
 			}
 			other => other,
@@ -227,7 +228,7 @@ enum SyncState {
 	Rounds(SyncRound),
 }
 
-/// A wrapper around the SyncState that makes sure to
+/// A wrapper around the `SyncState` that makes sure to
 /// update the giving reference to `is_idle`
 #[derive(Debug)]
 struct SyncStateWrapper {
@@ -235,9 +236,9 @@ struct SyncStateWrapper {
 }
 
 impl SyncStateWrapper {
-	/// Create a new wrapper for SyncState::Idle
-	pub fn idle() -> Self {
-		SyncStateWrapper {
+	/// Create a new wrapper for `SyncState::Idle`
+	pub const fn idle() -> Self {
+		Self {
 			state: SyncState::Idle,
 		}
 	}
@@ -252,6 +253,7 @@ impl SyncStateWrapper {
 	}
 
 	/// Returns the internal state's value
+	#[allow(clippy::missing_const_for_fn)]
 	pub fn into_inner(self) -> SyncState {
 		self.state
 	}
@@ -332,7 +334,7 @@ impl<L: AsLightClient + Send + Sync> Handler for LightSync<L> {
 	fn on_disconnect(&self, ctx: &dyn EventContext, unfulfilled: &[ReqId]) {
 		let peer_id = ctx.peer();
 
-		let peer = match self.peers.write().remove(&peer_id).map(|p| p.into_inner()) {
+		let peer = match self.peers.write().remove(&peer_id).map(Mutex::into_inner) {
 			Some(peer) => peer,
 			None => return,
 		};
@@ -358,7 +360,7 @@ impl<L: AsLightClient + Send + Sync> Handler for LightSync<L> {
 		{
 			let mut pending_reqs = self.pending_reqs.lock();
 			for unfulfilled in unfulfilled {
-				pending_reqs.remove(&unfulfilled);
+				pending_reqs.remove(unfulfilled);
 			}
 		}
 
@@ -427,7 +429,7 @@ impl<L: AsLightClient + Send + Sync> Handler for LightSync<L> {
 		}
 
 		let headers = match responses.get(0) {
-			Some(&request::Response::Headers(ref response)) => &response.headers[..],
+			Some(request::Response::Headers(response)) => &response.headers[..],
 			Some(_) => {
 				trace!("Disabling peer {} for wrong response type.", peer);
 				ctx.disable_peer(peer);
@@ -441,7 +443,7 @@ impl<L: AsLightClient + Send + Sync> Handler for LightSync<L> {
 
 			let ctx = ResponseCtx {
 				peer: ctx.peer(),
-				req_id: req_id,
+				req_id,
 				ctx: ctx.as_basic(),
 				data: headers,
 			};
@@ -465,10 +467,8 @@ impl<L: AsLightClient + Send + Sync> Handler for LightSync<L> {
 
 // private helpers
 impl<L: AsLightClient> LightSync<L> {
-	/// Sets the LightSync's state, and update
-	/// `is_idle`
+	/// Sets the `LightSync` state and updates `is_idle`
 	fn set_state(&self, state: &mut SyncStateWrapper, next_state: SyncState) {
-
 		match next_state {
 			SyncState::Idle => self.notify_senders(ChainSyncState::Idle),
 			_ => self.notify_senders(ChainSyncState::Blocks)
@@ -486,7 +486,7 @@ impl<L: AsLightClient> LightSync<L> {
 	// Begins a search for the common ancestor and our best block.
 	// does not lock state, instead has a mutable reference to it passed.
 	fn begin_search(&self, state: &mut SyncStateWrapper) {
-		if let None =  *self.best_seen.lock() {
+		if self.best_seen.lock().is_none() {
 			// no peers.
 			self.set_state(state, SyncState::Idle);
 			return;
@@ -554,9 +554,9 @@ impl<L: AsLightClient> LightSync<L> {
 		// handle state transitions.
 		{
 			let best_td = chain_info.pending_total_difficulty;
-			let sync_target = match *self.best_seen.lock() {
-				Some(ref target) if target.head_td > best_td => (target.head_num, target.head_hash),
-				ref other => {
+			let sync_target = match self.best_seen.lock().as_ref() {
+				Some(target) if target.head_td > best_td => (target.head_num, target.head_hash),
+				other => {
 					let network_score = other.as_ref().map(|target| target.head_td);
 					trace!(target: "sync", "No target to sync to. Network score: {:?}, Local score: {:?}",
 						network_score, best_td);
@@ -567,7 +567,7 @@ impl<L: AsLightClient> LightSync<L> {
 
 			match mem::replace(&mut *state, SyncStateWrapper::idle()).into_inner() {
 				SyncState::Rounds(SyncRound::Abort(reason, remaining)) => {
-					if remaining.len() > 0 {
+					if remaining.is_empty() {
 						self.set_state(&mut state, SyncState::Rounds(SyncRound::Abort(reason, remaining)));
 						return;
 					}
@@ -615,7 +615,7 @@ impl<L: AsLightClient> LightSync<L> {
 			}
 
 			if !unfulfilled.is_empty() {
-				for unfulfilled in unfulfilled.iter() {
+				for unfulfilled in &unfulfilled {
 					pending_reqs.remove(unfulfilled);
 				}
 				drop(pending_reqs);
@@ -663,7 +663,7 @@ impl<L: AsLightClient> LightSync<L> {
 					if requested_from.contains(peer) { continue }
 					match ctx.request_from(*peer, request.clone()) {
 						Ok(id) => {
-							assert!(req.max <= u32::max_value() as u64,
+							assert!(u32::try_from(req.max).is_ok(),
 								"requesting more than 2^32 headers at a time would overflow");
 							let timeout = REQ_TIMEOUT_BASE + REQ_TIMEOUT_PER_HEADER * req.max as u32;
 							self.pending_reqs.lock().insert(id.clone(), PendingReq {
@@ -710,12 +710,12 @@ impl<L: AsLightClient> LightSync<L> {
 	/// This won't do anything until registered as a handler
 	/// so it can act on events.
 	pub fn new(client: Arc<L>) -> Result<Self, ::std::io::Error> {
-		Ok(LightSync {
+		Ok(Self {
 			start_block_number: client.as_light_client().chain_info().best_block_number,
 			best_seen: Mutex::new(None),
 			peers: RwLock::new(HashMap::new()),
 			pending_reqs: Mutex::new(HashMap::new()),
-			client: client,
+			client,
 			rng: Mutex::new(OsRng),
 			senders: RwLock::new(Vec::new()),
 			state: Mutex::new(SyncStateWrapper::idle()),
@@ -735,7 +735,7 @@ pub trait SyncInfo {
 	/// Whether major sync is underway.
 	fn is_major_importing(&self) -> bool;
 
-	/// returns the receieving end of a futures::mpsc unbounded channel
+	/// returns the receieving end of a `futures::mpsc` unbounded channel
 	/// poll the channel for changes to sync state
 	fn sync_notification(&self) -> Notification<ChainSyncState>;
 }

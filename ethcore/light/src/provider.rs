@@ -97,10 +97,7 @@ pub trait Provider: Send + Sync {
 		let headers: Vec<_> = (0_u64..max)
 			.map(|x: u64| x.saturating_mul(req.skip.saturating_add(1)))
 			.take_while(|&x| if req.reverse { x < start_num } else { best_num.saturating_sub(start_num) >= x })
-			.map(|x| if req.reverse { start_num.saturating_sub(x) } else { start_num.saturating_add(x) })
-			.map(|x| self.block_header(BlockId::Number(x)))
-			.take_while(|x| x.is_some())
-			.flat_map(|x| x)
+			.map(|x| if req.reverse { start_num.saturating_sub(x) } else { start_num.saturating_add(x) }).flat_map(|x| self.block_header(BlockId::Number(x)))
 			.collect();
 
 		if headers.is_empty() {
@@ -129,7 +126,7 @@ pub trait Provider: Send + Sync {
 	/// Get a storage proof.
 	fn storage_proof(&self, req: request::CompleteStorageRequest) -> Option<request::StorageResponse>;
 
-	/// Provide contract code for the specified (block_hash, code_hash) pair.
+	/// Provide contract code for the specified `(block_hash, code_hash)` pair.
 	fn contract_code(&self, req: request::CompleteCodeRequest) -> Option<request::CodeResponse>;
 
 	/// Provide a header proof from a given Canonical Hash Trie as well as the
@@ -214,12 +211,11 @@ impl<T: ProvingBlockChainClient + ?Sized> Provider for T {
 	}
 
 	fn header_proof(&self, req: request::CompleteHeaderProofRequest) -> Option<request::HeaderProofResponse> {
-		let cht_number = match cht::block_to_cht_number(req.num) {
-			Some(cht_num) => cht_num,
-			None => {
-				debug!(target: "pip_provider", "Requested CHT proof with invalid block number");
-				return None;
-			}
+		let cht_number = if let Some(cht_num) = cht::block_to_cht_number(req.num) {
+			cht_num
+		} else {
+			debug!(target: "pip_provider", "Requested CHT proof with invalid block number");
+			return None;
 		};
 
 		let mut needed = None;
@@ -315,8 +311,8 @@ pub struct LightProvider<L> {
 
 impl<L> LightProvider<L> {
 	/// Create a new `LightProvider` from the given client and transaction queue.
-	pub fn new(client: Arc<L>, txqueue: Arc<RwLock<TransactionQueue>>) -> Self {
-		LightProvider {
+	pub const fn new(client: Arc<L>, txqueue: Arc<RwLock<TransactionQueue>>) -> Self {
+		Self {
 			client,
 			txqueue,
 		}
@@ -412,6 +408,6 @@ mod tests {
 
 		client.add_blocks(48, EachBlockWith::Nothing);
 
-		assert!(client.header_proof(req.clone()).is_some());
+		assert!(client.header_proof(req).is_some());
 	}
 }

@@ -16,6 +16,54 @@
 
 //! Tracing
 
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
+
 use ethereum_types::{U256, Address};
 use kvdb::DBTransaction;
 use vm::{Error as VmError, ActionParams};
@@ -51,22 +99,22 @@ pub(crate) type BlockNumber = u64;
 
 /// This trait is used by executive to build traces.
 pub trait Tracer: Send {
-	/// Data returned when draining the Tracer.
+	/// Data returned when draining the `Tracer`.
 	type Output;
 
-	/// Prepares call trace for given params. Would panic if prepare/done_trace are not balanced.
+	/// Prepares call trace for given params. Would panic if `prepare`/`done_trace` are not balanced.
 	fn prepare_trace_call(&mut self, params: &ActionParams, depth: usize, is_builtin: bool);
 
-	/// Prepares create trace for given params. Would panic if prepare/done_trace are not balanced.
+	/// Prepares create trace for given params. Would panic if `prepare`/`done_trace` are not balanced.
 	fn prepare_trace_create(&mut self, params: &ActionParams);
 
-	/// Finishes a successful call trace. Would panic if prepare/done_trace are not balanced.
+	/// Finishes a successful call trace. Would panic if `prepare`/`done_trace` are not balanced.
 	fn done_trace_call(&mut self, gas_used: U256, output: &[u8]);
 
-	/// Finishes a successful create trace. Would panic if prepare/done_trace are not balanced.
+	/// Finishes a successful create trace. Would panic if `prepare`/`done_trace` are not balanced.
 	fn done_trace_create(&mut self, gas_used: U256, code: &[u8], address: Address);
 
-	/// Finishes a failed trace. Would panic if prepare/done_trace are not balanced.
+	/// Finishes a failed trace. Would panic if `prepare`/`done_trace` are not balanced.
 	fn done_trace_failed(&mut self, error: &VmError);
 
 	/// Stores suicide info.
@@ -82,7 +130,7 @@ pub trait Tracer: Send {
 /// Used by executive to build VM traces.
 pub trait VMTracer: Send {
 
-	/// Data returned when draining the VMTracer.
+	/// Data returned when draining the `VMTracer`.
 	type Output;
 
 	/// Trace the progression of interpreter to next instruction.

@@ -87,31 +87,30 @@ pub enum Error {
 
 impl From<Box<ethtrie::TrieError>> for Error {
 	fn from(err: Box<ethtrie::TrieError>) -> Self {
-		Error::Internal(format!("Internal error: {}", err))
+		Self::Internal(format!("Internal error: {}", err))
 	}
 }
 
 impl From<ethtrie::TrieError> for Error {
 	fn from(err: ethtrie::TrieError) -> Self {
-		Error::Internal(format!("Internal error: {}", err))
+		Self::Internal(format!("Internal error: {}", err))
 	}
 }
 
 impl fmt::Display for Error {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		use self::Error::*;
-		match *self {
+		match self {
 			OutOfGas => write!(f, "Out of gas"),
 			BadJumpDestination { destination } => write!(f, "Bad jump destination {:x}", destination),
 			BadInstruction { instruction } => write!(f, "Bad instruction {:x}",  instruction),
 			StackUnderflow { instruction, wanted, on_stack } => write!(f, "Stack underflow {} {}/{}", instruction, wanted, on_stack),
 			OutOfStack { instruction, wanted, limit } => write!(f, "Out of stack {} {}/{}", instruction, wanted, limit),
 			BuiltIn(name) => write!(f, "Built-in failed: {}", name),
-			Internal(ref msg) => write!(f, "Internal error: {}", msg),
 			MutableCallInStaticContext => write!(f, "Mutable call in static context"),
-			Wasm(ref msg) => write!(f, "Internal error: {}", msg),
 			OutOfBounds => write!(f, "Out of bounds"),
 			Reverted => write!(f, "Reverted"),
+			Internal(msg) | Wasm(msg) => write!(f, "Internal error: {}", msg),
 		}
 	}
 }

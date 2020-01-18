@@ -45,19 +45,19 @@ pub enum ParamsType {
 impl ActionValue {
 	/// Returns action value as U256.
 	pub fn value(&self) -> U256 {
-		match *self {
-			ActionValue::Transfer(x) | ActionValue::Apparent(x) => x
+		match self {
+			Self::Transfer(x) | Self::Apparent(x) => *x
 		}
 	}
 
 	/// Returns the transfer action value of the U256-convertable raw value
-	pub fn transfer<T: Into<U256>>(transfer_value: T) -> ActionValue {
-		ActionValue::Transfer(transfer_value.into())
+	pub fn transfer<T: Into<U256>>(transfer_value: T) -> Self {
+		Self::Transfer(transfer_value.into())
 	}
 
 	/// Returns the apparent action value of the U256-convertable raw value
-	pub fn apparent<T: Into<U256>>(apparent_value: T) -> ActionValue {
-		ActionValue::Apparent(apparent_value.into())
+	pub fn apparent<T: Into<U256>>(apparent_value: T) -> Self {
+		Self::Apparent(apparent_value.into())
 	}
 }
 
@@ -95,9 +95,9 @@ pub struct ActionParams {
 }
 
 impl Default for ActionParams {
-	/// Returns default ActionParams initialized with zeros
-	fn default() -> ActionParams {
-		ActionParams {
+	/// Returns default `ActionParams` initialized with zeros
+	fn default() -> Self {
+		Self {
 			code_address: Address::zero(),
 			code_hash: Some(KECCAK_EMPTY),
 			address: Address::zero(),
@@ -118,10 +118,10 @@ impl Default for ActionParams {
 impl From<ethjson::vm::Transaction> for ActionParams {
 	fn from(t: ethjson::vm::Transaction) -> Self {
 		let address: Address = t.address.into();
-		ActionParams {
+		Self {
 			code_address: Address::zero(),
 			code_hash: Some(keccak(&*t.code)),
-			address: address,
+			address,
 			sender: t.sender.into(),
 			origin: t.origin.into(),
 			code: Some(Arc::new(t.code.into())),
@@ -130,7 +130,7 @@ impl From<ethjson::vm::Transaction> for ActionParams {
 			gas: t.gas.into(),
 			gas_price: t.gas_price.into(),
 			value: ActionValue::Transfer(t.value.into()),
-			call_type: match address.is_zero() { true => CallType::None, false => CallType::Call },	// TODO @debris is this correct?
+			call_type: if address.is_zero() { CallType::None } else { CallType::Call },	// TODO @debris is this correct?
 			params_type: ParamsType::Separate,
 		}
 	}

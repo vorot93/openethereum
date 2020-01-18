@@ -62,7 +62,7 @@ pub struct ServiceConfiguration {
 	pub acl_check_contract_address: Option<ContractAddress>,
 	/// Cluster configuration.
 	pub cluster_config: ClusterConfiguration,
-	// Allowed CORS domains
+	/// Allowed CORS domains
 	pub cors: Option<Vec<String>>,
 }
 
@@ -109,17 +109,17 @@ pub enum Requester {
 
 impl Default for Requester {
 	fn default() -> Self {
-		Requester::Signature(Default::default())
+		Self::Signature(Default::default())
 	}
 }
 
 impl Requester {
 	pub fn public(&self, server_key_id: &ServerKeyId) -> Result<Public, String> {
-		match *self {
-			Requester::Signature(ref signature) => crypto::publickey::recover(signature, server_key_id)
+		match self {
+			Self::Signature(signature) => crypto::publickey::recover(signature, server_key_id)
 				.map_err(|e| format!("bad signature: {}", e)),
-			Requester::Public(ref public) => Ok(public.clone()),
-			Requester::Address(_) => Err("cannot recover public from address".into()),
+			Self::Public(public) => Ok(*public),
+			Self::Address(_) => Err("cannot recover public from address".into()),
 		}
 	}
 
@@ -130,19 +130,19 @@ impl Requester {
 }
 
 impl From<crypto::publickey::Signature> for Requester {
-	fn from(signature: crypto::publickey::Signature) -> Requester {
-		Requester::Signature(signature)
+	fn from(signature: crypto::publickey::Signature) -> Self {
+		Self::Signature(signature)
 	}
 }
 
 impl From<ethereum_types::Public> for Requester {
-	fn from(public: ethereum_types::Public) -> Requester {
-		Requester::Public(public)
+	fn from(public: ethereum_types::Public) -> Self {
+		Self::Public(public)
 	}
 }
 
 impl From<ethereum_types::Address> for Requester {
-	fn from(address: ethereum_types::Address) -> Requester {
-		Requester::Address(address)
+	fn from(address: ethereum_types::Address) -> Self {
+		Self::Address(address)
 	}
 }

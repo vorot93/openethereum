@@ -35,7 +35,7 @@ pub struct TestBlockChain {
 }
 
 impl TestBlockChain {
-	pub fn new() -> Self { TestBlockChain::default() }
+	pub fn new() -> Self { Self::default() }
 
 	pub fn insert(&mut self, bytes: Bytes) {
 		let header = Unverified::from_rlp(bytes.clone()).unwrap().header;

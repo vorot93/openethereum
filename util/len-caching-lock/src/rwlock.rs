@@ -24,7 +24,7 @@ use Len;
 
 /// Can be used in place of a [`RwLock`](../../lock_api/struct.RwLock.html) where 
 /// reading `T`'s `len()` without needing to lock, is advantageous. 
-/// When the WriteGuard is released, `T`'s `len()` will be cached.
+/// When the `WriteGuard` is released, `T`'s `len()` will be cached.
 #[derive(Debug)]
 pub struct LenCachingRwLock<T: ?Sized> {
 	len: AtomicUsize,
@@ -33,20 +33,20 @@ pub struct LenCachingRwLock<T: ?Sized> {
 
 impl<T: Len + Default> Default for LenCachingRwLock<T> {
 	fn default() -> Self {
-		LenCachingRwLock::new(T::default())
+		Self::new(T::default())
 	}
 }
 
 impl<T: Len> From<T> for LenCachingRwLock<T> {
 	fn from(data: T) -> Self {
-		LenCachingRwLock::new(data)
+		Self::new(data)
 	}
 }
 
 impl<T: Len> LenCachingRwLock<T> {
-	/// Constructs a new LenCachingRwLock
+	/// Constructs a new `LenCachingRwLock`
 	pub fn new(data: T) -> Self {
-		LenCachingRwLock {
+		Self {
 			len: AtomicUsize::new(data.len()),
 			data: RwLock::new(data),
 		}

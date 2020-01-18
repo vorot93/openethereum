@@ -32,8 +32,8 @@ pub enum SecurityLevel {
 impl SecurityLevel {
 	/// `true` for `FullPoW`/`FullState`.
 	pub fn is_full(&self) -> bool {
-		match *self {
-			SecurityLevel::FullState | SecurityLevel::FullProofOfWork => true,
+		match self {
+			Self::FullState | Self::FullProofOfWork => true,
 			_ => false,
 		}
 	}

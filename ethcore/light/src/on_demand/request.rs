@@ -96,6 +96,7 @@ pub trait RequestAdapter {
 	fn extract_from(Vec<Response>) -> Self::Out;
 }
 
+#[allow(clippy::use_self)]
 impl<T: RequestArg> RequestAdapter for Vec<T> {
 	type Out = Vec<T::Out>;
 
@@ -127,8 +128,8 @@ macro_rules! impl_single {
 		}
 
 		impl From<$me> for Request {
-			fn from(me: $me) -> Request {
-				Request::$variant(me)
+			fn from(me: $me) -> Self {
+				Self::$variant(me)
 			}
 		}
 	}
@@ -149,14 +150,14 @@ impl_single!(Signal, Signal, Vec<u8>);
 macro_rules! impl_args {
 	() => {
 		impl<T: RequestArg> RequestAdapter for T {
-			type Out = T::Out;
+			type Out = <Self as RequestArg>::Out;
 
 			fn make_requests(self) -> Vec<Request> {
 				vec![self.make()]
 			}
 
 			fn extract_from(mut responses: Vec<Response>) -> Self::Out {
-				T::extract(responses.pop().expect(SUPPLIED_MATCHES))
+				Self::extract(responses.pop().expect(SUPPLIED_MATCHES))
 			}
 		}
 	};
@@ -212,32 +213,32 @@ pub enum HeaderRef {
 impl HeaderRef {
 	/// Attempt to inspect the header.
 	pub fn as_ref(&self) -> Result<&encoded::Header, Error> {
-		match *self {
-			HeaderRef::Stored(ref hdr) => Ok(hdr),
-			HeaderRef::Unresolved(idx, _) => Err(Error::UnresolvedHeader(idx)),
+		match self {
+			Self::Stored(hdr) => Ok(hdr),
+			Self::Unresolved(idx, _) => Err(Error::UnresolvedHeader(*idx)),
 		}
 	}
 
 	// get the blockhash field to be used in requests.
 	fn field(&self) -> Field<H256> {
-		match *self {
-			HeaderRef::Stored(ref hdr) => Field::Scalar(hdr.hash()),
-			HeaderRef::Unresolved(_, field) => field,
+		match self {
+			Self::Stored(hdr) => Field::Scalar(hdr.hash()),
+			Self::Unresolved(_, field) => *field,
 		}
 	}
 
 	// yield the index of the request which will produce the header.
 	fn needs_header(&self) -> Option<(usize, Field<H256>)> {
-		match *self {
-			HeaderRef::Stored(_) => None,
-			HeaderRef::Unresolved(idx, field) => Some((idx, field)),
+		match self {
+			Self::Stored(_) => None,
+			Self::Unresolved(idx, field) => Some((*idx, *field)),
 		}
 	}
 }
 
 impl From<encoded::Header> for HeaderRef {
 	fn from(header: encoded::Header) -> Self {
-		HeaderRef::Stored(header)
+		Self::Stored(header)
 	}
 }
 
@@ -269,7 +270,7 @@ impl From<Request> for CheckedRequest {
 					reverse: false,
 				};
 				trace!(target: "on_demand", "HeaderByHash Request, {:?}", net_req);
-				CheckedRequest::HeaderByHash(req, net_req)
+				Self::HeaderByHash(req, net_req)
 			}
 			Request::HeaderWithAncestors(req) => {
 				let net_req = net_request::IncompleteHeadersRequest {
@@ -279,35 +280,35 @@ impl From<Request> for CheckedRequest {
 					reverse: true,
 				};
 				trace!(target: "on_demand", "HeaderWithAncestors Request, {:?}", net_req);
-				CheckedRequest::HeaderWithAncestors(req, net_req)
+				Self::HeaderWithAncestors(req, net_req)
 			}
 			Request::HeaderProof(req) => {
 				let net_req = net_request::IncompleteHeaderProofRequest {
 					num: req.num().into(),
 				};
 				trace!(target: "on_demand", "HeaderProof Request, {:?}", net_req);
-				CheckedRequest::HeaderProof(req, net_req)
+				Self::HeaderProof(req, net_req)
 			}
 			Request::TransactionIndex(req) => {
 				let net_req = net_request::IncompleteTransactionIndexRequest {
 					hash: req.0,
 				};
 				trace!(target: "on_demand", "TransactionIndex Request, {:?}", net_req);
-				CheckedRequest::TransactionIndex(req, net_req)
+				Self::TransactionIndex(req, net_req)
 			}
 			Request::Body(req) => {
 				let net_req = net_request::IncompleteBodyRequest {
 					hash: req.0.field(),
 				};
 				trace!(target: "on_demand", "Body Request, {:?}", net_req);
-				CheckedRequest::Body(req, net_req)
+				Self::Body(req, net_req)
 			}
 			Request::Receipts(req) => {
 				let net_req = net_request::IncompleteReceiptsRequest {
 					hash: req.0.field(),
 				};
 				trace!(target: "on_demand", "Receipt Request, {:?}", net_req);
-				CheckedRequest::Receipts(req, net_req)
+				Self::Receipts(req, net_req)
 			}
 			Request::Account(req) => {
 				let net_req = net_request::IncompleteAccountRequest {
@@ -315,7 +316,7 @@ impl From<Request> for CheckedRequest {
 					address_hash: ::hash::keccak(&req.address).into(),
 				};
 				trace!(target: "on_demand", "Account Request, {:?}", net_req);
-				CheckedRequest::Account(req, net_req)
+				Self::Account(req, net_req)
 			}
 			Request::Code(req) => {
 				let net_req = net_request::IncompleteCodeRequest {
@@ -323,7 +324,7 @@ impl From<Request> for CheckedRequest {
 					code_hash: req.code_hash,
 				};
 				trace!(target: "on_demand", "Code Request, {:?}", net_req);
-				CheckedRequest::Code(req, net_req)
+				Self::Code(req, net_req)
 			}
 			Request::Execution(req) => {
 				let net_req = net_request::IncompleteExecutionRequest {
@@ -336,14 +337,14 @@ impl From<Request> for CheckedRequest {
 					data: req.tx.data.clone(),
 				};
 				trace!(target: "on_demand", "Execution request, {:?}", net_req);
-				CheckedRequest::Execution(req, net_req)
+				Self::Execution(req, net_req)
 			}
 			Request::Signal(req) => {
 				let net_req = net_request::IncompleteSignalRequest {
 					block_hash: req.hash.into(),
 				};
 				trace!(target: "on_demand", "Signal Request, {:?}", net_req);
-				CheckedRequest::Signal(req, net_req)
+				Self::Signal(req, net_req)
 			}
 		}
 	}
@@ -355,16 +356,16 @@ impl CheckedRequest {
 		use ::request::Request as NetRequest;
 
 		match self {
-			CheckedRequest::HeaderProof(_, req) => NetRequest::HeaderProof(req),
-			CheckedRequest::HeaderByHash(_, req) => NetRequest::Headers(req),
-			CheckedRequest::HeaderWithAncestors(_, req) => NetRequest::Headers(req),
-			CheckedRequest::TransactionIndex(_, req) => NetRequest::TransactionIndex(req),
-			CheckedRequest::Receipts(_, req) => NetRequest::Receipts(req),
-			CheckedRequest::Body(_, req) => NetRequest::Body(req),
-			CheckedRequest::Account(_, req) => NetRequest::Account(req),
-			CheckedRequest::Code(_, req) => NetRequest::Code(req),
-			CheckedRequest::Execution(_, req) => NetRequest::Execution(req),
-			CheckedRequest::Signal(_, req) => NetRequest::Signal(req),
+			Self::HeaderProof(_, req) => NetRequest::HeaderProof(req),
+			Self::HeaderByHash(_, req) => NetRequest::Headers(req),
+			Self::HeaderWithAncestors(_, req) => NetRequest::Headers(req),
+			Self::TransactionIndex(_, req) => NetRequest::TransactionIndex(req),
+			Self::Receipts(_, req) => NetRequest::Receipts(req),
+			Self::Body(_, req) => NetRequest::Body(req),
+			Self::Account(_, req) => NetRequest::Account(req),
+			Self::Code(_, req) => NetRequest::Code(req),
+			Self::Execution(_, req) => NetRequest::Execution(req),
+			Self::Signal(_, req) => NetRequest::Signal(req),
 		}
 	}
 
@@ -373,12 +374,12 @@ impl CheckedRequest {
 	/// and the field giving the hash
 	/// if so, `None` otherwise.
 	pub fn needs_header(&self) -> Option<(usize, Field<H256>)> {
-		match *self {
-			CheckedRequest::Receipts(ref x, _) => x.0.needs_header(),
-			CheckedRequest::Body(ref x, _) => x.0.needs_header(),
-			CheckedRequest::Account(ref x, _) => x.header.needs_header(),
-			CheckedRequest::Code(ref x, _) => x.header.needs_header(),
-			CheckedRequest::Execution(ref x, _) => x.header.needs_header(),
+		match self {
+			Self::Receipts(x, _) => x.0.needs_header(),
+			Self::Body(x, _) => x.0.needs_header(),
+			Self::Account(x, _) => x.header.needs_header(),
+			Self::Code(x, _) => x.header.needs_header(),
+			Self::Execution(x, _) => x.header.needs_header(),
 			_ => None,
 		}
 	}
@@ -387,33 +388,33 @@ impl CheckedRequest {
 	/// returns `Some`, and for correctness, only use the header yielded by the correct
 	/// request.
 	pub fn provide_header(&mut self, header: encoded::Header) {
-		match *self {
-			CheckedRequest::Receipts(ref mut x, _) => x.0 = HeaderRef::Stored(header),
-			CheckedRequest::Body(ref mut x, _) => x.0 = HeaderRef::Stored(header),
-			CheckedRequest::Account(ref mut x, _) => x.header = HeaderRef::Stored(header),
-			CheckedRequest::Code(ref mut x, _) => x.header = HeaderRef::Stored(header),
-			CheckedRequest::Execution(ref mut x, _) => x.header = HeaderRef::Stored(header),
+		match self {
+			Self::Receipts(x, _) => x.0 = HeaderRef::Stored(header),
+			Self::Body(x, _) => x.0 = HeaderRef::Stored(header),
+			Self::Account(x, _) => x.header = HeaderRef::Stored(header),
+			Self::Code(x, _) => x.header = HeaderRef::Stored(header),
+			Self::Execution(x, _) => x.header = HeaderRef::Stored(header),
 			_ => {},
 		}
 	}
 
 	/// Attempt to complete the request based on data in the cache.
 	pub fn respond_local(&self, cache: &Mutex<::cache::Cache>) -> Option<Response> {
-		match *self {
-			CheckedRequest::HeaderProof(ref check, _) => {
+		match self {
+			Self::HeaderProof(check, _) => {
 				let mut cache = cache.lock();
 				cache.block_hash(check.num)
 					.and_then(|h| cache.chain_score(&h).map(|s| (h, s)))
 					.map(|(h, s)| Response::HeaderProof((h, s)))
 			}
-			CheckedRequest::HeaderByHash(_, ref req) => {
-				if let Some(&net_request::HashOrNumber::Hash(ref h)) = req.start.as_ref() {
-					return cache.lock().block_header(h).map(Response::HeaderByHash);
+			Self::HeaderByHash(_, req) => {
+				if let Some(&net_request::HashOrNumber::Hash(h)) = req.start.as_ref() {
+					return cache.lock().block_header(&h).map(Response::HeaderByHash);
 				}
 
 				None
 			}
-			CheckedRequest::HeaderWithAncestors(_, ref req) => {
+			Self::HeaderWithAncestors(_, req) => {
 				if req.skip != 1 || !req.reverse {
 					return None;
 				}
@@ -434,7 +435,7 @@ impl CheckedRequest {
 					Some(Response::HeaderWithAncestors(result))
 				} else { None }
 			}
-			CheckedRequest::Receipts(ref check, ref req) => {
+			Self::Receipts(check, req) => {
 				// empty transactions -> no receipts
 				if check.0.as_ref().ok().map_or(false, |hdr| hdr.receipts_root() == KECCAK_NULL_RLP) {
 					return Some(Response::Receipts(Vec::new()));
@@ -444,7 +445,7 @@ impl CheckedRequest {
 					.and_then(|hash| cache.lock().block_receipts(hash))
 					.map(Response::Receipts)
 			}
-			CheckedRequest::Body(ref check, ref req) => {
+			Self::Body(check, req) => {
 				// check for empty body.
 				if let Ok(hdr) = check.0.as_ref() {
 					if hdr.transactions_root() == KECCAK_NULL_RLP && hdr.uncles_hash() == KECCAK_EMPTY_LIST_RLP {
@@ -460,7 +461,7 @@ impl CheckedRequest {
 				// otherwise, check for cached body and header.
 				let block_hash = req.hash.as_ref()
 					.cloned()
-					.or_else(|| check.0.as_ref().ok().map(|hdr| hdr.hash()));
+					.or_else(|| check.0.as_ref().ok().map(encoded::Header::hash));
 				let block_hash = match block_hash {
 					Some(hash) => hash,
 					None => return None,
@@ -471,9 +472,10 @@ impl CheckedRequest {
 
 				// can't use as_ref here although it seems like you would be able to:
 				// it complains about uninitialized `cached_header`.
-				let block_header = match check.0.as_ref().ok() {
-					Some(hdr) => Some(hdr),
-					None => {
+				let block_header = {
+					if let Ok(hdr) = check.0.as_ref() {
+						Some(hdr)
+					} else {
 						cached_header = cache.block_header(&block_hash);
 						cached_header.as_ref()
 					}
@@ -485,7 +487,7 @@ impl CheckedRequest {
 						Response::Body(encoded::Block::new_from_header_and_body(&hdr.view(), &body.view()))
 					})
 			}
-			CheckedRequest::Code(_, ref req) => {
+			Self::Code(_, req) => {
 				if req.code_hash.as_ref().map_or(false, |&h| h == KECCAK_EMPTY) {
 					Some(Response::Code(Vec::new()))
 				} else {
@@ -500,16 +502,16 @@ impl CheckedRequest {
 macro_rules! match_me {
 	($me: expr, ($check: pat, $req: pat) => $e: expr) => {
 		match $me {
-			CheckedRequest::HeaderProof($check, $req) => $e,
-			CheckedRequest::HeaderByHash($check, $req) => $e,
-			CheckedRequest::HeaderWithAncestors($check, $req) => $e,
-			CheckedRequest::TransactionIndex($check, $req) => $e,
-			CheckedRequest::Receipts($check, $req) => $e,
-			CheckedRequest::Body($check, $req) => $e,
-			CheckedRequest::Account($check, $req) => $e,
-			CheckedRequest::Code($check, $req) => $e,
-			CheckedRequest::Execution($check, $req) => $e,
-			CheckedRequest::Signal($check, $req) => $e,
+			Self::HeaderProof($check, $req) => $e,
+			Self::HeaderByHash($check, $req) => $e,
+			Self::HeaderWithAncestors($check, $req) => $e,
+			Self::TransactionIndex($check, $req) => $e,
+			Self::Receipts($check, $req) => $e,
+			Self::Body($check, $req) => $e,
+			Self::Account($check, $req) => $e,
+			Self::Code($check, $req) => $e,
+			Self::Execution($check, $req) => $e,
+			Self::Signal($check, $req) => $e,
 		}
 	}
 }
@@ -521,9 +523,9 @@ impl IncompleteRequest for CheckedRequest {
 	fn check_outputs<F>(&self, mut f: F) -> Result<(), net_request::NoSuchOutput>
 		where F: FnMut(usize, usize, OutputKind) -> Result<(), net_request::NoSuchOutput>
 	{
-		match *self {
-			CheckedRequest::HeaderProof(_, ref req) => req.check_outputs(f),
-			CheckedRequest::HeaderByHash(ref check, ref req) => {
+		match self {
+			Self::HeaderProof(_, req) => req.check_outputs(f),
+			Self::HeaderByHash(check, req) => {
 				req.check_outputs(&mut f)?;
 
 				// make sure the output given is definitively a hash.
@@ -532,7 +534,7 @@ impl IncompleteRequest for CheckedRequest {
 					_ => Ok(()),
 				}
 			}
-			CheckedRequest::HeaderWithAncestors(ref check, ref req) => {
+			Self::HeaderWithAncestors(check, req) => {
 				req.check_outputs(&mut f)?;
 
 				// make sure the output given is definitively a hash.
@@ -541,63 +543,63 @@ impl IncompleteRequest for CheckedRequest {
 					_ => Ok(()),
 				}
 			}
-			CheckedRequest::TransactionIndex(_, ref req) => req.check_outputs(f),
-			CheckedRequest::Receipts(_, ref req) => req.check_outputs(f),
-			CheckedRequest::Body(_, ref req) => req.check_outputs(f),
-			CheckedRequest::Account(_, ref req) => req.check_outputs(f),
-			CheckedRequest::Code(_, ref req) => req.check_outputs(f),
-			CheckedRequest::Execution(_, ref req) => req.check_outputs(f),
-			CheckedRequest::Signal(_, ref req) => req.check_outputs(f),
+			Self::TransactionIndex(_, req) => req.check_outputs(f),
+			Self::Receipts(_, req) => req.check_outputs(f),
+			Self::Body(_, req) => req.check_outputs(f),
+			Self::Account(_, req) => req.check_outputs(f),
+			Self::Code(_, req) => req.check_outputs(f),
+			Self::Execution(_, req) => req.check_outputs(f),
+			Self::Signal(_, req) => req.check_outputs(f),
 		}
 	}
 
 	fn note_outputs<F>(&self, f: F) where F: FnMut(usize, OutputKind) {
-		match_me!(*self, (_, ref req) => req.note_outputs(f))
+		match_me!(self, (_, req) => req.note_outputs(f))
 	}
 
 	fn fill<F>(&mut self, f: F) where F: Fn(usize, usize) -> Result<Output, net_request::NoSuchOutput> {
-		match_me!(*self, (_, ref mut req) => req.fill(f))
+		match_me!(self, (_, req) => req.fill(f))
 	}
 
 	fn complete(self) -> Result<Self::Complete, net_request::NoSuchOutput> {
 		match self {
-			CheckedRequest::HeaderProof(_, req) => {
+			Self::HeaderProof(_, req) => {
 				trace!(target: "on_demand", "HeaderProof request completed {:?}", req);
 				req.complete().map(CompleteRequest::HeaderProof)
 			}
-			CheckedRequest::HeaderByHash(_, req) => {
+			Self::HeaderByHash(_, req) => {
 				trace!(target: "on_demand", "HeaderByHash request completed {:?}", req);
 				req.complete().map(CompleteRequest::Headers)
 			}
-			CheckedRequest::HeaderWithAncestors(_, req) => {
+			Self::HeaderWithAncestors(_, req) => {
 				trace!(target: "on_demand", "HeaderWithAncestors request completed {:?}", req);
 				req.complete().map(CompleteRequest::Headers)
 			}
-			CheckedRequest::TransactionIndex(_, req) => {
+			Self::TransactionIndex(_, req) => {
 				trace!(target: "on_demand", "TransactionIndex request completed {:?}", req);
 				req.complete().map(CompleteRequest::TransactionIndex)
 			}
-			CheckedRequest::Receipts(_, req) => {
+			Self::Receipts(_, req) => {
 				trace!(target: "on_demand", "Receipt request completed {:?}", req);
 				req.complete().map(CompleteRequest::Receipts)
 			}
-			CheckedRequest::Body(_, req) => {
+			Self::Body(_, req) => {
 				trace!(target: "on_demand", "Block request completed {:?}", req);
 				req.complete().map(CompleteRequest::Body)
 			}
-			CheckedRequest::Account(_, req) => {
+			Self::Account(_, req) => {
 				trace!(target: "on_demand", "Account request completed {:?}", req);
 				req.complete().map(CompleteRequest::Account)
 			}
-			CheckedRequest::Code(_, req) => {
+			Self::Code(_, req) => {
 				trace!(target: "on_demand", "Code request completed {:?}", req);
 				req.complete().map(CompleteRequest::Code)
 			}
-			CheckedRequest::Execution(_, req) => {
+			Self::Execution(_, req) => {
 				trace!(target: "on_demand", "Execution request completed {:?}", req);
 				req.complete().map(CompleteRequest::Execution)
 			}
-			CheckedRequest::Signal(_, req) => {
+			Self::Signal(_, req) => {
 				trace!(target: "on_demand", "Signal request completed {:?}", req);
 				req.complete().map(CompleteRequest::Signal)
 			}
@@ -605,7 +607,7 @@ impl IncompleteRequest for CheckedRequest {
 	}
 
 	fn adjust_refs<F>(&mut self, mapping: F) where F: FnMut(usize) -> usize {
-		match_me!(*self, (_, ref mut req) => req.adjust_refs(mapping))
+		match_me!(self, (_, req) => req.adjust_refs(mapping))
 	}
 }
 
@@ -629,35 +631,35 @@ impl net_request::CheckedRequest for CheckedRequest {
 		}
 
 		// check response against contained prover.
-		match *self {
-			CheckedRequest::HeaderProof(ref prover, _) =>
+		match &self {
+			Self::HeaderProof(prover, _) =>
 				expect!((&NetResponse::HeaderProof(ref res), _) =>
 					prover.check_response(cache, &res.proof).map(Response::HeaderProof)),
-			CheckedRequest::HeaderByHash(ref prover, _) =>
+			Self::HeaderByHash(prover, _) =>
 				expect!((&NetResponse::Headers(ref res), &CompleteRequest::Headers(ref req)) =>
 					prover.check_response(cache, &req.start, &res.headers).map(Response::HeaderByHash)),
-			CheckedRequest::HeaderWithAncestors(ref prover, _) =>
+			Self::HeaderWithAncestors(prover, _) =>
 				expect!((&NetResponse::Headers(ref res), &CompleteRequest::Headers(ref req)) =>
 					prover.check_response(cache, &req.start, &res.headers).map(Response::HeaderWithAncestors)),
-			CheckedRequest::TransactionIndex(ref prover, _) =>
+			Self::TransactionIndex(prover, _) =>
 				expect!((&NetResponse::TransactionIndex(ref res), _) =>
 					prover.check_response(cache, res).map(Response::TransactionIndex)),
-			CheckedRequest::Receipts(ref prover, _) =>
+			Self::Receipts(prover, _) =>
 				expect!((&NetResponse::Receipts(ref res), _) =>
 					prover.check_response(cache, &res.receipts).map(Response::Receipts)),
-			CheckedRequest::Body(ref prover, _) =>
+			Self::Body(prover, _) =>
 				expect!((&NetResponse::Body(ref res), _) =>
 					prover.check_response(cache, &res.body).map(Response::Body)),
-			CheckedRequest::Account(ref prover, _) =>
+			Self::Account(prover, _) =>
 				expect!((&NetResponse::Account(ref res), _) =>
 					prover.check_response(cache, &res.proof).map(Response::Account)),
-			CheckedRequest::Code(ref prover, _) =>
+			Self::Code(prover, _) =>
 				expect!((&NetResponse::Code(ref res), &CompleteRequest::Code(ref req)) =>
 					prover.check_response(cache, &req.code_hash, &res.code).map(Response::Code)),
-			CheckedRequest::Execution(ref prover, _) =>
+			Self::Execution(prover, _) =>
 				expect!((&NetResponse::Execution(ref res), _) =>
 					prover.check_response(cache, &res.items).map(Response::Execution)),
-			CheckedRequest::Signal(ref prover, _) =>
+			Self::Signal(prover, _) =>
 				expect!((&NetResponse::Signal(ref res), _) =>
 					prover.check_response(cache, &res.signal).map(Response::Signal)),
 		}
@@ -693,13 +695,13 @@ pub enum Response {
 
 impl net_request::ResponseLike for Response {
 	fn fill_outputs<F>(&self, mut f: F) where F: FnMut(usize, Output) {
-		match *self {
-			Response::HeaderProof((ref hash, _)) => f(0, Output::Hash(*hash)),
-			Response::Account(None) => {
+		match self {
+			Self::HeaderProof((hash, _)) => f(0, Output::Hash(*hash)),
+			Self::Account(None) => {
 				f(0, Output::Hash(KECCAK_EMPTY)); // code hash
 				f(1, Output::Hash(KECCAK_NULL_RLP)); // storage root.
 			}
-			Response::Account(Some(ref acc)) => {
+			Self::Account(Some(acc)) => {
 				f(0, Output::Hash(acc.code_hash));
 				f(1, Output::Hash(acc.storage_root));
 			}
@@ -741,13 +743,13 @@ pub enum Error {
 
 impl From<::rlp::DecoderError> for Error {
 	fn from(err: ::rlp::DecoderError) -> Self {
-		Error::Decoder(err)
+		Self::Decoder(err)
 	}
 }
 
 impl From<Box<TrieError>> for Error {
 	fn from(err: Box<TrieError>) -> Self {
-		Error::Trie(*err)
+		Self::Trie(*err)
 	}
 }
 
@@ -766,7 +768,7 @@ impl HeaderProof {
 	/// Construct a new header-by-number request. Fails if the given number is 0.
 	/// Provide the expected CHT root to compare against.
 	pub fn new(num: u64, cht_root: H256) -> Option<Self> {
-		::cht::block_to_cht_number(num).map(|cht_num| HeaderProof {
+		::cht::block_to_cht_number(num).map(|cht_num| Self {
 			num,
 			cht_num,
 			cht_root,
@@ -774,13 +776,13 @@ impl HeaderProof {
 	}
 
 	/// Access the requested block number.
-	pub fn num(&self) -> u64 { self.num }
+	pub const fn num(&self) -> u64 { self.num }
 
 	/// Access the CHT number.
-	pub fn cht_num(&self) -> u64 { self.cht_num }
+	pub const fn cht_num(&self) -> u64 { self.cht_num }
 
 	/// Access the expected CHT root.
-	pub fn cht_root(&self) -> H256 { self.cht_root }
+	pub const fn cht_root(&self) -> H256 { self.cht_root }
 
 	/// Check a response with a CHT proof, get a hash and total difficulty back.
 	pub fn check_response(&self, cache: &Mutex<::cache::Cache>, proof: &[Bytes]) -> Result<(H256, U256), Error> {
@@ -982,14 +984,11 @@ impl Account {
 		let mut db = journaldb::new_memory_db();
 		for node in proof { db.insert(hash_db::EMPTY_PREFIX, &node[..]); }
 
-		match TrieDB::new(&db, &state_root).and_then(|t| t.get(keccak(&self.address).as_bytes()))? {
-			Some(val) => {
-				Ok(Some(rlp::decode::<BasicAccount>(&val)?))
-			},
-			None => {
-				trace!(target: "on_demand", "Account {:?} not found", self.address);
-				Ok(None)
-			}
+		if let Some(val) = TrieDB::new(&db, &state_root).and_then(|t| t.get(keccak(&self.address).as_bytes()))? {
+			Ok(Some(rlp::decode::<BasicAccount>(&val)?))
+		} else {
+			trace!(target: "on_demand", "Account {:?} not found", self.address);
+			Ok(None)
 		}
 	}
 }
@@ -1225,7 +1224,7 @@ mod tests {
 				.check_response(&cache, &invalid_successor.hash().into(), response),
 				Err(Error::WrongHeaderSequence));
 
-		let response = &[raw_invalid_successor.clone(), raw_headers[1].clone()];
+		let response = &[raw_invalid_successor, raw_headers[1].clone()];
 		assert_eq!(header_with_ancestors(invalid_successor.hash().into(), 1)
 				.check_response(&cache, &invalid_successor.hash().into(), response),
 				Err(Error::WrongHeaderSequence));
@@ -1250,7 +1249,7 @@ mod tests {
 	fn check_receipts() {
 		let receipts = (0..5).map(|_| Receipt {
 			outcome: TransactionOutcome::StateRoot(H256::random()),
-			gas_used: 21_000u64.into(),
+			gas_used: 21_000_u64.into(),
 			log_bloom: Default::default(),
 			logs: Vec::new(),
 		}).collect::<Vec<_>>();
@@ -1281,8 +1280,8 @@ mod tests {
 		let addr = Address::random();
 		let rand_acc = || {
 			let mut stream = RlpStream::new_list(4);
-			stream.append(&2u64)
-				.append(&100_000_000u64)
+			stream.append(&2_u64)
+				.append(&100_000_000_u64)
 				.append(&H256::random())
 				.append(&H256::random());
 
@@ -1320,7 +1319,7 @@ mod tests {
 
 	#[test]
 	fn check_code() {
-		let code = vec![1u8; 256];
+		let code = vec![1_u8; 256];
 		let code_hash = keccak(&code);
 		let header = Header::new();
 		let req = Code {

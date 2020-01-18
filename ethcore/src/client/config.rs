@@ -36,7 +36,7 @@ pub enum DatabaseCompactionProfile {
 
 impl Default for DatabaseCompactionProfile {
 	fn default() -> Self {
-		DatabaseCompactionProfile::Auto
+		Self::Auto
 	}
 }
 
@@ -45,9 +45,9 @@ impl FromStr for DatabaseCompactionProfile {
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		match s {
-			"auto" => Ok(DatabaseCompactionProfile::Auto),
-			"ssd" => Ok(DatabaseCompactionProfile::SSD),
-			"hdd" => Ok(DatabaseCompactionProfile::HDD),
+			"auto" => Ok(Self::Auto),
+			"ssd" => Ok(Self::SSD),
+			"hdd" => Ok(Self::HDD),
 			_ => Err("Invalid compaction profile given. Expected default/hdd/ssd.".into()),
 		}
 	}
@@ -99,10 +99,10 @@ pub struct ClientConfig {
 impl Default for ClientConfig {
 	fn default() -> Self {
 		let mb = 1024 * 1024;
-		ClientConfig {
+		Self {
 			queue: Default::default(),
 			blockchain: Default::default(),
-			tracing: Default::default(),
+			tracing: TraceConfig::default(),
 			fat_db: false,
 			pruning: journaldb::Algorithm::OverlayRecent,
 			name: "default".into(),
@@ -111,8 +111,8 @@ impl Default for ClientConfig {
 			mode: Mode::Active,
 			spec_name: "".into(),
 			verifier_type: VerifierType::Canon,
-			state_cache_size: 1 * mb,
-			jump_table_size: 1 * mb,
+			state_cache_size: mb,
+			jump_table_size: mb,
 			history: 64,
 			history_mem: 32 * mb,
 			check_seal: true,

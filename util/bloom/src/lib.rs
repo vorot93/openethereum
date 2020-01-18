@@ -14,12 +14,60 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
+
 use std::{cmp, mem, f64};
 use std::hash::{Hash, Hasher};
 use std::collections::HashSet;
 use siphasher::sip::SipHasher;
 
-/// BitVec structure with journalling
+/// `BitVec` structure with journalling
 /// Every time any of the blocks is getting set it's index is tracked
 /// and can be then drained by `drain` method
 struct BitVecJournal {
@@ -28,16 +76,16 @@ struct BitVecJournal {
 }
 
 impl BitVecJournal {
-	pub fn new(size: usize) -> BitVecJournal {
+	pub fn new(size: usize) -> Self {
 		let extra = if size % 64 > 0  { 1 } else { 0 };
-		BitVecJournal {
-			elems: vec![0u64; size / 64 + extra],
+		Self {
+			elems: vec![0_u64; size / 64 + extra],
 			journal: HashSet::new(),
 		}
 	}
 
-	pub fn from_parts(parts: &[u64]) -> BitVecJournal {
-		BitVecJournal {
+	pub fn from_parts(parts: &[u64]) -> Self {
+		Self {
 			elems: parts.to_vec(),
 			journal: HashSet::new(),
 		}
@@ -47,7 +95,7 @@ impl BitVecJournal {
 		let e_index = index / 64;
 		let bit_index = index % 64;
 		let val = self.elems.get_mut(e_index).unwrap();
-		*val |= 1u64 << bit_index;
+		*val |= 1_u64 << bit_index;
 		self.journal.insert(e_index);
 	}
 
@@ -63,7 +111,7 @@ impl BitVecJournal {
 	}
 
 	pub fn saturation(&self) -> f64 {
-		self.elems.iter().fold(0u64, |acc, e| acc + e.count_ones() as u64) as f64 / (self.elems.len() * 64) as f64
+		self.elems.iter().fold(0_u64, |acc, e| acc + e.count_ones() as u64) as f64 / (self.elems.len() * 64) as f64
 	}
 }
 
@@ -76,43 +124,43 @@ pub struct Bloom {
 
 impl Bloom {
 	/// Create a new bloom filter structure.
-	/// bitmap_size is the size in bytes (not bits) that will be allocated in memory
-	/// items_count is an estimation of the maximum number of items to store.
-	pub fn new(bitmap_size: usize, items_count: usize) -> Bloom {
+	/// `bitmap_size` is the size in bytes (not bits) that will be allocated in memory
+	/// `items_count` is an estimation of the maximum number of items to store.
+	pub fn new(bitmap_size: usize, items_count: usize) -> Self {
 		assert!(bitmap_size > 0 && items_count > 0);
-		let bitmap_bits = (bitmap_size as u64) * 8u64;
-		let k_num = Bloom::optimal_k_num(bitmap_bits, items_count);
+		let bitmap_bits = (bitmap_size as u64) * 8_u64;
+		let k_num = Self::optimal_k_num(bitmap_bits, items_count);
 		let bitmap = BitVecJournal::new(bitmap_bits as usize);
-		Bloom {
-			bitmap: bitmap,
-			bitmap_bits: bitmap_bits,
-			k_num: k_num,
+		Self {
+			bitmap,
+			bitmap_bits,
+			k_num,
 		}
 	}
 
 	/// Initializes bloom filter from saved state
-	pub fn from_parts(parts: &[u64], k_num: u32) -> Bloom {
+	pub fn from_parts(parts: &[u64], k_num: u32) -> Self {
 		let bitmap_size = parts.len() * 8;
-		let bitmap_bits = (bitmap_size as u64) * 8u64;
+		let bitmap_bits = (bitmap_size as u64) * 8_u64;
 		let bitmap = BitVecJournal::from_parts(parts);
-		Bloom {
-			bitmap: bitmap,
-			bitmap_bits: bitmap_bits,
-			k_num: k_num,
+		Self {
+			bitmap,
+			bitmap_bits,
+			k_num,
 		}
 	}
 
 	/// Create a new bloom filter structure.
-	/// items_count is an estimation of the maximum number of items to store.
-	/// fp_p is the wanted rate of false positives, in ]0.0, 1.0[
-	pub fn new_for_fp_rate(items_count: usize, fp_p: f64) -> Bloom {
-		let bitmap_size = Bloom::compute_bitmap_size(items_count, fp_p);
-		Bloom::new(bitmap_size, items_count)
+	/// `items_count` is an estimation of the maximum number of items to store.
+	/// `fp_p` is the wanted rate of false positives, in ]0.0, 1.0[
+	pub fn new_for_fp_rate(items_count: usize, fp_p: f64) -> Self {
+		let bitmap_size = Self::compute_bitmap_size(items_count, fp_p);
+		Self::new(bitmap_size, items_count)
 	}
 
-	/// Compute a recommended bitmap size for items_count items
-	/// and a fp_p rate of false positives.
-	/// fp_p obviously has to be within the ]0.0, 1.0[ range.
+	/// Compute a recommended bitmap size for `items_count` items
+	/// and a `fp_p` rate of false positives.
+	/// `fp_p` obviously has to be within the ]0.0, 1.0[ range.
 	pub fn compute_bitmap_size(items_count: usize, fp_p: f64) -> usize {
 		assert!(items_count > 0);
 		assert!(fp_p > 0.0 && fp_p < 1.0);
@@ -125,9 +173,9 @@ impl Bloom {
 	pub fn set<T>(&mut self, item: T)
 		where T: Hash
 	{
-		let base_hash = Bloom::sip_hash(&item);
+		let base_hash = Self::sip_hash(&item);
 		for k_i in 0..self.k_num {
-			let bit_offset = (Bloom::bloom_hash(base_hash, k_i) % self.bitmap_bits) as usize;
+			let bit_offset = (Self::bloom_hash(base_hash, k_i) % self.bitmap_bits) as usize;
 			self.bitmap.set(bit_offset);
 		}
 	}
@@ -137,9 +185,9 @@ impl Bloom {
 	pub fn check<T>(&self, item: T) -> bool
 		where T: Hash
 	{
-		let base_hash = Bloom::sip_hash(&item);
+		let base_hash = Self::sip_hash(&item);
 		for k_i in 0..self.k_num {
-			let bit_offset = (Bloom::bloom_hash(base_hash, k_i) % self.bitmap_bits) as usize;
+			let bit_offset = (Self::bloom_hash(base_hash, k_i) % self.bitmap_bits) as usize;
 			if !self.bitmap.get(bit_offset) {
 				return false;
 			}
@@ -148,19 +196,19 @@ impl Bloom {
 	}
 
 	/// Return the number of bits in the filter
-	pub fn number_of_bits(&self) -> u64 {
+	pub const fn number_of_bits(&self) -> u64 {
 		self.bitmap_bits
 	}
 
 	/// Return the number of hash functions used for `check` and `set`
-	pub fn number_of_hash_functions(&self) -> u32 {
+	pub const fn number_of_hash_functions(&self) -> u32 {
 		self.k_num
 	}
 
 	fn optimal_k_num(bitmap_bits: u64, items_count: usize) -> u32 {
 		let m = bitmap_bits as f64;
 		let n = items_count as f64;
-		let k_num = (m / n * f64::ln(2.0f64)).ceil() as u32;
+		let k_num = (m / n * f64::ln(2.0_f64)).ceil() as u32;
 		cmp::max(k_num, 1)
 	}
 
@@ -169,15 +217,14 @@ impl Bloom {
 	{
 		let mut sip = SipHasher::new();
 		item.hash(&mut sip);
-		let hash = sip.finish();
-		hash
+		sip.finish()
 	}
 
 	fn bloom_hash(base_hash: u64, k_i: u32) -> u64 {
 		if k_i < 2 {
 			base_hash
 		} else {
-			base_hash.wrapping_add((k_i as u64).wrapping_mul(base_hash) % 0xffffffffffffffc5)
+			base_hash.wrapping_add((k_i as u64).wrapping_mul(base_hash) % 0xffff_ffff_ffff_ffc5)
 		}
 	}
 
@@ -211,7 +258,7 @@ mod tests {
 	#[test]
 	fn get_set() {
 		let mut bloom = Bloom::new(10, 80);
-		let key = vec![115u8, 99];
+		let key = vec![115_u8, 99];
 		assert!(!bloom.check(&key));
 		bloom.set(&key);
 		assert!(bloom.check(&key));
@@ -219,9 +266,9 @@ mod tests {
 
 	#[test]
 	fn journalling() {
-		let initial = vec![0u64; 8];
+		let initial = vec![0_u64; 8];
 		let mut bloom = Bloom::from_parts(&initial, 3);
-		bloom.set(&vec![5u8, 4]);
+		bloom.set(&vec![5_u8, 4]);
 		let drain = bloom.drain_journal();
 
 		assert_eq!(2, drain.entries.len())
@@ -229,41 +276,41 @@ mod tests {
 
 	#[test]
 	fn saturation() {
-		let initial = vec![0u64; 8];
+		let initial = vec![0_u64; 8];
 		let mut bloom = Bloom::from_parts(&initial, 3);
-		bloom.set(&vec![5u8, 4]);
+		bloom.set(&vec![5_u8, 4]);
 
 		let full = bloom.saturation();
 		// 2/8/64 = 0.00390625
-		assert!(full >= 0.0039f64 && full <= 0.004f64);
+		assert!(full >= 0.0039_f64 && full <= 0.004_f64);
 	}
 
 	#[test]
 	fn hash_backward_compatibility_for_new() {
 		let ss = vec!["you", "should", "not", "break", "hash", "backward", "compatibility"];
 		let mut bloom = Bloom::new(16, 8);
-		for s in ss.iter() {
+		for s in &ss {
 			bloom.set(&s);
 		}
 
 		let drained_elems: HashSet<u64> = bloom.drain_journal().entries.into_iter().map(|t| t.1).collect();
-		let expected: HashSet<u64> = [2094615114573771027u64, 244675582389208413u64].iter().cloned().collect();
+		let expected: HashSet<u64> = [2_094_615_114_573_771_027_u64, 244_675_582_389_208_413_u64].iter().cloned().collect();
 		assert_eq!(drained_elems, expected);
 		assert_eq!(bloom.k_num, 12);
 	}
 
 	#[test]
 	fn hash_backward_compatibility_for_from_parts() {
-		let stored_state = vec![2094615114573771027u64, 244675582389208413u64];
+		let stored_state = vec![2_094_615_114_573_771_027_u64, 244_675_582_389_208_413_u64];
 		let k_num = 12;
 		let bloom = Bloom::from_parts(&stored_state, k_num);
 
 		let ss = vec!["you", "should", "not", "break", "hash", "backward", "compatibility"];
 		let tt = vec!["this", "doesnot", "exist"];
-		for s in ss.iter() {
+		for s in &ss {
 			assert!(bloom.check(&s));
 		}
-		for s in tt.iter() {
+		for s in &tt {
 			assert!(!bloom.check(&s));
 		}
 

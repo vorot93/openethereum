@@ -87,7 +87,7 @@ mod tests {
 				nonce: H64(Eth64::from_str("00006d6f7264656e").unwrap()),
 				mix_hash: H256(Eth256::from_str("0000000000000000000000000000000000000000000000000000000000000000").unwrap())
 			}),
-			difficulty: Uint(U256::from(0x400000000u64)),
+			difficulty: Uint(U256::from(0x0004_0000_0000_u64)),
 			author: Some(Address(H160::from_str("1000000000000000000000000000000000000001").unwrap())),
 			timestamp: Some(Uint(U256::from(0x07))),
 			parent_hash: Some(H256(Eth256::from_str("9000000000000000000000000000000000000000000000000000000000000000").unwrap())),

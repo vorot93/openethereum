@@ -35,17 +35,15 @@ fn check_hex(string: &str) -> Result<()> {
 		return Ok(())
 	}
 
-	return Err(ErrorKind::HexParseError(
-		format!("Expected a 0x-prefixed string of even length, found {} length string", string.len()))
-	)?
+	Err(ErrorKind::HexParseError(
+		format!("Expected a 0x-prefixed string of even length, found {} length string", string.len())
+	).into())
 }
-/// given a type and HashMap<String, Vec<FieldType>>
-/// returns a HashSet of dependent types of the given type
+/// Given a type and `HashMap<String, Vec<FieldType>>`
+/// returns a `HashSet` of dependent types of the given type
 fn build_dependencies<'a>(message_type: &'a str, message_types: &'a MessageTypes) -> Option<HashSet<&'a str>>
 {
-	if message_types.get(message_type).is_none() {
-		return None;
-	}
+	message_types.get(message_type)?;
 
 	let mut types = IndexSet::new();
 	types.insert(message_type);
@@ -70,7 +68,7 @@ fn build_dependencies<'a>(message_type: &'a str, message_types: &'a MessageTypes
 		}
 	};
 
-	return Some(deps)
+	Some(deps)
 }
 
 fn encode_type(message_type: &str, message_types: &MessageTypes) -> Result<String> {
@@ -116,23 +114,23 @@ fn encode_data(
 			inner,
 			length
 		} => {
-			let mut items = vec![];
+			let mut items = Vec::new();
 			let values = value.as_array()
-				.ok_or(serde_error("array", field_name))?;
+				.ok_or_else(|| serde_error("array", field_name))?;
 
 			// check if the type definition actually matches
 			// the length of items to be encoded
 			if length.is_some() && Some(values.len() as u64) != *length {
 				let array_type = format!("{}[{}]", *inner, length.unwrap());
 				return Err(
-					ErrorKind::UnequalArrayItems(length.unwrap(), array_type, values.len() as u64)
-				)?
+					ErrorKind::UnequalArrayItems(length.unwrap(), array_type, values.len() as u64).into()
+				)
 			}
 
 			for item in values {
 				let mut encoded = encode_data(
 					&*inner,
-					&message_types,
+					message_types,
 					item,
 					field_name
 				)?;
@@ -142,8 +140,8 @@ fn encode_data(
 			keccak(items).as_ref().to_vec()
 		}
 
-		Type::Custom(ref ident) if message_types.get(&*ident).is_some() => {
-			let type_hash = (&type_hash(ident, &message_types)?).0.to_vec();
+		Type::Custom(ident) if message_types.get(&*ident).is_some() => {
+			let type_hash = type_hash(ident, message_types)?.0.to_vec();
 			let mut tokens = encode(&[EthAbiToken::FixedBytes(type_hash)]);
 
 			for field in message_types.get(ident).expect("Already checked in match guard; qed") {
@@ -151,8 +149,8 @@ fn encode_data(
 				let type_ = parse_type(&*field.type_)?;
 				let mut encoded = encode_data(
 					&type_,
-					&message_types,
-					&value,
+					message_types,
+					value,
 					Some(&*field.name)
 				)?;
 				tokens.append(&mut encoded);
@@ -163,9 +161,9 @@ fn encode_data(
 
 		Type::Bytes => {
 			let string = value.as_str()
-				.ok_or(serde_error("string", field_name))?;
+				.ok_or_else(|| serde_error("string", field_name))?;
 
-			check_hex(&string)?;
+			check_hex(string)?;
 
 			let bytes = (&string[2..])
 				.from_hex::<Vec<u8>>()
@@ -177,9 +175,9 @@ fn encode_data(
 
 		Type::Byte(_) => {
 			let string = value.as_str()
-				.ok_or(serde_error("string", field_name))?;
+				.ok_or_else(|| serde_error("string", field_name))?;
 
-			check_hex(&string)?;
+			check_hex(string)?;
 
 			let bytes = (&string[2..])
 				.from_hex::<Vec<u8>>()
@@ -190,19 +188,19 @@ fn encode_data(
 
 		Type::String => {
 			let value = value.as_str()
-				.ok_or(serde_error("string", field_name))?;
+				.ok_or_else(|| serde_error("string", field_name))?;
 			let hash = keccak(value).as_ref().to_vec();
 			encode(&[EthAbiToken::FixedBytes(hash)])
 		}
 
 		Type::Bool => encode(&[EthAbiToken::Bool(value.as_bool()
-			.ok_or(serde_error("bool", field_name))?)]),
+			.ok_or_else(|| serde_error("bool", field_name))?)]),
 
 		Type::Address => {
 			let addr = value.as_str()
-				.ok_or(serde_error("string", field_name))?;
+				.ok_or_else(|| serde_error("string", field_name))?;
 			if addr.len() != 42 {
-				return Err(ErrorKind::InvalidAddressLength(addr.len()))?;
+				return Err(ErrorKind::InvalidAddressLength(addr.len()).into());
 			}
 			let address = EthAddress::from_str(&addr[2..])
 				.map_err(|err| ErrorKind::HexParseError(format!("{}", err)))?;
@@ -211,9 +209,9 @@ fn encode_data(
 
 		Type::Uint | Type::Int => {
 			let string = value.as_str()
-				.ok_or(serde_error("int/uint", field_name))?;
+				.ok_or_else(|| serde_error("int/uint", field_name))?;
 
-			check_hex(&string)?;
+			check_hex(string)?;
 
 			let uint = U256::from_str(&string[2..])
 				.map_err(|err| ErrorKind::HexParseError(format!("{}", err)))?;
@@ -228,8 +226,8 @@ fn encode_data(
 
 		_ => return Err(
 			ErrorKind::UnknownType(
-				format!("{}", field_name.unwrap_or("")),
-				format!("{}", *message_type)
+				field_name.unwrap_or_default().to_string(),
+				message_type.to_string()
 			).into()
 		)
 	};
@@ -268,7 +266,7 @@ mod tests {
 	use serde_json::from_str;
 	use rustc_hex::ToHex;
 
-	const JSON: &'static str = r#"{
+	const JSON: &str = r#"{
 		"primaryType": "Mail",
 		"domain": {
 			"name": "Ether Mail",
@@ -363,7 +361,7 @@ mod tests {
 		let mail = &String::from("Mail");
 		assert_eq!(
 			"Mail(Person from,Person to,string contents)Person(string name,address wallet)",
-			encode_type(&mail, &value).expect("alas error!")
+			encode_type(mail, &value).expect("alas error!")
 		)
 	}
 
@@ -389,7 +387,7 @@ mod tests {
 
 		let value = from_str::<MessageTypes>(string).expect("alas error!");
 		let mail = &String::from("Mail");
-		let hash = (type_hash(&mail, &value).expect("alas error!").0).to_hex::<String>();
+		let hash = (type_hash(mail, &value).expect("alas error!").0).to_hex::<String>();
 		assert_eq!(
 			hash,
 			"a0cedeb2dc280ba39b857546d74f5549c3a1d7bdc2dd96bf881f76108e23dac2"
@@ -408,7 +406,7 @@ mod tests {
 
 	#[test]
 	fn test_unequal_array_lengths() {
-		const TEST: &'static str = r#"{
+		const TEST: &str = r#"{
 		"primaryType": "Mail",
 		"domain": {
 			"name": "Ether Mail",
@@ -540,7 +538,7 @@ mod tests {
         }"#;
 
 		let typed_data = from_str::<EIP712>(string).expect("alas error!");
-		let hash = hash_structured_data(typed_data.clone()).expect("alas error!");
+		let hash = hash_structured_data(typed_data).expect("alas error!");
 		assert_eq!(
 			&format!("{:x}", hash)[..],
 
@@ -637,7 +635,7 @@ mod tests {
             }
           }"#;
 		let typed_data = from_str::<EIP712>(string).expect("alas error!");
-		let hash = hash_structured_data(typed_data.clone()).expect("alas error!");
+		let hash = hash_structured_data(typed_data).expect("alas error!");
 
 		assert_eq!(
 			&format!("{:x}", hash)[..],

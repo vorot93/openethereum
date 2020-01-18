@@ -64,8 +64,8 @@ impl<C> State<C> {
 		stale_id: Option<usize>,
 		max_nonce: Option<U256>,
 	) -> Self {
-		State {
-			nonces: Default::default(),
+		Self {
+			nonces: HashMap::new(),
 			state,
 			max_nonce,
 			stale_id,
@@ -111,8 +111,8 @@ pub struct Condition {
 
 impl Condition {
 	/// Create a new condition checker given current block number and UTC timestamp.
-	pub fn new(block_number: u64, now: u64) -> Self {
-		Condition {
+	pub const fn new(block_number: u64, now: u64) -> Self {
+		Self {
 			block_number,
 			now,
 		}
@@ -141,8 +141,8 @@ pub struct OptionalState<C> {
 
 impl<C> OptionalState<C> {
 	pub fn new(state: C) -> Self {
-		OptionalState {
-			nonces: Default::default(),
+		Self {
+			nonces: HashMap::new(),
 			state,
 		}
 	}
@@ -236,7 +236,7 @@ mod tests {
 		let v = |tx: transaction::PendingTransaction| TestClient::new().verify(tx);
 		let tx1 = v(transaction::PendingTransaction::new(tx.clone(), transaction::Condition::Number(5).into()));
 		let tx2 = v(transaction::PendingTransaction::new(tx.clone(), transaction::Condition::Timestamp(3).into()));
-		let tx3 = v(transaction::PendingTransaction::new(tx.clone(), None));
+		let tx3 = v(transaction::PendingTransaction::new(tx, None));
 
 		// when/then
 		assert_eq!(Condition::new(0, 0).is_ready(&tx1), txpool::Readiness::Future);

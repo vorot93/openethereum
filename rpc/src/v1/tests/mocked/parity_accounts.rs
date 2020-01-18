@@ -49,12 +49,10 @@ fn setup_with_accounts_provider(accounts_provider: Arc<AccountProvider>) -> Pari
 	io.extend_with(ParityAccounts::to_delegate(parity_accounts));
 	io.extend_with(ParityAccountsInfo::to_delegate(parity_accounts2));
 
-	let tester = ParityAccountsTester {
+	ParityAccountsTester {
 		accounts: accounts_provider,
-		io: io,
-	};
-
-	tester
+		io,
+	}
 }
 
 fn setup() -> ParityAccountsTester {
@@ -174,7 +172,7 @@ fn should_be_able_to_kill_account() {
 	assert_eq!(accounts.len(), 1);
 	let address = accounts[0];
 
-	let request = format!(r#"{{"jsonrpc": "2.0", "method": "parity_killAccount", "params": ["0xf00baba2f00baba2f00baba2f00baba2f00baba2"], "id": 1}}"#);
+	let request = "{\"jsonrpc\": \"2.0\", \"method\": \"parity_killAccount\", \"params\": [\"0xf00baba2f00baba2f00baba2f00baba2f00baba2\"], \"id\": 1}".to_string();
 	let response = r#"{"jsonrpc":"2.0","error":{"code":-32602,"message":"Invalid params: invalid length 1, expected a tuple of size 2."},"id":1}"#;
 	let res = tester.io.handle_request_sync(&request);
 	assert_eq!(res, Some(response.into()));
@@ -195,7 +193,7 @@ fn should_be_able_to_remove_address() {
 	// add an address
 	let request = r#"{"jsonrpc": "2.0", "method": "parity_setAccountName", "params": ["0x000baba1000baba2000baba3000baba4000baba5", "Test"], "id": 1}"#;
 	let response = r#"{"jsonrpc":"2.0","result":true,"id":1}"#;
-	let res = tester.io.handle_request_sync(&request);
+	let res = tester.io.handle_request_sync(request);
 	assert_eq!(res, Some(response.into()));
 
 	// verify it exists
@@ -207,7 +205,7 @@ fn should_be_able_to_remove_address() {
 	// remove the address
 	let request = r#"{"jsonrpc": "2.0", "method": "parity_removeAddress", "params": ["0x000baba1000baba2000baba3000baba4000baba5"], "id": 3}"#;
 	let response = r#"{"jsonrpc":"2.0","result":true,"id":3}"#;
-	let res = tester.io.handle_request_sync(&request);
+	let res = tester.io.handle_request_sync(request);
 	assert_eq!(res, Some(response.into()));
 
 	// verify empty
@@ -297,7 +295,7 @@ fn rpc_parity_vault_adds_vault_field_to_acount_meta() {
 	let request = r#"{"jsonrpc": "2.0", "method": "parity_allAccountsInfo", "params":[], "id": 1}"#;
 	let response = format!(r#"{{"jsonrpc":"2.0","result":{{"0x{:x}":{{"meta":"{{\"vault\":\"vault1\"}}","name":"","uuid":"{}"}}}},"id":1}}"#, address1, uuid1);
 
-	assert_eq!(tester.io.handle_request_sync(request), Some(response.to_owned()));
+	assert_eq!(tester.io.handle_request_sync(request), Some(response));
 
 	// and then
 	assert!(tester.accounts.change_vault(address1, "").is_ok());
@@ -305,7 +303,7 @@ fn rpc_parity_vault_adds_vault_field_to_acount_meta() {
 	let request = r#"{"jsonrpc": "2.0", "method": "parity_allAccountsInfo", "params":[], "id": 1}"#;
 	let response = format!(r#"{{"jsonrpc":"2.0","result":{{"0x{:x}":{{"meta":"{{}}","name":"","uuid":"{}"}}}},"id":1}}"#, address1, uuid1);
 
-	assert_eq!(tester.io.handle_request_sync(request), Some(response.to_owned()));
+	assert_eq!(tester.io.handle_request_sync(request), Some(response));
 }
 
 #[test]
@@ -394,7 +392,7 @@ fn derive_key_hash() {
 	// derive by hash
 	let request = r#"{"jsonrpc": "2.0", "method": "parity_deriveAddressHash", "params": ["0xc171033d5cbff7175f29dfd3a63dda3d6f8f385e", "password1", { "type": "soft", "hash": "0x0c0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0c0c" }, true ], "id": 3}"#;
 	let response = r#"{"jsonrpc":"2.0","result":"0xf28c28fcddf4a9b8f474237278d3647f9c0d1b3c","id":3}"#;
-	let res = tester.io.handle_request_sync(&request);
+	let res = tester.io.handle_request_sync(request);
 	assert_eq!(res, Some(response.into()));
 }
 
@@ -414,7 +412,7 @@ fn derive_key_index() {
 	// derive by hash
 	let request = r#"{"jsonrpc": "2.0", "method": "parity_deriveAddressIndex", "params": ["0xc171033d5cbff7175f29dfd3a63dda3d6f8f385e", "password1", [{ "type": "soft", "index": 0 }, { "type": "soft", "index": 1 }], false ], "id": 3}"#;
 	let response = r#"{"jsonrpc":"2.0","result":"0xcc548e0bb2efe792a920ae0fbf583b13919f274f","id":3}"#;
-	let res = tester.io.handle_request_sync(&request);
+	let res = tester.io.handle_request_sync(request);
 	assert_eq!(res, Some(response.into()));
 }
 
@@ -430,14 +428,14 @@ fn should_export_account() {
 	// invalid password
 	let request = r#"{"jsonrpc":"2.0","method":"parity_exportAccount","params":["0x0042e5d2a662eeaca8a7e828c174f98f35d8925b","123"],"id":1}"#;
 	let response = r#"{"jsonrpc":"2.0","error":{"code":-32023,"message":"Could not export account.","data":"InvalidPassword"},"id":1}"#;
-	let res = tester.io.handle_request_sync(&request);
+	let res = tester.io.handle_request_sync(request);
 	assert_eq!(res, Some(response.into()));
 
 	// correct password
 	let request = r#"{"jsonrpc":"2.0","method":"parity_exportAccount","params":["0x0042e5d2a662eeaca8a7e828c174f98f35d8925b","parity-export-test"],"id":1}"#;
 
 	let response = r#"{"jsonrpc":"2.0","result":{"address":"0042e5d2a662eeaca8a7e828c174f98f35d8925b","crypto":{"cipher":"aes-128-ctr","cipherparams":{"iv":"a1c6ff99070f8032ca1c4e8add006373"},"ciphertext":"df27e3db64aa18d984b6439443f73660643c2d119a6f0fa2fa9a6456fc802d75","kdf":"pbkdf2","kdfparams":{"c":10240,"dklen":32,"prf":"hmac-sha256","salt":"ddc325335cda5567a1719313e73b4842511f3e4a837c9658eeb78e51ebe8c815"},"mac":"3dc888ae79cbb226ff9c455669f6cf2d79be72120f2298f6cb0d444fddc0aa3d"},"id":"6a186c80-7797-cff2-bc2e-7c1d6a6cc76e","meta":"{\"passwordHint\":\"parity-export-test\",\"timestamp\":1490017814987}","name":"parity-export-test","version":3},"id":1}"#;
-	let result = tester.io.handle_request_sync(&request);
+	let result = tester.io.handle_request_sync(request);
 
 	println!("Result: {:?}", result);
 	println!("Response: {:?}", response);
@@ -458,7 +456,7 @@ fn should_import_wallet() {
 	assert_eq!(res, response);
 
 	let account_meta = tester.accounts.account_meta(Address::from_str("00bac56a8a27232baa044c03f43bf3648c961735").unwrap()).unwrap();
-	let account_uuid: String = account_meta.uuid.unwrap().into();
+	let account_uuid: String = account_meta.uuid.unwrap();
 
 	// the RPC should import the account with a new id
 	assert!(account_uuid != id);
@@ -477,6 +475,6 @@ fn should_sign_message() {
 
 	let request = r#"{"jsonrpc": "2.0", "method": "parity_signMessage", "params": ["0xc171033d5cbff7175f29dfd3a63dda3d6f8f385e", "password1", "0xbc36789e7a1e281436464229828f817d6612f7b477d66591ff96a9e064bcc98a"], "id": 3}"#;
 	let response = r#"{"jsonrpc":"2.0","result":"0x1d9e33a8cf8bfc089a172bca01da462f9e359c6cb1b0f29398bc884e4d18df4f78588aee4fb5cc067ca62d2abab995e0bba29527be6ac98105b0320020a2efaf00","id":3}"#;
-	let res = tester.io.handle_request_sync(&request);
+	let res = tester.io.handle_request_sync(request);
 	assert_eq!(res, Some(response.into()));
 }

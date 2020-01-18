@@ -136,15 +136,15 @@ pub enum Error {
 impl error::Error for Error {
 	fn source(&self) -> Option<&(dyn error::Error + 'static)> {
 		match self {
-			Error::Io(e) => Some(e),
-			Error::Decoder(e) => Some(e),
-			Error::Trie(e) => Some(e),
-			Error::TxPool(e) => Some(e),
-			Error::Json(e) => Some(e),
-			Error::Crypto(e) => Some(e),
-			Error::Execution(e) => Some(e),
-			Error::Transaction(e) => Some(e),
-			Error::Ethcore(e) => Some(e),
+			Self::Io(e) => Some(e),
+			Self::Decoder(e) => Some(e),
+			Self::Trie(e) => Some(e),
+			Self::TxPool(e) => Some(e),
+			Self::Json(e) => Some(e),
+			Self::Crypto(e) => Some(e),
+			Self::Execution(e) => Some(e),
+			Self::Transaction(e) => Some(e),
+			Self::Ethcore(e) => Some(e),
 			_ => None,
 		}
 	}
@@ -152,66 +152,66 @@ impl error::Error for Error {
 
 impl From<String> for Error {
 	fn from(s: String) -> Self {
-		Error::Msg(s)
+		Self::Msg(s)
 	}
 }
 
 impl From<std::io::Error> for Error {
 	fn from(err: std::io::Error) -> Self {
-		Error::Io(err).into()
+		Self::Io(err)
 	}
 }
 
 impl From<CryptoError> for Error {
 	fn from(err: CryptoError) -> Self {
-		Error::Crypto(err).into()
+		Self::Crypto(err)
 	}
 }
 
 impl From<DecoderError> for Error {
 	fn from(err: DecoderError) -> Self {
-		Error::Decoder(err).into()
+		Self::Decoder(err)
 	}
 }
 
 impl From<ExecutionError> for Error {
 	fn from(err: ExecutionError) -> Self {
-		Error::Execution(err).into()
+		Self::Execution(err)
 	}
 }
 
 impl From<TransactionError> for Error {
 	fn from(err: TransactionError) -> Self {
-		Error::Transaction(err).into()
+		Self::Transaction(err)
 	}
 }
 
 impl From<TrieError> for Error {
 	fn from(err: TrieError) -> Self {
-		Error::Trie(err).into()
+		Self::Trie(err)
 	}
 }
 
 impl From<TxPoolError> for Error {
 	fn from(err: TxPoolError) -> Self {
-		Error::TxPool(err).into()
+		Self::TxPool(err)
 	}
 }
 
 impl From<SerdeError> for Error {
 	fn from(err: SerdeError) -> Self {
-		Error::Json(err).into()
+		Self::Json(err)
 	}
 }
 
 impl From<EthcoreError> for Error {
 	fn from(err: EthcoreError) -> Self {
-		Error::Ethcore(err).into()
+		Self::Ethcore(err)
 	}
 }
 
 impl<E> From<Box<E>> for Error where Error: From<E> {
-	fn from(err: Box<E>) -> Error {
-		Error::from(*err)
+	fn from(err: Box<E>) -> Self {
+		Self::from(*err)
 	}
 }

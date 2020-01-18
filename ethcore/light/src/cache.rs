@@ -48,7 +48,7 @@ pub struct CacheSizes {
 impl Default for CacheSizes {
 	fn default() -> Self {
 		const MB: usize = 1024 * 1024;
-		CacheSizes {
+		Self {
 			headers: 10 * MB,
 			canon_hashes: 3 * MB,
 			bodies: 20 * MB,
@@ -76,7 +76,7 @@ pub struct Cache {
 impl Cache {
 	/// Create a new data cache with the given sizes and gas price corpus expiration time.
 	pub fn new(sizes: CacheSizes, corpus_expiration: Duration) -> Self {
-		Cache {
+		Self {
 			headers: MemoryLruCache::new(sizes.headers),
 			canon_hashes: MemoryLruCache::new(sizes.canon_hashes),
 			bodies: MemoryLruCache::new(sizes.bodies),
@@ -94,7 +94,7 @@ impl Cache {
 
 	/// Query hash by number.
 	pub fn block_hash(&mut self, num: BlockNumber) -> Option<H256> {
-		self.canon_hashes.get_mut(&num).map(|h| *h)
+		self.canon_hashes.get_mut(&num).copied()
 	}
 
 	/// Query block body by block hash.
@@ -109,7 +109,7 @@ impl Cache {
 
 	/// Query chain score by block hash.
 	pub fn chain_score(&mut self, hash: &H256) -> Option<U256> {
-		self.chain_score.get_mut(hash).map(|h| *h)
+		self.chain_score.get_mut(hash).copied()
 	}
 
 	/// Cache the given header.
@@ -141,7 +141,7 @@ impl Cache {
 	pub fn gas_price_corpus(&self) -> Option<Corpus<U256>> {
 		let now = Instant::now();
 
-		self.corpus.as_ref().and_then(|&(ref corpus, ref tm)| {
+		self.corpus.as_ref().and_then(|(corpus, tm)| {
 			if *tm + self.corpus_expiration >= now {
 				Some(corpus.clone())
 			} else {
@@ -182,14 +182,14 @@ mod tests {
 	#[test]
 	fn corpus_inaccessible() {
 		let duration = Duration::from_secs(20);
-		let mut cache = Cache::new(Default::default(), duration.clone());
+		let mut cache = Cache::new(Default::default(), duration);
 
-		cache.set_gas_price_corpus(vec![].into());
-		assert_eq!(cache.gas_price_corpus(), Some(vec![].into()));
+		cache.set_gas_price_corpus(Vec::new().into());
+		assert_eq!(cache.gas_price_corpus(), Some(Vec::new().into()));
 
 		{
 			let corpus_time = &mut cache.corpus.as_mut().unwrap().1;
-			*corpus_time = *corpus_time - duration;
+			*corpus_time -= duration;
 		}
 		assert!(cache.gas_price_corpus().is_none());
 	}

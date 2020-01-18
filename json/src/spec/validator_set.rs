@@ -63,14 +63,13 @@ mod tests {
 		assert_eq!(deserialized[0], ValidatorSet::List(vec![Address(H160::from_str("c6d9d2cd449a754c494264e1809c50e34d64562b").unwrap())]));
 		assert_eq!(deserialized[1], ValidatorSet::SafeContract(Address(H160::from_str("c6d9d2cd449a754c494264e1809c50e34d64562b").unwrap())));
 		assert_eq!(deserialized[2], ValidatorSet::Contract(Address(H160::from_str("c6d9d2cd449a754c494264e1809c50e34d64562b").unwrap())));
-		match deserialized[3] {
-			ValidatorSet::Multi(ref map) => {
-				assert_eq!(map.len(), 3);
-				assert!(map.contains_key(&Uint(U256::from(0))));
-				assert!(map.contains_key(&Uint(U256::from(10))));
-				assert!(map.contains_key(&Uint(U256::from(20))));
-			},
-			_ => assert!(false),
+		if let ValidatorSet::Multi(map) = &deserialized[3] {
+			assert_eq!(map.len(), 3);
+			assert!(map.contains_key(&Uint(U256::from(0))));
+			assert!(map.contains_key(&Uint(U256::from(10))));
+			assert!(map.contains_key(&Uint(U256::from(20))));
+		} else {
+			unreachable!()
 		}
 	}
 }

@@ -26,12 +26,12 @@ use super::SKIP_TESTS;
 use super::HookType;
 
 #[allow(dead_code)]
-fn skip_test(subname: &str, chain: &String, number: usize) -> bool {
+fn skip_test(subname: &str, chain: &str, number: usize) -> bool {
 	trace!(target: "json-tests", "[state, skip_test] subname: '{}', chain: '{}', number: {}", subname, chain, number);
 	SKIP_TESTS.state.iter().any(|state_test|{
 		if let Some(subtest) = state_test.subtests.get(subname) {
 			trace!(target: "json-tests", "[state, skip_test] Maybe skipping {:?}", subtest);
-			chain == &subtest.chain &&
+			*chain == subtest.chain &&
 			(
 				subtest.subnumbers[0] == "*" ||
 				subtest.subnumbers.contains(&number.to_string())
@@ -46,10 +46,10 @@ fn skip_test(subname: &str, chain: &String, number: usize) -> bool {
 pub fn json_chain_test<H: FnMut(&str, HookType)>(path: &Path, json_data: &[u8], start_stop_hook: &mut H) -> Vec<String> {
 	let _ = ::env_logger::try_init();
 	let tests = ethjson::test_helpers::state::Test::load(json_data)
-		.expect(&format!("Could not parse JSON state test data from {}", path.display()));
+		.unwrap_or_else(|_| panic!("Could not parse JSON state test data from {}", path.display()));
 	let mut failed = Vec::new();
 
-	for (name, test) in tests.into_iter() {
+	for (name, test) in tests {
 		start_stop_hook(&name, HookType::OnStart);
 
 		{
@@ -59,9 +59,10 @@ pub fn json_chain_test<H: FnMut(&str, HookType)>(path: &Path, json_data: &[u8], 
 
 			for (spec_name, states) in test.post_states {
 				let total = states.len();
-				let spec = match EvmTestClient::fork_spec_from_json(&spec_name) {
-					Some(spec) => spec,
-					None => {
+				let spec = {
+					if let Some(spec) = EvmTestClient::fork_spec_from_json(&spec_name) {
+						spec
+					} else {
 						println!("   - {} | {:?} Ignoring tests because of missing chainspec", name, spec_name);
 						continue;
 					}
@@ -92,7 +93,7 @@ pub fn json_chain_test<H: FnMut(&str, HookType)>(path: &Path, json_data: &[u8], 
 							flushln!("{} fail", info);
 							failed.push(name.clone());
 						},
-						Ok(Err(TransactErr { state_root, ref error, .. })) if state_root != post_root => {
+						Ok(Err(TransactErr { state_root, error, .. })) if state_root != post_root => {
 							println!("{} !!! State mismatch (got: {}, expect: {}", info, state_root, post_root);
 							println!("{} !!! Execution error: {:?}", info, error);
 							flushln!("{} fail", info);

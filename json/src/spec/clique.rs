@@ -49,7 +49,7 @@ mod tests {
 		}"#;
 
 		let deserialized: Clique = serde_json::from_str(s).unwrap();
-		assert_eq!(deserialized.params.period, Some(5u64));
+		assert_eq!(deserialized.params.period, Some(5_u64));
 		assert_eq!(deserialized.params.epoch, NonZeroU64::new(30000));
 	}
 }

@@ -18,6 +18,54 @@
 //! crate.
 // TODO: push changes upstream in a clean way.
 
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
+
 extern crate parity_util_mem;
 extern crate lru_cache;
 
@@ -43,9 +91,9 @@ fn heap_size_of<T: MallocSizeOf>(val: &T) -> usize {
 impl<K: Eq + Hash, V: MallocSizeOf> MemoryLruCache<K, V> {
 	/// Create a new cache with a maximum size in bytes.
 	pub fn new(max_size: usize) -> Self {
-		MemoryLruCache {
+		Self {
 			inner: LruCache::new(INITIAL_CAPACITY),
-			max_size: max_size,
+			max_size,
 			cur_size: 0,
 		}
 	}
@@ -100,13 +148,13 @@ mod tests {
 	#[test]
 	fn it_works() {
 		let mut cache = MemoryLruCache::new(256);
-		let val1 = vec![0u8; 100];
+		let val1 = vec![0_u8; 100];
 		let size1 = heap_size_of(&val1);
 		cache.insert("hello", val1);
 
 		assert_eq!(cache.current_size(), size1);
 
-		let val2 = vec![0u8; 210];
+		let val2 = vec![0_u8; 210];
 		let size2 = heap_size_of(&val2);
 		cache.insert("world", val2);
 

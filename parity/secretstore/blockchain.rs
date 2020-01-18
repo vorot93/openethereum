@@ -155,8 +155,8 @@ impl SecretStoreChain for TrustedClient {
 		registry_name: &str,
 		address: &ContractAddress
 	) -> Option<Address> {
-		match *address {
-			ContractAddress::Address(ref address) => Some(address.clone()),
+		match address {
+			ContractAddress::Address(address) => Some(address.clone()),
 			ContractAddress::Registry => self.get_trusted().and_then(|client|
 				self.get_confirmed_block_hash()
 					.and_then(|block| {
@@ -204,7 +204,7 @@ impl SecretStoreChain for TrustedClient {
 			// potentially this could lead us to reading same logs twice when reorganizing to the fork, which
 			// already has been canonical previosuly
 			// the worst thing that can happen in this case is spending some time reading unneeded data from SS db
-			Some(ref route) if route.index < route.blocks.len() => route.blocks[route.index],
+			Some(route) if route.index < route.blocks.len() => route.blocks[route.index],
 			// else we care only about confirmed block
 			_ => confirmed_block.clone(),
 		};

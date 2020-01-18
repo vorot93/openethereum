@@ -129,15 +129,15 @@ pub fn to_queue_penalization(time: Option<u64>) -> Result<Penalization, String> 
 }
 
 pub fn to_address(s: Option<String>) -> Result<Address, String> {
-	match s {
-		Some(ref a) => clean_0x(a).parse().map_err(|_| format!("Invalid address: {:?}", a)),
+	match &s {
+		Some(a) => clean_0x(a).parse().map_err(|_| format!("Invalid address: {:?}", a)),
 		None => Ok(Address::zero())
 	}
 }
 
 pub fn to_addresses(s: &Option<String>) -> Result<Vec<Address>, String> {
-	match *s {
-		Some(ref adds) if !adds.is_empty() => adds.split(',')
+	match s {
+		Some(adds) if !adds.is_empty() => adds.split(',')
 			.map(|a| clean_0x(a).parse().map_err(|_| format!("Invalid address: {:?}", a)))
 			.collect(),
 		_ => Ok(Vec::new()),
@@ -150,10 +150,7 @@ pub fn to_price(s: &str) -> Result<f32, String> {
 }
 
 pub fn join_set(set: Option<&HashSet<String>>) -> Option<String> {
-	match set {
-		Some(s) => Some(s.iter().map(|s| s.as_str()).collect::<Vec<&str>>().join(",")),
-		None => None
-	}
+	set.map(|s| s.iter().map(String::as_str).collect::<Vec<&str>>().join(","))
 }
 
 /// Flush output buffer.
@@ -187,17 +184,19 @@ pub fn parity_ipc_path(base: &str, path: &str, shift: u16) -> String {
 
 /// Validates and formats bootnodes option.
 pub fn to_bootnodes(bootnodes: &Option<String>) -> Result<Vec<String>, String> {
-	match *bootnodes {
-		Some(ref x) if !x.is_empty() => x.split(',').map(|s| {
-			match validate_node_url(s).map(Into::into) {
-				None => Ok(s.to_owned()),
-				Some(sync::Error::AddressResolve(_)) => Err(format!("Failed to resolve hostname of a boot node: {}", s)),
-				Some(_) => Err(format!("Invalid node address format given for a boot node: {}", s)),
-			}
-		}).collect(),
-		Some(_) => Ok(vec![]),
-		None => Ok(vec![])
+	if let Some(x) = bootnodes {
+		if !x.is_empty() {
+			return x.split(',').map(|s| {
+				match validate_node_url(s).map(Into::into) {
+					None => Ok(s.to_owned()),
+					Some(sync::Error::AddressResolve(_)) => Err(format!("Failed to resolve hostname of a boot node: {}", s)),
+					Some(_) => Err(format!("Invalid node address format given for a boot node: {}", s)),
+				}
+			}).collect();
+		}
 	}
+
+	Ok(Vec::new())
 }
 
 #[cfg(test)]
@@ -227,6 +226,7 @@ pub fn default_network_config() -> ::sync::NetworkConfiguration {
 	}
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn to_client_config(
 	cache_config: &CacheConfig,
 	spec_name: String,
@@ -302,7 +302,7 @@ pub fn execute_upgrades(
 /// Prompts user asking for password.
 pub fn password_prompt() -> Result<Password, String> {
 	use rpassword::read_password;
-	const STDIN_ERROR: &'static str = "Unable to ask for password on non-interactive terminal.";
+	const STDIN_ERROR: &str = "Unable to ask for password on non-interactive terminal.";
 
 	println!("Please note that password is NOT RECOVERABLE.");
 	print!("Type password: ");
@@ -336,12 +336,11 @@ pub fn passwords_from_files(files: &[String]) -> Result<Vec<Password>, String> {
 		let file = File::open(filename).map_err(|_| format!("{} Unable to read password file. Ensure it exists and permissions are correct.", filename))?;
 		let reader = BufReader::new(&file);
 		let lines = reader.lines()
-			.filter_map(|l| l.ok())
-			.map(|pwd| pwd.trim().to_owned().into())
+			.filter_map(|res| res.ok().map(|pwd| pwd.trim().to_owned().into()))
 			.collect::<Vec<Password>>();
 		Ok(lines)
 	}).collect::<Result<Vec<Vec<Password>>, String>>();
-	Ok(passwords?.into_iter().flat_map(|x| x).collect())
+	Ok(passwords?.into_iter().flatten().collect())
 }
 
 #[cfg(test)]
@@ -351,7 +350,7 @@ mod tests {
 	use std::io::Write;
 	use std::collections::HashSet;
 	use tempdir::TempDir;
-	use ethereum_types::U256;
+	use ethereum_types::{Address, U256};
 	use ethcore::miner::PendingSet;
 	use ethkey::Password;
 	use types::{
@@ -428,7 +427,7 @@ mod tests {
 			to_address(Some("D9A111feda3f362f55Ef1744347CDC8Dd9964a41".into())).unwrap(),
 			"D9A111feda3f362f55Ef1744347CDC8Dd9964a41".parse().unwrap()
 		);
-		assert_eq!(to_address(None).unwrap(), Default::default());
+		assert_eq!(to_address(None).unwrap(), Address::zero());
 	}
 
 	#[test]
@@ -493,8 +492,8 @@ but the first password is trimmed
 		let one_bootnode = "enode://e731347db0521f3476e6bbbb83375dcd7133a1601425ebd15fd10f3835fd4c304fba6282087ca5a0deeafadf0aa0d4fd56c3323331901c1f38bd181c283e3e35@128.199.55.137:30303";
 		let two_bootnodes = "enode://e731347db0521f3476e6bbbb83375dcd7133a1601425ebd15fd10f3835fd4c304fba6282087ca5a0deeafadf0aa0d4fd56c3323331901c1f38bd181c283e3e35@128.199.55.137:30303,enode://e731347db0521f3476e6bbbb83375dcd7133a1601425ebd15fd10f3835fd4c304fba6282087ca5a0deeafadf0aa0d4fd56c3323331901c1f38bd181c283e3e35@128.199.55.137:30303";
 
-		assert_eq!(to_bootnodes(&Some("".into())), Ok(vec![]));
-		assert_eq!(to_bootnodes(&None), Ok(vec![]));
+		assert_eq!(to_bootnodes(&Some("".into())), Ok(Vec::new()));
+		assert_eq!(to_bootnodes(&None), Ok(Vec::new()));
 		assert_eq!(to_bootnodes(&Some(one_bootnode.into())), Ok(vec![one_bootnode.into()]));
 		assert_eq!(to_bootnodes(&Some(two_bootnodes.into())), Ok(vec![one_bootnode.into(), one_bootnode.into()]));
 	}

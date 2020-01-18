@@ -30,11 +30,11 @@ use key_server_cluster::message::{Message, EncryptionMessage, InitializeEncrypti
 
 /// Encryption (distributed key generation) session.
 /// Based on "ECDKG: A Distributed Key Generation Protocol Based on Elliptic Curve Discrete Logarithm" paper:
-/// http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.124.4128&rep=rep1&type=pdf
+/// <http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.124.4128&rep=rep1&type=pdf>
 /// Brief overview:
 /// 1) initialization: master node (which has received request for storing the secret) initializes the session on all other nodes
-/// 2) master node sends common_point + encrypted_point to all other nodes
-/// 3) common_point + encrypted_point are saved on all nodes
+/// 2) master node sends `common_point` + `encrypted_point` to all other nodes
+/// 3) `common_point` + `encrypted_point` are saved on all nodes
 /// 4) in case of error, previous values are restored
 pub struct SessionImpl {
 	/// Unique session id.
@@ -55,7 +55,7 @@ pub struct SessionImpl {
 	data: Mutex<SessionData>,
 }
 
-/// SessionImpl creation parameters
+/// `SessionImpl` creation parameters
 pub struct SessionParams {
 	/// SessionImpl identifier.
 	pub id: SessionId,
@@ -112,7 +112,7 @@ impl SessionImpl {
 		check_encrypted_data(params.encrypted_data.as_ref())?;
 
 		let (completed, oneshot) = CompletionSignal::new();
-		Ok((SessionImpl {
+		Ok((Self {
 			id: params.id,
 			self_node_id: params.self_node_id,
 			encrypted_data: params.encrypted_data,
@@ -129,7 +129,7 @@ impl SessionImpl {
 	}
 
 	/// Get this node Id.
-	pub fn node(&self) -> &NodeId {
+	pub const fn node(&self) -> &NodeId {
 		&self.self_node_id
 	}
 
@@ -154,8 +154,8 @@ impl SessionImpl {
 		// save encryption data
 		if let Some(encrypted_data) = self.encrypted_data.clone() {
 			let requester_address = requester.address(&self.id).map_err(Error::InsufficientRequesterData)?;
-			update_encrypted_data(&self.key_storage, self.id.clone(),
-				encrypted_data, requester_address, common_point.clone(), encrypted_point.clone())?;
+			update_encrypted_data(&self.key_storage, self.id,
+				encrypted_data, requester_address, common_point, encrypted_point)?;
 		}
 
 		// start initialization
@@ -192,7 +192,7 @@ impl SessionImpl {
 		if let Some(encrypted_data) = self.encrypted_data.clone() {
 			let requester: Requester = message.requester.clone().into();
 			let requester_address = requester.address(&self.id).map_err(Error::InsufficientRequesterData)?;
-			update_encrypted_data(&self.key_storage, self.id.clone(),
+			update_encrypted_data(&self.key_storage, self.id,
 				encrypted_data, requester_address, message.common_point.clone().into(), message.encrypted_point.clone().into())?;
 		}
 
@@ -241,7 +241,7 @@ impl ClusterSession for SessionImpl {
 	}
 
 	fn id(&self) -> SessionId {
-		self.id.clone()
+		self.id
 	}
 
 	fn is_finished(&self) -> bool {
@@ -278,7 +278,7 @@ impl ClusterSession for SessionImpl {
 			let _ = self.cluster.broadcast(Message::Encryption(EncryptionMessage::EncryptionSessionError(EncryptionSessionError {
 				session: self.id.clone().into(),
 				session_nonce: self.nonce,
-				error: error.clone().into(),
+				error: error.clone(),
 			})));
 		}
 
@@ -297,12 +297,12 @@ impl ClusterSession for SessionImpl {
 		}
 
 		match message {
-			&Message::Encryption(ref message) => match message {
-				&EncryptionMessage::InitializeEncryptionSession(ref message) =>
+			Message::Encryption(message) => match message {
+				EncryptionMessage::InitializeEncryptionSession(message) =>
 					self.on_initialize_session(sender.clone(), message),
-				&EncryptionMessage::ConfirmEncryptionInitialization(ref message) =>
+				EncryptionMessage::ConfirmEncryptionInitialization(message) =>
 					self.on_confirm_initialization(sender.clone(), message),
-				&EncryptionMessage::EncryptionSessionError(ref message) => {
+				EncryptionMessage::EncryptionSessionError(message) => {
 					self.on_session_error(sender, message.error.clone());
 					Ok(())
 				},
@@ -318,7 +318,7 @@ impl Debug for SessionImpl {
 	}
 }
 
-/// Check that common_point and encrypted point are not yet set in key share.
+/// Check that `common_point` and `encrypted_point` are not yet set in key share.
 pub fn check_encrypted_data(key_share: Option<&DocumentKeyShare>) -> Result<(), Error> {
 	if let Some(key_share) = key_share {
 		// check that common_point and encrypted_point are still not set yet

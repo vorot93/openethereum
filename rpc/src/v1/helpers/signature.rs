@@ -22,7 +22,7 @@ use v1::helpers::errors;
 use v1::helpers::dispatch::eth_data_hash;
 use hash::keccak;
 
-/// helper method for parity_verifySignature
+/// helper method for `parity_verifySignature`
 pub fn verify_signature(
 	is_prefixed: bool,
 	message: Bytes,
@@ -77,22 +77,22 @@ mod tests {
 		let (r, s, v) = (sig.r(), sig.s(), sig.v());
 		let v = add_chain_replay_protection(v as u64, signing_chain_id);
 		let (r_buf, s_buf) = {
-			let (mut r_buf, mut s_buf) = ([0u8; 32], [0u8; 32]);
+			let (mut r_buf, mut s_buf) = ([0_u8; 32], [0_u8; 32]);
 			r_buf.copy_from_slice(r);
 			s_buf.copy_from_slice(s);
 			(r_buf, s_buf)
 		};
-		(address.into(), r_buf, s_buf, v.into())
+		(address, r_buf, s_buf, v.into())
 	}
 
 	fn run_test(test_case: TestCase) {
 		let TestCase { should_prefix, signing_chain_id, rpc_chain_id, is_valid_for_current_chain } = test_case;
-		let data = vec![5u8];
+		let data = vec![5_u8];
 
 		let (address, r, s, v) = sign(should_prefix, data.clone(), signing_chain_id);
 		let account = verify_signature(should_prefix, data.into(), r.into(), s.into(), v, rpc_chain_id).unwrap();
 
-		assert_eq!(account.address, address.into());
+		assert_eq!(account.address, address);
 		assert_eq!(account.is_valid_for_current_chain, is_valid_for_current_chain)
 	}
 

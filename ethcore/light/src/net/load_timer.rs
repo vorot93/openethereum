@@ -91,7 +91,7 @@ impl LoadDistribution {
 			}
 		}
 
-		LoadDistribution {
+		Self {
 			active_period: RwLock::new(HashMap::new()),
 			samples: RwLock::new(samples),
 		}
@@ -100,9 +100,9 @@ impl LoadDistribution {
 	/// Begin a timer.
 	pub fn begin_timer<'a>(&'a self, req: &CompleteRequest) -> LoadTimer<'a> {
 		let kind = req.kind();
-		let n = match *req {
-			CompleteRequest::Headers(ref req) => req.max,
-			CompleteRequest::Execution(ref req) => req.gas.low_u64(),
+		let n = match req {
+			CompleteRequest::Headers(req) => req.max,
+			CompleteRequest::Execution(req) => req.gas.low_u64(),
 			_ => 1,
 		};
 
@@ -125,7 +125,7 @@ impl LoadDistribution {
 			let alpha: f64 = 1_f64 / s.len() as f64;
 			let start = *s.front().expect("length known to be non-zero; qed") as f64;
 			let ema = s.iter().skip(1).fold(start, |a, &c| {
-				(alpha * c as f64) + ((1.0 - alpha) * a)
+				(1.0 - alpha).mul_add(a, alpha * c as f64)
 			});
 
 			Some(Duration::from_nanos(ema as u64))

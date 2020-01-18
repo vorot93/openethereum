@@ -42,19 +42,15 @@ impl<'a> BodyView<'a> {
 	///
 	/// use types::views::{BodyView};
 	///
-	/// fn main() {
 	/// let bytes : &[u8] = &[];
 	/// let body_view = view!(BodyView, bytes);
-	/// }
 	/// ```
-	pub fn new(rlp: ViewRlp<'a>) -> BodyView<'a> {
-		BodyView {
-			rlp: rlp
-		}
+	pub const fn new(rlp: ViewRlp<'a>) -> BodyView<'a> {
+		Self { rlp }
 	}
 
 	/// Return reference to underlaying rlp.
-	pub fn rlp(&self) -> &ViewRlp<'a> {
+	pub const fn rlp(&self) -> &ViewRlp<'a> {
 		&self.rlp
 	}
 
@@ -70,8 +66,8 @@ impl<'a> BodyView<'a> {
 			.enumerate()
 			.map(|(i, t)| LocalizedTransaction {
 				signed: t,
-				block_hash: block_hash.clone(),
-				block_number: block_number,
+				block_hash: *block_hash,
+				block_number,
 				transaction_index: i,
 				cached_sender: None,
 			}).collect()
@@ -105,8 +101,8 @@ impl<'a> BodyView<'a> {
 	pub fn localized_transaction_at(&self, block_hash: &H256, block_number: BlockNumber, index: usize) -> Option<LocalizedTransaction> {
 		self.transaction_at(index).map(|t| LocalizedTransaction {
 			signed: t,
-			block_hash: block_hash.clone(),
-			block_number: block_number,
+			block_hash: *block_hash,
+			block_number,
 			transaction_index: index,
 			cached_sender: None,
 		})

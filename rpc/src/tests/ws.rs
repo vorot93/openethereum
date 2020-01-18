@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-//! WebSockets server tests.
+//! Websocket server tests.
 
 use std::sync::Arc;
 
@@ -26,6 +26,7 @@ use tests::helpers::{GuardedAuthCodes, Server};
 use tests::http_client;
 
 /// Setup a mock signer for tests
+#[must_use]
 pub fn serve() -> (Server<ws::Server>, usize, GuardedAuthCodes) {
 	let address = "127.0.0.1:0".parse().unwrap();
 	let io = MetaIoHandler::default();
@@ -48,6 +49,7 @@ pub fn serve() -> (Server<ws::Server>, usize, GuardedAuthCodes) {
 }
 
 /// Test a single request to running server
+#[must_use]
 pub fn request(server: Server<ws::Server>, request: &str) -> http_client::Response {
 	http_client::request(server.server.addr(), request)
 }

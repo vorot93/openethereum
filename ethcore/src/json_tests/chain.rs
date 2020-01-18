@@ -28,22 +28,23 @@ use verification::{VerifierType, queue::kind::BlockLike};
 use super::SKIP_TESTS;
 use super::HookType;
 
-#[allow(dead_code)]
+// TODO: use &'static str ?
+#[allow(dead_code, clippy::ptr_arg)]
 fn skip_test(name: &String) -> bool {
 	SKIP_TESTS
 		.block
 		.iter()
-		.any(|block_test|block_test.subtests.contains(name))
+		.any(|block_test| block_test.subtests.contains(name))
 }
 
 #[allow(dead_code)]
 pub fn json_chain_test<H: FnMut(&str, HookType)>(path: &Path, json_data: &[u8], start_stop_hook: &mut H) -> Vec<String> {
 	let _ = ::env_logger::try_init();
 	let tests = blockchain::Test::load(json_data)
-		.expect(&format!("Could not parse JSON chain test data from {}", path.display()));
+		.unwrap_or_else(|_| panic!("Could not parse JSON chain test data from {}", path.display()));
 	let mut failed = Vec::new();
 
-	for (name, blockchain) in tests.into_iter() {
+	for (name, blockchain) in tests {
 		if skip_test(&name) {
 			println!("   - {} | {:?}: SKIPPED", name, blockchain.network);
 			continue;
@@ -67,9 +68,10 @@ pub fn json_chain_test<H: FnMut(&str, HookType)>(path: &Path, json_data: &[u8], 
 			flush!("   - {}...", name);
 
 			let spec = {
-				let mut spec = match EvmTestClient::fork_spec_from_json(&blockchain.network) {
-					Some(spec) => spec,
-					None => {
+				let mut spec = {
+					if let Some(spec) = EvmTestClient::fork_spec_from_json(&blockchain.network) {
+						spec
+					} else {
 						println!("   - {} | {:?} Ignoring tests because of missing chainspec", name, blockchain.network);
 						continue;
 					}
@@ -106,10 +108,10 @@ pub fn json_chain_test<H: FnMut(&str, HookType)>(path: &Path, json_data: &[u8], 
 						Ok(block) => {
 							let num = block.header.number();
 							let hash = block.hash();
-							trace!(target: "json-tests", "{} – Importing {} bytes. Block #{}/{}", name, bytes_len, num, hash);
+							trace!(target: "json-tests", "{} - Importing {} bytes. Block #{}/{}", name, bytes_len, num, hash);
 							let res = client.import_block(block);
 							if let Err(e) = res {
-								warn!(target: "json-tests", "{} – Error importing block #{}/{}: {:?}", name, num, hash, e);
+								warn!(target: "json-tests", "{} - Error importing block #{}/{}: {:?}", name, num, hash, e);
 							}
 							client.flush_queue();
 						},
@@ -131,7 +133,7 @@ pub fn json_chain_test<H: FnMut(&str, HookType)>(path: &Path, json_data: &[u8], 
 		start_stop_hook(&name, HookType::OnStop);
 	}
 
-	if failed.len() > 0 {
+	if !failed.is_empty() {
 		println!("!!! {:?} tests failed.", failed.len());
 	}
 	failed

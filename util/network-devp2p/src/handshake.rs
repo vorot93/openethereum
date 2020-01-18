@@ -48,7 +48,7 @@ enum HandshakeState {
 	StartSession,
 }
 
-/// `RLPx` protocol handshake. See https://github.com/ethereum/devp2p/blob/master/rlpx.md#encrypted-handshake
+/// `RLPx` protocol handshake. See <https://github.com/ethereum/devp2p/blob/master/rlpx.md#encrypted-handshake>
 pub struct Handshake {
 	/// Remote node public key
 	pub id: NodeId,
@@ -83,8 +83,8 @@ const ECIES_OVERHEAD: usize = 113;
 
 impl Handshake {
 	/// Create a new handshake object
-	pub fn new(token: StreamToken, id: Option<&NodeId>, socket: TcpStream, nonce: &H256) -> Result<Handshake, Error> {
-		Ok(Handshake {
+	pub fn new(token: StreamToken, id: Option<&NodeId>, socket: TcpStream, nonce: &H256) -> Result<Self, Error> {
+		Ok(Self {
 			id: if let Some(id) = id { *id } else { NodeId::default() },
 			connection: Connection::new(token, socket),
 			originated: false,
@@ -170,26 +170,23 @@ impl Handshake {
 			return Err(Error::BadProtocol);
 		}
 		self.auth_cipher = data.to_vec();
-		match ecies::decrypt(secret, &[], data) {
-			Ok(auth) => {
-				let (sig, rest) = auth.split_at(65);
-				let (_, rest) = rest.split_at(32);
-				let (pubk, rest) = rest.split_at(64);
-				let (nonce, _) = rest.split_at(32);
-				self.set_auth(secret, sig, pubk, nonce, PROTOCOL_VERSION)?;
-				self.write_ack(io)?;
+		if let Ok(auth) = ecies::decrypt(secret, &[], data) {
+			let (sig, rest) = auth.split_at(65);
+			let (_, rest) = rest.split_at(32);
+			let (pubk, rest) = rest.split_at(64);
+			let (nonce, _) = rest.split_at(32);
+			self.set_auth(secret, sig, pubk, nonce, PROTOCOL_VERSION)?;
+			self.write_ack(io)?;
+		} else {
+			// Try to interpret as EIP-8 packet
+			let total = ((u16::from(data[0]) << 8 | (u16::from(data[1]))) as usize) + 2;
+			if total < V4_AUTH_PACKET_SIZE {
+				debug!(target: "network", "Wrong EIP8 auth packet size");
+				return Err(Error::BadProtocol);
 			}
-			Err(_) => {
-				// Try to interpret as EIP-8 packet
-				let total = ((u16::from(data[0]) << 8 | (u16::from(data[1]))) as usize) + 2;
-				if total < V4_AUTH_PACKET_SIZE {
-					debug!(target: "network", "Wrong EIP8 auth packet size");
-					return Err(Error::BadProtocol);
-				}
-				let rest = total - data.len();
-				self.state = HandshakeState::ReadingAuthEip8;
-				self.connection.expect(rest);
-			}
+			let rest = total - data.len();
+			self.state = HandshakeState::ReadingAuthEip8;
+			self.connection.expect(rest);
 		}
 		Ok(())
 	}
@@ -216,23 +213,20 @@ impl Handshake {
 			return Err(Error::BadProtocol);
 		}
 		self.ack_cipher = data.to_vec();
-		match ecies::decrypt(secret, &[], data) {
-			Ok(ack) => {
-				self.remote_ephemeral.assign_from_slice(&ack[0..64]);
-				self.remote_nonce.assign_from_slice(&ack[64..(64+32)]);
-				self.state = HandshakeState::StartSession;
+		if let Ok(ack) = ecies::decrypt(secret, &[], data) {
+			self.remote_ephemeral.assign_from_slice(&ack[0..64]);
+			self.remote_nonce.assign_from_slice(&ack[64..(64+32)]);
+			self.state = HandshakeState::StartSession;
+		} else {
+			// Try to interpret as EIP-8 packet
+			let total = (((u16::from(data[0])) << 8 | (u16::from(data[1]))) as usize) + 2;
+			if total < V4_ACK_PACKET_SIZE {
+				debug!(target: "network", "Wrong EIP8 ack packet size");
+				return Err(Error::BadProtocol);
 			}
-			Err(_) => {
-				// Try to interpret as EIP-8 packet
-				let total = (((u16::from(data[0])) << 8 | (u16::from(data[1]))) as usize) + 2;
-				if total < V4_ACK_PACKET_SIZE {
-					debug!(target: "network", "Wrong EIP8 ack packet size");
-					return Err(Error::BadProtocol);
-				}
-				let rest = total - data.len();
-				self.state = HandshakeState::ReadingAckEip8;
-				self.connection.expect(rest);
-			}
+			let rest = total - data.len();
+			self.state = HandshakeState::ReadingAckEip8;
+			self.connection.expect(rest);
 		}
 		Ok(())
 	}
@@ -252,7 +246,7 @@ impl Handshake {
 	/// Sends auth message
 	fn write_auth<Message>(&mut self, io: &IoContext<Message>, secret: &Secret, public: &Public) -> Result<(), Error> where Message: Send + Clone + Sync + 'static {
 		trace!(target: "network", "Sending handshake auth to {:?}", self.connection.remote_addr_str());
-		let mut data = [0u8; /*Signature::SIZE*/ 65 + /*H256::SIZE*/ 32 + /*Public::SIZE*/ 64 + /*H256::SIZE*/ 32 + 1]; //TODO: use associated constants
+		let mut data = [0_u8; /*Signature::SIZE*/ 65 + /*H256::SIZE*/ 32 + /*Public::SIZE*/ 64 + /*H256::SIZE*/ 32 + 1]; //TODO: use associated constants
 		let len = data.len();
 		{
 			data[len - 1] = 0x0;
@@ -279,7 +273,7 @@ impl Handshake {
 	/// Sends ack message
 	fn write_ack<Message>(&mut self, io: &IoContext<Message>) -> Result<(), Error> where Message: Send + Clone + Sync + 'static {
 		trace!(target: "network", "Sending handshake ack to {:?}", self.connection.remote_addr_str());
-		let mut data = [0u8; 1 + /*Public::SIZE*/ 64 + /*H256::SIZE*/ 32]; //TODO: use associated constants
+		let mut data = [0_u8; 1 + /*Public::SIZE*/ 64 + /*H256::SIZE*/ 32]; //TODO: use associated constants
 		let len = data.len();
 		{
 			data[len - 1] = 0x0;
@@ -303,7 +297,7 @@ impl Handshake {
 		rlp.append(&self.nonce);
 		rlp.append(&PROTOCOL_VERSION);
 
-		let pad_array = [0u8; 200];
+		let pad_array = [0_u8; 200];
 		let pad = &pad_array[0 .. 100 + random::<usize>() % 100];
 		rlp.append_raw(pad, 0);
 
@@ -437,7 +431,7 @@ mod test {
 		h.read_auth_eip8(&test_io(), &secret, &auth[super::V4_AUTH_PACKET_SIZE..]).unwrap();
 		assert_eq!(h.state, super::HandshakeState::StartSession);
 		check_auth(&h, 56);
-		let ack = h.ack_cipher.clone();
+		let ack = h.ack_cipher;
 		let total = (((ack[0] as u16) << 8 | (ack[1] as u16)) as usize) + 2;
 		assert_eq!(ack.len(), total);
 	}

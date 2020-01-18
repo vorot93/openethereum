@@ -18,7 +18,7 @@
 use std::str::FromStr;
 
 /// Format for importing/exporting blocks
-#[derive(Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum DataFormat {
 	/// Hexadecimal format
 	Hex,
@@ -28,7 +28,7 @@ pub enum DataFormat {
 
 impl Default for DataFormat {
 	fn default() -> Self {
-		DataFormat::Binary
+		Self::Binary
 	}
 }
 
@@ -37,8 +37,8 @@ impl FromStr for DataFormat {
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		match s {
-			"binary" | "bin" => Ok(DataFormat::Binary),
-			"hex" => Ok(DataFormat::Hex),
+			"binary" | "bin" => Ok(Self::Binary),
+			"hex" => Ok(Self::Hex),
 			x => Err(format!("Invalid format: {}", x))
 		}
 	}

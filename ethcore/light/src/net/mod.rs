@@ -274,7 +274,7 @@ impl Default for Config {
 		const MEDIAN_PEERS: f64 = 25.0;
 		const MAX_ACCUMULATED: u64 = 60 * 5; // only charge for 5 minutes.
 
-		Config {
+		Self {
 			max_stored_seconds: MAX_ACCUMULATED,
 			median_peers: MEDIAN_PEERS,
 		}
@@ -314,10 +314,10 @@ mod id_guard {
 	}
 
 	impl<'a> IdGuard<'a> {
-		/// Create a new `IdGuard`, which will prevent access of the inner ReqId
+		/// Create a new `IdGuard`, which will prevent access of the inner `ReqId`
 		/// (for forming responses, triggering handlers) until defused
 		pub fn new(peers: RwLockReadGuard<'a, PeerMap>, peer_id: PeerId, req_id: ReqId) -> Self {
-			IdGuard {
+			Self {
 				peers,
 				peer_id,
 				req_id,
@@ -351,15 +351,21 @@ pub struct Statistics {
 	peer_counts: VecDeque<usize>,
 }
 
-impl Statistics {
-	/// Create a new Statistics instance
-	pub fn new() -> Self {
-		Statistics {
+impl Default for Statistics {
+	fn default() -> Self {
+		Self {
 			peer_counts: VecDeque::with_capacity(MOVING_SAMPLE_SIZE),
 		}
 	}
+}
 
-	/// Add a new peer_count sample
+impl Statistics {
+	/// Create a new Statistics instance
+	pub fn new() -> Self {
+		Self::default()
+	}
+
+	/// Add a new `peer_count` sample
 	pub fn add_peer_count(&mut self, peer_count: usize) {
 		while self.peer_counts.len() >= MOVING_SAMPLE_SIZE {
 			self.peer_counts.pop_front();
@@ -423,7 +429,7 @@ impl LightProtocol {
 			Duration::from_secs(params.config.max_stored_seconds),
 		);
 
-		LightProtocol {
+		Self {
 			provider,
 			config: params.config,
 			genesis_hash,
@@ -482,37 +488,36 @@ impl LightProtocol {
 
 		let mut peer = peer.lock();
 		let peer = &mut *peer;
-		match peer.remote_flow {
-			None => Err(Error::NotServer),
-			Some((ref mut creds, ref params)) => {
-				// apply recharge to credits if there's no pending requests.
-				if peer.pending_requests.is_empty() {
-					params.recharge(creds);
-				}
-
-				// compute and deduct cost.
-				let pre_creds = creds.current();
-				let cost = match params.compute_cost_multi(requests.requests()) {
-					Some(cost) => cost,
-					None => return Err(Error::NotServer),
-				};
-
-				creds.deduct_cost(cost)?;
-
-				trace!(target: "pip", "requesting from peer {}. Cost: {}; Available: {}",
-					peer_id, cost, pre_creds);
-
-				let req_id = ReqId(self.req_id.fetch_add(1, Ordering::SeqCst));
-				io.send(peer_id, packet::REQUEST, {
-					let mut stream = RlpStream::new_list(2);
-					stream.append(&req_id.0).append_list(&requests.requests());
-					stream.out()
-				});
-
-				// begin timeout.
-				peer.pending_requests.insert(req_id, requests, cost, Instant::now());
-				Ok(req_id)
+		if let Some((creds, params)) = &mut peer.remote_flow {
+			// apply recharge to credits if there's no pending requests.
+			if peer.pending_requests.is_empty() {
+				params.recharge(creds);
 			}
+
+			// compute and deduct cost.
+			let pre_creds = creds.current();
+			let cost = match params.compute_cost_multi(requests.requests()) {
+				Some(cost) => cost,
+				None => return Err(Error::NotServer),
+			};
+
+			creds.deduct_cost(cost)?;
+
+			trace!(target: "pip", "requesting from peer {}. Cost: {}; Available: {}",
+				peer_id, cost, pre_creds);
+
+			let req_id = ReqId(self.req_id.fetch_add(1, Ordering::SeqCst));
+			io.send(peer_id, packet::REQUEST, {
+				let mut stream = RlpStream::new_list(2);
+				stream.append(&req_id.0).append_list(requests.requests());
+				stream.out()
+			});
+
+			// begin timeout.
+			peer.pending_requests.insert(req_id, requests, cost, Instant::now());
+			Ok(req_id)
+		} else {
+			Err(Error::NotServer)
 		}
 	}
 
@@ -544,16 +549,13 @@ impl LightProtocol {
 
 			let reorg_depth = reorgs_map.entry(peer_info.sent_head)
 				.or_insert_with(|| {
-					match self.provider.reorg_depth(&announcement.head_hash, &peer_info.sent_head) {
-						Some(depth) => depth,
-						None => {
-							// both values will always originate locally -- this means something
-							// has gone really wrong
-							debug!(target: "pip", "couldn't compute reorganization depth between {:?} and {:?}",
-								&announcement.head_hash, &peer_info.sent_head);
-							0
-						}
-					}
+					self.provider.reorg_depth(&announcement.head_hash, &peer_info.sent_head).unwrap_or_else(|| {
+						// both values will always originate locally -- this means something
+						// has gone really wrong
+						debug!(target: "pip", "couldn't compute reorganization depth between {:?} and {:?}",
+							&announcement.head_hash, &peer_info.sent_head);
+						0
+					})
 				});
 
 			peer_info.sent_head = announcement.head_hash;
@@ -609,7 +611,7 @@ impl LightProtocol {
 
 				match (req_info, flow_info) {
 					(Some(_), Some(flow_info)) => {
-						let &mut (ref mut c, ref mut flow) = flow_info;
+						let (c, flow) = flow_info;
 
 						// only update if the cumulative cost of the request set is zero.
 						// and this response wasn't from before request costs were updated.
@@ -671,10 +673,13 @@ impl LightProtocol {
 		{
 			let mut pending = self.pending_peers.write();
 			let slowpokes: Vec<_> = pending.iter()
-				.filter(|&(_, ref peer)| {
-					peer.last_update + timeout::HANDSHAKE <= now
+				.filter_map(|(p, peer)| {
+					if peer.last_update + timeout::HANDSHAKE <= now {
+						Some(*p)
+					} else {
+						None
+					}
 				})
-				.map(|(&p, _)| p)
 				.collect();
 
 			for slowpoke in slowpokes {
@@ -694,8 +699,8 @@ impl LightProtocol {
 					io.disconnect_peer(*peer_id);
 				}
 
-				if let Some((ref start, _)) = peer.awaiting_acknowledge {
-					if *start + ack_duration <= now {
+				if let Some((start, _)) = peer.awaiting_acknowledge {
+					if start + ack_duration <= now {
 						debug!(target: "pip", "Peer {} update acknowledgement timeout", peer_id);
 						io.disconnect_peer(*peer_id);
 					}
@@ -727,8 +732,7 @@ impl LightProtocol {
 
 			// fill the buffer with all non-propagated transactions.
 			let to_propagate = ready_transactions.iter()
-				.filter(|tx| prop_filter.insert(tx.hash()))
-				.map(|tx| &tx.transaction);
+				.filter_map(|tx| if prop_filter.insert(tx.hash()) { Some(&tx.transaction) } else { None });
 
 			buf.extend(to_propagate);
 
@@ -873,12 +877,7 @@ impl LightProtocol {
 impl LightProtocol {
 	// Handle status message from peer.
 	fn status(&self, peer: PeerId, io: &dyn IoContext, data: &Rlp) -> Result<(), Error> {
-		let pending = match self.pending_peers.write().remove(&peer) {
-			Some(pending) => pending,
-			None => {
-				return Err(Error::UnexpectedHandshake);
-			}
-		};
+		let pending = self.pending_peers.write().remove(&peer).ok_or(Error::UnexpectedHandshake)?;
 
 		let (status, capabilities, flow_params) = status::parse_handshake(data)?;
 
@@ -990,9 +989,10 @@ impl LightProtocol {
 		use ::request::CompleteRequest;
 
 		let peers = self.peers.read();
-		let peer = match peers.get(&peer_id) {
-			Some(peer) => peer,
-			None => {
+		let peer = {
+			if let Some(peer) = peers.get(&peer_id) {
+				peer
+			} else {
 				debug!(target: "pip", "Ignoring request from unknown peer");
 				return Ok(())
 			}
@@ -1052,7 +1052,7 @@ impl LightProtocol {
 	// handle a packet with responses.
 	fn response(&self, peer: PeerId, io: &dyn IoContext, raw: &Rlp) -> Result<(), Error> {
 		let (req_id, responses) = {
-			let id_guard = self.pre_verify_response(peer, &raw)?;
+			let id_guard = self.pre_verify_response(peer, raw)?;
 			let responses: Vec<Response> = raw.list_at(2)?;
 			(id_guard.defuse(), responses)
 		};
@@ -1078,7 +1078,7 @@ impl LightProtocol {
 		trace!(target: "pip", "Received an update to request credit params from peer {}", peer_id);
 
 		{
-			let &mut (ref mut credits, ref mut old_params) = peer.remote_flow.as_mut().ok_or(Error::NotServer)?;
+			let (credits, old_params) = peer.remote_flow.as_mut().ok_or(Error::NotServer)?;
 			old_params.recharge(credits);
 
 			let new_params = FlowParams::new(
@@ -1174,16 +1174,16 @@ impl NetworkProtocolHandler for LightProtocol {
 			.expect("Error registering statistics timer.");
 	}
 
-	fn read(&self, io: &dyn NetworkContext, peer: &PeerId, packet_id: u8, data: &[u8]) {
-		self.handle_packet(&io, *peer, packet_id, data);
+	fn read(&self, io: &dyn NetworkContext, peer: PeerId, packet_id: u8, data: &[u8]) {
+		self.handle_packet(&io, peer, packet_id, data);
 	}
 
-	fn connected(&self, io: &dyn NetworkContext, peer: &PeerId) {
-		self.on_connect(*peer, &io);
+	fn connected(&self, io: &dyn NetworkContext, peer: PeerId) {
+		self.on_connect(peer, &io);
 	}
 
-	fn disconnected(&self, io: &dyn NetworkContext, peer: &PeerId) {
-		self.on_disconnect(*peer, &io);
+	fn disconnected(&self, io: &dyn NetworkContext, peer: PeerId) {
+		self.on_disconnect(peer, &io);
 	}
 
 	fn timeout(&self, io: &dyn NetworkContext, timer: TimerToken) {

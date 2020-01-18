@@ -19,6 +19,7 @@ use std::sync::Arc;
 use dir::Directories;
 use ethereum_types::Address;
 use ethkey::Password;
+use parity_crypto::publickey::Message;
 
 use params::{SpecType, AccountsConfig};
 
@@ -53,7 +54,7 @@ mod accounts {
 	}
 
 	pub fn accounts_list(_account_provider: Arc<AccountProvider>) -> Arc<Fn() -> Vec<Address> + Send + Sync> {
-		Arc::new(|| vec![])
+		Arc::new(|| Vec::new())
 	}
 }
 
@@ -80,7 +81,7 @@ mod accounts {
 		let dir = Box::new(RootDiskDirectory::create(&path).map_err(|e| format!("Could not open keys directory: {}", e))?);
 		let account_settings = AccountProviderSettings {
 			unlock_keep_secret: cfg.enable_fast_unlock,
-			blacklisted_accounts: 	match *spec {
+			blacklisted_accounts: 	match spec {
 				SpecType::Mordor | SpecType::Ropsten | SpecType::Kovan | SpecType::Goerli | SpecType::Kotti | SpecType::Sokol | SpecType::Dev => vec![],
 				_ => vec![
 					H160::from_str("00a329c0648769a73afac7f9381e08fb43dbea72").expect("the string is valid hex; qed"),
@@ -128,7 +129,7 @@ mod accounts {
 		}
 	}
 
-	pub fn miner_local_accounts(account_provider: Arc<AccountProvider>) -> LocalAccounts {
+	pub const fn miner_local_accounts(account_provider: Arc<AccountProvider>) -> LocalAccounts {
 		LocalAccounts(account_provider)
 	}
 
@@ -152,7 +153,7 @@ mod accounts {
 				engine_signer,
 				password.clone(),
 			);
-			if signer.sign(Default::default()).is_ok() {
+			if signer.sign(Message::zero()).is_ok() {
 				author = Some(::ethcore::miner::Author::Sealer(Box::new(signer)));
 			}
 		}
@@ -211,7 +212,7 @@ mod accounts {
 	}
 
 	fn insert_dev_account(account_provider: &AccountProvider) {
-		let secret = parity_crypto::publickey::Secret::from_str("4d5db4107d237df6a3d58ee5f70ae63d73d7658d4026f2eefd2f204c81682cb7".into()).expect("Valid account;qed");
+		let secret = parity_crypto::publickey::Secret::from_str("4d5db4107d237df6a3d58ee5f70ae63d73d7658d4026f2eefd2f204c81682cb7").expect("Valid account;qed");
 		let dev_account = parity_crypto::publickey::KeyPair::from_secret(secret.clone()).expect("Valid secret produces valid key;qed");
 		if !account_provider.has_account(dev_account.address()) {
 			match account_provider.insert_account(secret, &Password::from(String::new())) {

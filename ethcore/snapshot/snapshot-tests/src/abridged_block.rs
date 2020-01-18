@@ -34,7 +34,7 @@ fn encode_block(b: &Block) -> Bytes {
 #[test]
 fn empty_block_abridging() {
 	let b = Block::default();
-	let receipts_root = b.header.receipts_root().clone();
+	let receipts_root = *b.header.receipts_root();
 	let encoded = encode_block(&b);
 
 	let abridged = AbridgedBlock::from_block_view(&view!(BlockView, &encoded));
@@ -45,7 +45,7 @@ fn empty_block_abridging() {
 #[should_panic]
 fn wrong_number() {
 	let b = Block::default();
-	let receipts_root = b.header.receipts_root().clone();
+	let receipts_root = *b.header.receipts_root();
 	let encoded = encode_block(&b);
 
 	let abridged = AbridgedBlock::from_block_view(&view!(BlockView, &encoded));
@@ -69,15 +69,15 @@ fn with_transactions() {
 		action: Action::Create,
 		nonce: U256::from(88),
 		gas_price: U256::from(12345),
-		gas: U256::from(300000),
-		value: U256::from(1000000000),
+		gas: U256::from(300_000),
+		value: U256::from(1_000_000_000),
 		data: "Eep!".into(),
 	}.fake_sign(Address::from_low_u64_be(0x55));
 
 	b.transactions.push(t1.into());
 	b.transactions.push(t2.into());
 
-	let receipts_root = b.header.receipts_root().clone();
+	let receipts_root = *b.header.receipts_root();
 	b.header.set_transactions_root(triehash::ordered_trie_root(
 		b.transactions.iter().map(::rlp::encode)
 	));

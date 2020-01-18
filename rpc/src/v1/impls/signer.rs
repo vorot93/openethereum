@@ -70,12 +70,12 @@ impl<D: Dispatcher + 'static> SignerClient<D> {
 			}
 		});
 
-		SignerClient {
+		Self {
 			signer: signer.clone(),
 			accounts: accounts.clone(),
 			dispatcher,
 			subscribers,
-			deprecation_notice: Default::default(),
+			deprecation_notice: DeprecationNotice::default(),
 		}
 	}
 
@@ -87,10 +87,12 @@ impl<D: Dispatcher + 'static> SignerClient<D> {
 		let dispatcher = self.dispatcher.clone();
 		let signer = self.signer.clone();
 
-		Box::new(signer.take(&id).map(|sender| {
+		Box::new(signer.take(&id).map_or_else(
+		  || Either::B(future::err(errors::invalid_params("Unknown RequestID", id))),
+		  |sender| {
 			let mut payload = sender.request.payload.clone();
 			// Modify payload
-			if let ConfirmationPayload::SendTransaction(ref mut request) = payload {
+			if let ConfirmationPayload::SendTransaction(request) = &mut payload {
 				if let Some(sender) = modification.sender {
 					request.from = sender;
 					// Altering sender should always reset the nonce.
@@ -102,14 +104,14 @@ impl<D: Dispatcher + 'static> SignerClient<D> {
 				if let Some(gas) = modification.gas {
 					request.gas = gas;
 				}
-				if let Some(ref condition) = modification.condition {
-					request.condition = condition.clone().map(Into::into);
+				if let Some(condition) = modification.condition {
+					request.condition = condition.map(Into::into);
 				}
 			}
 			let fut = f(dispatcher, &self.accounts, payload);
 			Either::A(fut.into_future().then(move |result| {
 				// Execute
-				if let Ok(ref response) = result {
+				if let Ok(response) = &result {
 					signer.request_confirmed(sender, Ok((*response).clone()));
 				} else {
 					signer.request_untouched(sender);
@@ -117,8 +119,7 @@ impl<D: Dispatcher + 'static> SignerClient<D> {
 
 				result
 			}))
-		})
-		.unwrap_or_else(|| Either::B(future::err(errors::invalid_params("Unknown RequestID", id)))))
+		}))
 	}
 
 	fn verify_transaction<F>(bytes: Bytes, request: FilledTransactionRequest, process: F) -> Result<ConfirmationResponse> where
@@ -197,7 +198,7 @@ impl<D: Dispatcher + 'static> Signer for SignerClient<D> {
 	fn confirm_request_raw(&self, id: U256, bytes: Bytes) -> Result<ConfirmationResponse> {
 		self.deprecation_notice.print("signer_confirmRequestRaw", deprecated::msgs::ACCOUNTS);
 
-		self.signer.take(&id).map(|sender| {
+		self.signer.take(&id).map_or_else(|| Err(errors::invalid_params("Unknown RequestID", id)), |sender| {
 			let payload = sender.request.payload.clone();
 			let result = match payload {
 				ConfirmationPayload::SendTransaction(request) => {
@@ -231,17 +232,17 @@ impl<D: Dispatcher + 'static> Signer for SignerClient<D> {
 					}
 				},
 				ConfirmationPayload::Decrypt(_address, _data) => {
-					// TODO [ToDr]: Decrypt can we verify if the answer is correct?
+					// TODO: Decrypt can we verify if the answer is correct?
 					Ok(ConfirmationResponse::Decrypt(bytes))
 				},
 			};
-			if let Ok(ref response) = result {
+			if let Ok(response) = &result {
 				self.signer.request_confirmed(sender, Ok(response.clone()));
 			} else {
 				self.signer.request_untouched(sender);
 			}
 			result
-		}).unwrap_or_else(|| Err(errors::invalid_params("Unknown RequestID", id)))
+		})
 	}
 
 	fn reject_request(&self, id: U256) -> Result<bool> {

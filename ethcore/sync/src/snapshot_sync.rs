@@ -15,7 +15,6 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::collections::HashSet;
-use std::iter::FromIterator;
 
 use ethereum_types::H256;
 use keccak_hash::keccak;
@@ -66,7 +65,7 @@ pub struct Snapshot {
 impl Snapshot {
 	/// Create a new instance.
 	pub fn new() -> Self {
-		Default::default()
+		Self::default()
 	}
 
 	/// Sync the Snapshot completed chunks with the Snapshot Service
@@ -76,7 +75,7 @@ impl Snapshot {
 		}
 
 		if let Some(completed_chunks) = snapshot_service.completed_chunks() {
-			self.completed_chunks = HashSet::from_iter(completed_chunks);
+			self.completed_chunks = completed_chunks.into_iter().collect();
 		}
 
 		trace!(
@@ -108,10 +107,10 @@ impl Snapshot {
 	/// block&state chunk hashes contained in the `ManifestData`).
 	pub fn reset_to(&mut self, manifest: &ManifestData, hash: &H256) {
 		self.clear();
-		self.pending_state_chunks = IndexSet::from_iter(manifest.state_hashes.clone());
-		self.pending_block_chunks = IndexSet::from_iter(manifest.block_hashes.clone());
+		self.pending_state_chunks = manifest.state_hashes.clone().into_iter().collect();
+		self.pending_block_chunks = manifest.block_hashes.clone().into_iter().collect();
 		self.total_chunks = Some(self.pending_block_chunks.len() + self.pending_state_chunks.len());
-		self.snapshot_hash = Some(hash.clone());
+		self.snapshot_hash = Some(*hash);
 	}
 
 	/// Check if the the chunk is known, i.e. downloaded already or currently downloading; if so add
@@ -130,15 +129,12 @@ impl Snapshot {
 				self.completed_chunks.insert(h);
 				Some(ChunkType::Block(hash))
 			})
-			.or(
-				self.pending_state_chunks.take(&hash)
-					.and_then(|h| {
-						self.completed_chunks.insert(h);
-						Some(ChunkType::State(hash))
-					})
-			).ok_or_else(|| {
+			.or_else(|| self.pending_state_chunks.take(&hash).and_then(|h| {
+				self.completed_chunks.insert(h);
+				Some(ChunkType::State(hash))
+			}))
+			.ok_or_else(|| {
 				trace!(target: "snapshot_sync", "Ignoring unknown chunk: {:x}", hash);
-				()
 			})
 	}
 
@@ -147,17 +143,15 @@ impl Snapshot {
 	/// sometimes spills over into more than one chunk and the parts of state that are missing
 	/// pieces are held in memory while waiting for the next chunk(s) to show up. This means that
 	/// when chunks are processed out-of-order, memory usage goes up, sometimes significantly (see
-	/// e.g. https://github.com/paritytech/parity-ethereum/issues/8825).
+	/// e.g. <https://github.com/paritytech/parity-ethereum/issues/8825>).
 	pub fn needed_chunk(&mut self) -> Option<H256> {
 		// Find next needed chunk: first block, then state chunks
 		let chunk = {
 			let filter = |h| !self.downloading_chunks.contains(h) && !self.completed_chunks.contains(h);
 			self.pending_block_chunks.iter()
 				.find(|&h| filter(h))
-				.or(self.pending_state_chunks.iter()
-					.find(|&h| filter(h))
-				)
-				.map(|h| *h)
+				.or_else(|| self.pending_state_chunks.iter().find(|&h| filter(h)))
+				.copied()
 		};
 		if let Some(hash) = chunk {
 			self.downloading_chunks.insert(hash.clone());
@@ -181,7 +175,7 @@ impl Snapshot {
 	}
 
 	/// Hash of the snapshot we're currently downloading/importing.
-	pub fn snapshot_hash(&self) -> Option<H256> {
+	pub const fn snapshot_hash(&self) -> Option<H256> {
 		self.snapshot_hash
 	}
 
@@ -222,8 +216,8 @@ mod test {
 		let block_chunks: Vec<Bytes> = (0..20).map(|_| H256::random().as_bytes().to_vec()).collect();
 		let manifest = ManifestData {
 			version: 2,
-			state_hashes: state_chunks.iter().map(|data| keccak(data)).collect(),
-			block_hashes: block_chunks.iter().map(|data| keccak(data)).collect(),
+			state_hashes: state_chunks.iter().map(keccak).collect(),
+			block_hashes: block_chunks.iter().map(keccak).collect(),
 			state_root: H256::zero(),
 			block_number: 42,
 			block_hash: H256::zero(),
@@ -267,13 +261,13 @@ mod test {
 
 		assert_eq!(
 			snapshot.validate_chunk(&state_chunks[4]),
-			Ok(ChunkType::State(manifest.state_hashes[4].clone())),
+			Ok(ChunkType::State(manifest.state_hashes[4])),
 			"4th state chunk hash validates as such"
 		);
 		assert_eq!(snapshot.completed_chunks.len(), 1, "after validating a chunk, it's in the completed set");
 		assert_eq!(snapshot.downloading_chunks.len(), 39, "after validating a chunk, there's one less in the downloading set");
 
-		assert_eq!(snapshot.validate_chunk(&block_chunks[10]), Ok(ChunkType::Block(manifest.block_hashes[10].clone())));
+		assert_eq!(snapshot.validate_chunk(&block_chunks[10]), Ok(ChunkType::Block(manifest.block_hashes[10])));
 		assert_eq!(snapshot.completed_chunks.len(), 2);
 		assert_eq!(snapshot.downloading_chunks.len(), 38);
 

@@ -60,24 +60,24 @@ pub struct SchnorrPartialSigningResponse {
 
 impl SchnorrSigningJob {
 	pub fn new_on_slave(self_node_id: NodeId, key_share: DocumentKeyShare, key_version: H256, session_public: Public, session_secret_coeff: Secret) -> Result<Self, Error> {
-		Ok(SchnorrSigningJob {
-			self_node_id: self_node_id,
-			key_share: key_share,
-			key_version: key_version,
-			session_public: session_public,
-			session_secret_coeff: session_secret_coeff,
+		Ok(Self {
+			self_node_id,
+			key_share,
+			key_version,
+			session_public,
+			session_secret_coeff,
 			request_id: None,
 			message_hash: None,
 		})
 	}
 
 	pub fn new_on_master(self_node_id: NodeId, key_share: DocumentKeyShare, key_version: H256, session_public: Public, session_secret_coeff: Secret, message_hash: H256) -> Result<Self, Error> {
-		Ok(SchnorrSigningJob {
-			self_node_id: self_node_id,
-			key_share: key_share,
-			key_version: key_version,
-			session_public: session_public,
-			session_secret_coeff: session_secret_coeff,
+		Ok(Self {
+			self_node_id,
+			key_share,
+			key_version,
+			session_public,
+			session_secret_coeff,
 			request_id: Some(math::generate_random_scalar()?),
 			message_hash: Some(message_hash),
 		})
@@ -94,15 +94,15 @@ impl JobExecutor for SchnorrSigningJob {
 
 		let request_id = self.request_id.as_ref()
 			.expect("prepare_partial_request is only called on master nodes; request_id is filed in constructor on master nodes; qed");
-		let message_hash = self.message_hash.as_ref()
+		let message_hash = *self.message_hash.as_ref()
 			.expect("compute_response is only called on master nodes; message_hash is filed in constructor on master nodes; qed");
 		let mut other_nodes_ids = nodes.clone();
 		other_nodes_ids.remove(node);
 
 		Ok(SchnorrPartialSigningRequest {
 			id: request_id.clone(),
-			message_hash: message_hash.clone(),
-			other_nodes_ids: other_nodes_ids,
+			message_hash,
+			other_nodes_ids,
 		})
 	}
 

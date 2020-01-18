@@ -16,6 +16,54 @@
 
 //! DB Migration module.
 
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
+
 #[macro_use]
 extern crate log;
 #[macro_use]
@@ -47,9 +95,9 @@ pub struct Config {
 
 impl Default for Config {
 	fn default() -> Self {
-		Config {
+		Self {
 			batch_size: 1024,
-			compaction_profile: Default::default(),
+			compaction_profile: CompactionProfile::default(),
 		}
 	}
 }
@@ -64,7 +112,7 @@ pub struct Batch {
 impl Batch {
 	/// Make a new batch with the given config.
 	pub fn new(config: &Config, column: u32) -> Self {
-		Batch {
+		Self {
 			inner: BTreeMap::new(),
 			batch_size: config.batch_size,
 			column,
@@ -87,7 +135,7 @@ impl Batch {
 		let mut transaction = DBTransaction::new();
 
 		for keypair in &self.inner {
-			transaction.put(self.column, &keypair.0, &keypair.1);
+			transaction.put(self.column, keypair.0, keypair.1);
 		}
 
 		self.inner.clear();
@@ -182,9 +230,9 @@ enum TempIndex {
 
 impl TempIndex {
 	fn swap(&mut self) {
-		match *self {
-			TempIndex::One => *self = TempIndex::Two,
-			TempIndex::Two => *self = TempIndex::One,
+		match self {
+			Self::One => *self = Self::Two,
+			Self::Two => *self = Self::One,
 		}
 	}
 
@@ -192,9 +240,9 @@ impl TempIndex {
 	fn path(&self, db_root: &Path) -> PathBuf {
 		let mut buf = db_root.to_owned();
 
-		match *self {
-			TempIndex::One => buf.push("temp_migration_1"),
-			TempIndex::Two => buf.push("temp_migration_2"),
+		match self {
+			Self::One => buf.push("temp_migration_1"),
+			Self::Two => buf.push("temp_migration_2"),
 		};
 
 		buf
@@ -210,9 +258,9 @@ pub struct Manager {
 impl Manager {
 	/// Creates new migration manager with given configuration.
 	pub fn new(config: Config) -> Self {
-		Manager {
+		Self {
 			config,
-			migrations: vec![],
+			migrations: Vec::new(),
 		}
 	}
 
@@ -223,10 +271,13 @@ impl Manager {
 			None => true,
 		};
 
-		match is_new {
-			true => Ok(self.migrations.push(Box::new(migration))),
-			false => Err(other_io_err("Cannot add migration.")),
+		if is_new {
+			self.migrations.push(Box::new(migration));
+		} else {
+			return Err(other_io_err("Cannot add migration."));
 		}
+
+		Ok(())
 	}
 
 	/// Performs migration in order, starting with a source path, migrating between two temporary databases,
@@ -245,7 +296,7 @@ impl Manager {
 			max_open_files: 64,
 			compaction: config.compaction_profile,
 			columns,
-			..Default::default()
+			..DatabaseConfig::default()
 		};
 
 		let db_root = database_path(old_path);
@@ -305,8 +356,8 @@ impl Manager {
 	}
 
 	/// Find all needed migrations.
-	fn migrations_from(&mut self, version: u32) -> Vec<&mut Box<dyn Migration>> {
-		self.migrations.iter_mut().filter(|m| m.version() > version).collect()
+	fn migrations_from(&mut self, version: u32) -> Vec<&mut (dyn Migration + 'static)> {
+		self.migrations.iter_mut().filter_map(|m| if m.version() > version { Some(&mut **m) } else { None }).collect()
 	}
 }
 
@@ -318,7 +369,7 @@ pub struct Progress {
 
 impl Default for Progress {
 	fn default() -> Self {
-		Progress {
+		Self {
 			current: 0,
 			max: 100_000,
 		}

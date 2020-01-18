@@ -39,7 +39,7 @@ pub struct MemoryDiff {
 
 impl From<et::MemoryDiff> for MemoryDiff {
 	fn from(c: et::MemoryDiff) -> Self {
-		MemoryDiff {
+		Self {
 			off: c.offset,
 			data: c.data.into(),
 		}
@@ -57,7 +57,7 @@ pub struct StorageDiff {
 
 impl From<et::StorageDiff> for StorageDiff {
 	fn from(c: et::StorageDiff) -> Self {
-		StorageDiff {
+		Self {
 			key: c.location,
 			val: c.value,
 		}
@@ -79,7 +79,7 @@ pub struct VMExecutedOperation {
 
 impl From<et::VMExecutedOperation> for VMExecutedOperation {
 	fn from(c: et::VMExecutedOperation) -> Self {
-		VMExecutedOperation {
+		Self {
 			used: c.gas_used.low_u64(),
 			push: c.stack_push.into_iter().map(Into::into).collect(),
 			mem: c.mem_diff.map(Into::into),
@@ -104,7 +104,7 @@ pub struct VMOperation {
 
 impl From<(et::VMOperation, Option<et::VMTrace>)> for VMOperation {
 	fn from(c: (et::VMOperation, Option<et::VMTrace>)) -> Self {
-		VMOperation {
+		Self {
 			pc: c.0.pc,
 			cost: c.0.gas_cost.low_u64(),
 			ex: c.0.executed.map(Into::into),
@@ -126,7 +126,7 @@ impl From<et::VMTrace> for VMTrace {
 	fn from(c: et::VMTrace) -> Self {
 		let mut subs = c.subs.into_iter();
 		let mut next_sub = subs.next();
-		VMTrace {
+		Self {
 			code: c.code.into(),
 			ops: c.operations
 				.into_iter()
@@ -144,16 +144,16 @@ impl From<et::VMTrace> for VMTrace {
 	}
 }
 
+/// Aux type for `Diff::Changed`.
 #[derive(Debug, Serialize)]
-/// Aux type for Diff::Changed.
-pub struct ChangedType<T> where T: Serialize {
+pub struct ChangedType<T> {
 	from: T,
 	to: T,
 }
 
-#[derive(Debug, Serialize)]
 /// Serde-friendly `Diff` shadow.
-pub enum Diff<T> where T: Serialize {
+#[derive(Debug, Serialize)]
+pub enum Diff<T> {
 	#[serde(rename = "=")]
 	Same,
 	#[serde(rename = "+")]
@@ -167,10 +167,10 @@ pub enum Diff<T> where T: Serialize {
 impl<T, U> From<account_diff::Diff<T>> for Diff<U> where T: Eq, U: Serialize + From<T> {
 	fn from(c: account_diff::Diff<T>) -> Self {
 		match c {
-			account_diff::Diff::Same => Diff::Same,
-			account_diff::Diff::Born(t) => Diff::Born(t.into()),
-			account_diff::Diff::Died(t) => Diff::Died(t.into()),
-			account_diff::Diff::Changed(t, u) => Diff::Changed(ChangedType{from: t.into(), to: u.into()}),
+			account_diff::Diff::Same => Self::Same,
+			account_diff::Diff::Born(t) => Self::Born(t.into()),
+			account_diff::Diff::Died(t) => Self::Died(t.into()),
+			account_diff::Diff::Changed(t, u) => Self::Changed(ChangedType{from: t.into(), to: u.into()}),
 		}
 	}
 }
@@ -186,7 +186,7 @@ pub struct AccountDiff {
 
 impl From<account_diff::AccountDiff> for AccountDiff {
 	fn from(c: account_diff::AccountDiff) -> Self {
-		AccountDiff {
+		Self {
 			balance: c.balance.into(),
 			nonce: c.nonce.into(),
 			code: c.code.into(),
@@ -208,7 +208,7 @@ impl Serialize for StateDiff {
 
 impl From<state_diff::StateDiff> for StateDiff {
 	fn from(c: state_diff::StateDiff) -> Self {
-		StateDiff(c.raw.into_iter().map(|(k, v)| (k, v.into())).collect())
+		Self(c.raw.into_iter().map(|(k, v)| (k, v.into())).collect())
 	}
 }
 
@@ -227,7 +227,7 @@ pub struct Create {
 
 impl From<trace::Create> for Create {
 	fn from(c: trace::Create) -> Self {
-		Create {
+		Self {
 			from: c.from,
 			value: c.value,
 			gas: c.gas,
@@ -255,11 +255,11 @@ pub enum CallType {
 impl From<vm::CallType> for CallType {
 	fn from(c: vm::CallType) -> Self {
 		match c {
-			vm::CallType::None => CallType::None,
-			vm::CallType::Call => CallType::Call,
-			vm::CallType::CallCode => CallType::CallCode,
-			vm::CallType::DelegateCall => CallType::DelegateCall,
-			vm::CallType::StaticCall => CallType::StaticCall,
+			vm::CallType::None => Self::None,
+			vm::CallType::Call => Self::Call,
+			vm::CallType::CallCode => Self::CallCode,
+			vm::CallType::DelegateCall => Self::DelegateCall,
+			vm::CallType::StaticCall => Self::StaticCall,
 		}
 	}
 }
@@ -284,7 +284,7 @@ pub struct Call {
 
 impl From<trace::Call> for Call {
 	fn from(c: trace::Call) -> Self {
-		Call {
+		Self {
 			from: c.from,
 			to: c.to,
 			value: c.value,
@@ -312,10 +312,10 @@ pub enum RewardType {
 impl From<trace::RewardType> for RewardType {
 	fn from(c: trace::RewardType) -> Self {
 		match c {
-			trace::RewardType::Block => RewardType::Block,
-			trace::RewardType::Uncle => RewardType::Uncle,
-			trace::RewardType::EmptyStep => RewardType::EmptyStep,
-			trace::RewardType::External => RewardType::External,
+			trace::RewardType::Block => Self::Block,
+			trace::RewardType::Uncle => Self::Uncle,
+			trace::RewardType::EmptyStep => Self::EmptyStep,
+			trace::RewardType::External => Self::External,
 		}
 	}
 }
@@ -334,7 +334,7 @@ pub struct Reward {
 
 impl From<trace::Reward> for Reward {
 	fn from(r: trace::Reward) -> Self {
-		Reward {
+		Self {
 			author: r.author,
 			value: r.value,
 			reward_type: r.reward_type.into(),
@@ -356,7 +356,7 @@ pub struct Suicide {
 
 impl From<trace::Suicide> for Suicide {
 	fn from(s: trace::Suicide) -> Self {
-		Suicide {
+		Self {
 			address: s.address,
 			refund_address: s.refund_address,
 			balance: s.balance,
@@ -380,10 +380,10 @@ pub enum Action {
 impl From<trace::Action> for Action {
 	fn from(c: trace::Action) -> Self {
 		match c {
-			trace::Action::Call(call) => Action::Call(call.into()),
-			trace::Action::Create(create) => Action::Create(create.into()),
-			trace::Action::Suicide(suicide) => Action::Suicide(suicide.into()),
-			trace::Action::Reward(reward) => Action::Reward(reward.into()),
+			trace::Action::Call(call) => Self::Call(call.into()),
+			trace::Action::Create(create) => Self::Create(create.into()),
+			trace::Action::Suicide(suicide) => Self::Suicide(suicide.into()),
+			trace::Action::Reward(reward) => Self::Reward(reward.into()),
 		}
 	}
 }
@@ -400,7 +400,7 @@ pub struct CallResult {
 
 impl From<trace::CallResult> for CallResult {
 	fn from(c: trace::CallResult) -> Self {
-		CallResult {
+		Self {
 			gas_used: c.gas_used,
 			output: c.output.into(),
 		}
@@ -421,7 +421,7 @@ pub struct CreateResult {
 
 impl From<trace::CreateResult> for CreateResult {
 	fn from(c: trace::CreateResult) -> Self {
-		CreateResult {
+		Self {
 			gas_used: c.gas_used,
 			code: c.code.into(),
 			address: c.address,
@@ -447,11 +447,11 @@ pub enum Res {
 impl From<trace::Res> for Res {
 	fn from(t: trace::Res) -> Self {
 		match t {
-			trace::Res::Call(call) => Res::Call(CallResult::from(call)),
-			trace::Res::Create(create) => Res::Create(CreateResult::from(create)),
-			trace::Res::FailedCall(error) => Res::FailedCall(error),
-			trace::Res::FailedCreate(error) => Res::FailedCreate(error),
-			trace::Res::None => Res::None,
+			trace::Res::Call(call) => Self::Call(CallResult::from(call)),
+			trace::Res::Create(create) => Self::Create(CreateResult::from(create)),
+			trace::Res::FailedCall(error) => Self::FailedCall(error),
+			trace::Res::FailedCreate(error) => Self::FailedCreate(error),
+			trace::Res::None => Self::None,
 		}
 	}
 }
@@ -482,30 +482,29 @@ impl Serialize for LocalizedTrace {
 		where S: Serializer
 	{
 		let mut struc = serializer.serialize_struct("LocalizedTrace", 9)?;
-		match self.action {
-			Action::Call(ref call) => {
+		match &self.action {
+			Action::Call(call) => {
 				struc.serialize_field("type", "call")?;
 				struc.serialize_field("action", call)?;
 			},
-			Action::Create(ref create) => {
+			Action::Create(create) => {
 				struc.serialize_field("type", "create")?;
 				struc.serialize_field("action", create)?;
 			},
-			Action::Suicide(ref suicide) => {
+			Action::Suicide(suicide) => {
 				struc.serialize_field("type", "suicide")?;
 				struc.serialize_field("action", suicide)?;
 			},
-			Action::Reward(ref reward) => {
+			Action::Reward(reward) => {
 				struc.serialize_field("type", "reward")?;
 				struc.serialize_field("action", reward)?;
 			},
 		}
 
-		match self.result {
-			Res::Call(ref call) => struc.serialize_field("result", call)?,
-			Res::Create(ref create) => struc.serialize_field("result", create)?,
-			Res::FailedCall(ref error) => struc.serialize_field("error", &error.to_string())?,
-			Res::FailedCreate(ref error) => struc.serialize_field("error", &error.to_string())?,
+		match &self.result {
+			Res::Call(call) => struc.serialize_field("result", call)?,
+			Res::Create(create) => struc.serialize_field("result", create)?,
+			Res::FailedCall(error) | Res::FailedCreate(error) => struc.serialize_field("error", &error.to_string())?,
 			Res::None => struc.serialize_field("result", &None as &Option<u8>)?,
 		}
 
@@ -522,7 +521,7 @@ impl Serialize for LocalizedTrace {
 
 impl From<EthLocalizedTrace> for LocalizedTrace {
 	fn from(t: EthLocalizedTrace) -> Self {
-		LocalizedTrace {
+		Self {
 			action: t.action.into(),
 			result: t.result.into(),
 			trace_address: t.trace_address.into_iter().map(Into::into).collect(),
@@ -553,30 +552,29 @@ impl Serialize for Trace {
 		where S: Serializer
 	{
 		let mut struc = serializer.serialize_struct("Trace", 4)?;
-		match self.action {
-			Action::Call(ref call) => {
+		match &self.action {
+			Action::Call(call) => {
 				struc.serialize_field("type", "call")?;
 				struc.serialize_field("action", call)?;
 			},
-			Action::Create(ref create) => {
+			Action::Create(create) => {
 				struc.serialize_field("type", "create")?;
 				struc.serialize_field("action", create)?;
 			},
-			Action::Suicide(ref suicide) => {
+			Action::Suicide(suicide) => {
 				struc.serialize_field("type", "suicide")?;
 				struc.serialize_field("action", suicide)?;
 			},
-			Action::Reward(ref reward) => {
+			Action::Reward(reward) => {
 				struc.serialize_field("type", "reward")?;
 				struc.serialize_field("action", reward)?;
 			},
 		}
 
-		match self.result {
-			Res::Call(ref call) => struc.serialize_field("result", call)?,
-			Res::Create(ref create) => struc.serialize_field("result", create)?,
-			Res::FailedCall(ref error) => struc.serialize_field("error", &error.to_string())?,
-			Res::FailedCreate(ref error) => struc.serialize_field("error", &error.to_string())?,
+		match &self.result {
+			Res::Call(call) => struc.serialize_field("result", call)?,
+			Res::Create(create) => struc.serialize_field("result", create)?,
+			Res::FailedCall(error) | Res::FailedCreate(error) => struc.serialize_field("error", &error.to_string())?,
 			Res::None => struc.serialize_field("result", &None as &Option<u8>)?,
 		}
 
@@ -589,7 +587,7 @@ impl Serialize for Trace {
 
 impl From<FlatTrace> for Trace {
 	fn from(t: FlatTrace) -> Self {
-		Trace {
+		Self {
 			trace_address: t.trace_address.into_iter().map(Into::into).collect(),
 			subtraces: t.subtraces,
 			action: t.action.into(),
@@ -614,7 +612,7 @@ pub struct TraceResults {
 
 impl From<Executed> for TraceResults {
 	fn from(t: Executed) -> Self {
-		TraceResults {
+		Self {
 			output: t.output.into(),
 			trace: t.trace.into_iter().map(Into::into).collect(),
 			vm_trace: t.vm_trace.map(Into::into),
@@ -641,7 +639,7 @@ pub struct TraceResultsWithTransactionHash {
 
 impl From<(H256, Executed)> for TraceResultsWithTransactionHash {
 	fn from(t: (H256, Executed)) -> Self {
-		TraceResultsWithTransactionHash {
+		Self {
 			output: t.1.output.into(),
 			trace: t.1.trace.into_iter().map(Into::into).collect(),
 			vm_trace: t.1.vm_trace.map(Into::into),
@@ -664,7 +662,7 @@ mod tests {
 	fn should_serialize_trace_results() {
 		let r = TraceResults {
 			output: vec![0x60].into(),
-			trace: vec![],
+			trace: Vec::new(),
 			vm_trace: None,
 			state_diff: None,
 		};
@@ -835,7 +833,7 @@ mod tests {
 								cost: 0,
 								ex: Some(VMExecutedOperation {
 									used: 10,
-									push: vec![42.into()].into(),
+									push: vec![42.into()],
 									mem: Some(MemoryDiff {off: 42, data: vec![1, 2, 3].into()}),
 									store: Some(StorageDiff {key: 69.into(), val: 42.into()}),
 								}),

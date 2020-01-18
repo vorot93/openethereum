@@ -15,7 +15,7 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use ethereum_types::{H256, U256, Address};
-use ethjson;
+
 use keccak_hash::KECCAK_NULL_RLP;
 use crate::seal::Seal;
 
@@ -48,15 +48,15 @@ pub struct Genesis {
 
 impl From<ethjson::spec::Genesis> for Genesis {
 	fn from(g: ethjson::spec::Genesis) -> Self {
-		Genesis {
+		Self {
 			seal: From::from(g.seal),
 			difficulty: g.difficulty.into(),
 			author: g.author.map_or_else(Address::zero, Into::into),
 			timestamp: g.timestamp.map_or(0, Into::into),
 			parent_hash: g.parent_hash.map_or_else(H256::zero, Into::into),
 			gas_limit: g.gas_limit.into(),
-			transactions_root: g.transactions_root.map_or_else(|| KECCAK_NULL_RLP.clone(), Into::into),
-			receipts_root: g.receipts_root.map_or_else(|| KECCAK_NULL_RLP.clone(), Into::into),
+			transactions_root: g.transactions_root.map_or_else(|| KECCAK_NULL_RLP, Into::into),
+			receipts_root: g.receipts_root.map_or_else(|| KECCAK_NULL_RLP, Into::into),
 			state_root: g.state_root.map(Into::into),
 			gas_used: g.gas_used.map_or_else(U256::zero, Into::into),
 			extra_data: g.extra_data.map_or_else(Vec::new, Into::into),

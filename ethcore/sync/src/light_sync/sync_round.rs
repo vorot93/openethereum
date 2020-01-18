@@ -100,6 +100,7 @@ impl Fetcher {
 	// with a list of peers who helped produce the chain.
 	// The headers must be valid RLP at this point and must have a consistent
 	// non-zero gap between them. Will abort the round if found wrong.
+	#[allow(clippy::new_ret_no_self)]
 	fn new(sparse_headers: Vec<Header>, contributors: Vec<PeerId>, target: (u64, H256)) -> SyncRound {
 		let mut requests = BinaryHeap::with_capacity(sparse_headers.len() - 1);
 
@@ -133,26 +134,23 @@ impl Fetcher {
 			None => return SyncRound::abort(AbortReason::BadScaffold(contributors), VecDeque::new()),
 		};
 
-		SyncRound::Fetch(Fetcher {
+		SyncRound::Fetch(Self {
 			sparse: sparse_headers.into(),
-			requests: requests,
+			requests,
 			complete_requests: HashMap::new(),
 			pending: HashMap::new(),
 			scaffold_contributors: contributors,
 			ready: VecDeque::new(),
-			end: end,
-			target: target,
+			end,
+			target,
 		})
 	}
 
 	// collect complete requests and their subchain from the sparse header chain
 	// into the ready set in order.
 	fn collect_ready(&mut self) {
-		loop {
-			let start_hash = match self.sparse.front() {
-				Some(first) => first.hash(),
-				None => break,
-			};
+		while let Some(first) = self.sparse.front() {
+			let start_hash = first.hash();
 
 			match self.complete_requests.remove(&start_hash) {
 				None => break,
@@ -234,7 +232,7 @@ impl Fetcher {
 				}
 
 				// state transition not triggered until drain is finished.
-				(SyncRound::Fetch(self))
+				SyncRound::Fetch(self)
 			}
 		}
 	}
@@ -257,19 +255,16 @@ impl Fetcher {
 		where D: FnMut(HeadersRequest) -> Option<ReqId>
 	{
 		while let Some(pending_req) = self.requests.pop() {
-			match dispatcher(pending_req.headers_request.clone()) {
-				Some(req_id) => {
-					trace!(target: "sync", "Assigned request {} for subchain ({} -> {})",
-						req_id, pending_req.subchain_parent.0, pending_req.subchain_end.0);
+			if let Some(req_id) = dispatcher(pending_req.headers_request.clone()) {
+				trace!(target: "sync", "Assigned request {} for subchain ({} -> {})",
+					req_id, pending_req.subchain_parent.0, pending_req.subchain_end.0);
 
-					self.pending.insert(req_id, pending_req);
-				}
-				None => {
-					trace!(target: "sync", "Failed to assign request for subchain ({} -> {})",
-						pending_req.subchain_parent.0, pending_req.subchain_end.0);
-					self.requests.push(pending_req);
-					break;
-				}
+				self.pending.insert(req_id, pending_req);
+			} else {
+				trace!(target: "sync", "Failed to assign request for subchain ({} -> {})",
+					pending_req.subchain_parent.0, pending_req.subchain_end.0);
+				self.requests.push(pending_req);
+				break;
 			}
 		}
 
@@ -310,10 +305,10 @@ fn scaffold_params(diff: u64) -> (u64, u64) {
 }
 
 /// Round started: get stepped header chain.
-/// from a start block with number X we request ROUND_PIVOTS headers stepped by ROUND_SKIP from
+/// from a start block with number X we request `ROUND_PIVOTS` headers stepped by `ROUND_SKIP` from
 /// block X + 1 to a target >= X + 1.
-/// If the sync target is within ROUND_SKIP of the start, we request
-/// only those blocks. If the sync target is within (ROUND_SKIP + 1) * (ROUND_PIVOTS - 1) of
+/// If the sync target is within `ROUND_SKIP` of the start, we request
+/// only those blocks. If the sync target is within `(ROUND_SKIP + 1) * (ROUND_PIVOTS - 1)` of
 /// the start, we reduce the number of pivots so the target is outside it.
 pub struct RoundStart {
 	start_block: (u64, H256),
@@ -333,15 +328,15 @@ impl RoundStart {
 		trace!(target: "sync", "Beginning sync round: {} pivots and {} skip from block {}",
 			pivots, skip, start.0);
 
-		RoundStart {
+		Self {
 			start_block: start,
-			target: target,
+			target,
 			pending_req: None,
 			sparse_headers: Vec::new(),
 			contributors: HashSet::new(),
 			attempt: 0,
-			skip: skip,
-			pivots: pivots,
+			skip,
+			pivots,
 		}
 	}
 
@@ -351,7 +346,7 @@ impl RoundStart {
 		self.attempt += 1;
 
 		if self.attempt >= SCAFFOLD_ATTEMPTS {
-			return if self.sparse_headers.len() > 1 {
+			if self.sparse_headers.len() > 1 {
 				Fetcher::new(self.sparse_headers, self.contributors.into_iter().collect(), self.target)
 			} else {
 				let fetched_headers = if self.skip == 0 {
@@ -369,7 +364,7 @@ impl RoundStart {
 
 	fn process_response<R: ResponseContext>(mut self, ctx: &R) -> SyncRound {
 		let req = match self.pending_req.take() {
-			Some((id, ref req)) if ctx.req_id() == &id => { req.clone() }
+			Some((id, req)) if ctx.req_id() == &id => { req }
 			other => {
 				self.pending_req = other;
 				return SyncRound::Start(self);
@@ -437,7 +432,7 @@ impl RoundStart {
 
 			let headers_request = HeadersRequest {
 				start: start.into(),
-				max: max,
+				max,
 				skip: self.skip,
 				reverse: false,
 			};
@@ -468,23 +463,23 @@ impl SyncRound {
 	fn abort(reason: AbortReason, remaining: VecDeque<Header>) -> Self {
 		trace!(target: "sync", "Aborting sync round: {:?}. To drain: {}", reason, remaining.len());
 
-		SyncRound::Abort(reason, remaining)
+		Self::Abort(reason, remaining)
 	}
 
 	/// Begin sync rounds from a starting block, but not to go past a given target
 	pub fn begin(start: (u64, H256), target: (u64, H256)) -> Self {
 		if target.0 <= start.0 {
-			SyncRound::abort(AbortReason::TargetReached, VecDeque::new())
+			Self::abort(AbortReason::TargetReached, VecDeque::new())
 		} else {
-			SyncRound::Start(RoundStart::new(start, target))
+			Self::Start(RoundStart::new(start, target))
 		}
 	}
 
 	/// Process an answer to a request. Unknown requests will be ignored.
 	pub fn process_response<R: ResponseContext>(self, ctx: &R) -> Self {
 		match self {
-			SyncRound::Start(round_start) => round_start.process_response(ctx),
-			SyncRound::Fetch(fetcher) => fetcher.process_response(ctx),
+			Self::Start(round_start) => round_start.process_response(ctx),
+			Self::Fetch(fetcher) => fetcher.process_response(ctx),
 			other => other,
 		}
 	}
@@ -492,8 +487,8 @@ impl SyncRound {
 	/// Return unfulfilled requests from disconnected peer. Unknown requests will be ignored.
 	pub fn requests_abandoned(self, abandoned: &[ReqId]) -> Self {
 		match self {
-			SyncRound::Start(round_start) => round_start.requests_abandoned(abandoned),
-			SyncRound::Fetch(fetcher) => fetcher.requests_abandoned(abandoned),
+			Self::Start(round_start) => round_start.requests_abandoned(abandoned),
+			Self::Fetch(fetcher) => fetcher.requests_abandoned(abandoned),
 			other => other,
 		}
 	}
@@ -506,8 +501,8 @@ impl SyncRound {
 		where D: FnMut(HeadersRequest) -> Option<ReqId>
 	{
 		match self {
-			SyncRound::Start(round_start) => round_start.dispatch_requests(dispatcher),
-			SyncRound::Fetch(fetcher) => fetcher.dispatch_requests(dispatcher),
+			Self::Start(round_start) => round_start.dispatch_requests(dispatcher),
+			Self::Fetch(fetcher) => fetcher.dispatch_requests(dispatcher),
 			other => other,
 		}
 	}
@@ -516,11 +511,11 @@ impl SyncRound {
 	/// the round start block) from the round, starting a new one once finished.
 	pub fn drain(self, v: &mut Vec<Header>, max: Option<usize>) -> Self {
 		match self {
-			SyncRound::Fetch(fetcher) => fetcher.drain(v, max),
-			SyncRound::Abort(reason, mut remaining) => {
+			Self::Fetch(fetcher) => fetcher.drain(v, max),
+			Self::Abort(reason, mut remaining) => {
 				let len = ::std::cmp::min(max.unwrap_or(usize::max_value()), remaining.len());
 				v.extend(remaining.drain(..len));
-				SyncRound::Abort(reason, remaining)
+				Self::Abort(reason, remaining)
 			}
 			other => other,
 		}
@@ -529,10 +524,10 @@ impl SyncRound {
 
 impl fmt::Debug for SyncRound {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match *self {
-			SyncRound::Start(ref state) => write!(f, "Scaffolding from {:?}", state.start_block),
-			SyncRound::Fetch(ref fetcher) => write!(f, "Filling scaffold up to {:?}", fetcher.end),
-			SyncRound::Abort(ref reason, ref remaining) =>
+		match self {
+			Self::Start(state) => write!(f, "Scaffolding from {:?}", state.start_block),
+			Self::Fetch(fetcher) => write!(f, "Filling scaffold up to {:?}", fetcher.end),
+			Self::Abort(reason, remaining) =>
 				write!(f, "Aborted: {:?}, {} remain", reason, remaining.len()),
 		}
 	}

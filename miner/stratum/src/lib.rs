@@ -16,6 +16,54 @@
 
 //! Stratum protocol implementation for parity ethereum/bitcoin clients
 
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
+
 extern crate jsonrpc_tcp_server;
 extern crate jsonrpc_core;
 extern crate ethereum_types;
@@ -72,7 +120,7 @@ impl Stratum {
 		addr: &SocketAddr,
 		dispatcher: Arc<dyn JobDispatcher>,
 		secret: Option<H256>,
-	) -> Result<Arc<Stratum>, Error> {
+	) -> Result<Arc<Self>, Error> {
 
 		let implementation = Arc::new(StratumImpl {
 			subscribers: RwLock::default(),
@@ -95,7 +143,7 @@ impl Stratum {
 		let server_builder = server_builder.session_meta_extractor(PeerMetaExtractor::new(tcp_dispatcher.clone()));
 		let server = server_builder.start(addr)?;
 
-		let stratum = Arc::new(Stratum {
+		let stratum = Arc::new(Self {
 			rpc_server: Some(server),
 			implementation,
 			tcp_dispatcher,
@@ -114,7 +162,9 @@ impl PushWorkHandler for Stratum {
 impl Drop for Stratum {
 	fn drop(&mut self) {
 		// shut down rpc server
-		self.rpc_server.take().map(|server| server.close());
+		if let Some(server) = self.rpc_server.take() {
+			server.close();
+		}
 	}
 }
 
@@ -147,10 +197,10 @@ impl StratumImpl {
 				Ok(val) => Ok(val),
 				Err(e) => {
 					warn!(target: "stratum", "Invalid payload: '{}' ({:?})", &initial, e);
-					to_value(&[0u8; 0])
+					to_value(&[0_u8; 0])
 				},
 			},
-			None => to_value(&[0u8; 0]),
+			None => to_value(&[0_u8; 0]),
 		}.expect("Empty slices are serializable; qed"))
 	}
 
@@ -171,12 +221,12 @@ impl StratumImpl {
 
 	/// rpc method `mining.submit`
 	fn submit(&self, params: Params, meta: SocketMetadata) -> RpcResult {
-		Ok(match params {
-			Params::Array(vals) => {
+		Ok({
+			if let Params::Array(vals) = params {
 				// first two elements are service messages (worker_id & job_id)
 				match self.dispatcher.submit(vals.iter().skip(2)
-					.filter_map(|val| match *val {
-						Value::String(ref s) => Some(s.to_owned()),
+					.filter_map(|val| match val {
+						Value::String(s) => Some(s.to_owned()),
 						_ => None
 					})
 					.collect::<Vec<String>>()) {
@@ -189,8 +239,7 @@ impl StratumImpl {
 						to_value(false)
 					}
 				}
-			},
-			_ => {
+			} else {
 				trace!(target: "stratum", "Invalid submit work format {:?}", params);
 				to_value(false)
 			}
@@ -209,10 +258,10 @@ impl StratumImpl {
 			let workers = self.workers.read();
 			let next_request_id = {
 				let mut counter = self.notify_counter.write();
-				if *counter == ::std::u32::MAX {
+				if *counter == u32::max_value() {
 					*counter = NOTIFY_COUNTER_INITIAL;
 				} else {
-					*counter = *counter + 1
+					*counter += 1
 				}
 				*counter
 			};
@@ -256,7 +305,7 @@ pub struct SocketMetadata {
 
 impl Default for SocketMetadata {
 	fn default() -> Self {
-		SocketMetadata {
+		Self {
 			addr: "0.0.0.0:0".parse().unwrap(),
 			tcp_dispatcher: None,
 		}
@@ -264,7 +313,7 @@ impl Default for SocketMetadata {
 }
 
 impl SocketMetadata {
-	pub fn addr(&self) -> &SocketAddr {
+	pub const fn addr(&self) -> &SocketAddr {
 		&self.addr
 	}
 }
@@ -276,8 +325,8 @@ pub struct PeerMetaExtractor {
 }
 
 impl PeerMetaExtractor {
-	fn new(tcp_dispatcher: Dispatcher) -> Self {
-		PeerMetaExtractor {
+	const fn new(tcp_dispatcher: Dispatcher) -> Self {
+		Self {
 			tcp_dispatcher,
 		}
 	}
@@ -326,9 +375,7 @@ mod tests {
 			.and_then(|(_stream, read_buf)| {
 				future::ok(read_buf)
 			});
-			let result = runtime.block_on(stream).expect("Runtime should run with no errors");
-
-			result
+			runtime.block_on(stream).expect("Runtime should run with no errors")
 	}
 
 	#[test]
@@ -353,15 +400,15 @@ mod tests {
 	}
 
 	impl DummyManager {
-		fn new() -> Arc<DummyManager> {
+		fn new() -> Arc<Self> {
 			Arc::new(Self::build())
 		}
 
-		fn build() -> DummyManager {
-			DummyManager { initial_payload: r#"[ "dummy payload" ]"#.to_owned() }
+		fn build() -> Self {
+			Self { initial_payload: r#"[ "dummy payload" ]"#.to_owned() }
 		}
 
-		fn of_initial(mut self, new_initial: &str) -> DummyManager {
+		fn of_initial(mut self, new_initial: &str) -> Self {
 			self.initial_payload = new_initial.to_owned();
 			self
 		}
@@ -431,7 +478,7 @@ mod tests {
 		let auth_response = "{\"jsonrpc\":\"2.0\",\"result\":true,\"id\":1}\n";
 
 		let mut runtime = Runtime::new().expect("Tokio Runtime should be created with no errors");
-		let read_buf0 = vec![0u8; auth_response.len()];
+		let read_buf0 = vec![0_u8; auth_response.len()];
 		let read_buf1 = Vec::with_capacity(2048);
 		let stream = TcpStream::connect(&addr)
 			.and_then(move |stream| {

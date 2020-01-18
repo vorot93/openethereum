@@ -81,7 +81,7 @@ pub struct Account {
 
 impl From<BasicAccount> for Account {
 	fn from(basic: BasicAccount) -> Self {
-		Account {
+		Self {
 			balance: basic.balance,
 			nonce: basic.nonce,
 			storage_root: basic.storage_root,
@@ -90,7 +90,7 @@ impl From<BasicAccount> for Account {
 			storage_changes: HashMap::new(),
 			code_hash: basic.code_hash,
 			code_size: None,
-			code_cache: Arc::new(vec![]),
+			code_cache: Arc::new(Vec::new()),
 			code_version: basic.code_version,
 			code_filth: Filth::Clean,
 			address_hash: Cell::new(None),
@@ -101,10 +101,10 @@ impl From<BasicAccount> for Account {
 impl Account {
 	#[cfg(test)]
 	/// General constructor.
-	pub fn new(balance: U256, nonce: U256, storage: HashMap<H256, H256>, code: Bytes, version: U256) -> Account {
-		Account {
-			balance: balance,
-			nonce: nonce,
+	pub fn new(balance: U256, nonce: U256, storage: HashMap<H256, H256>, code: Bytes, version: U256) -> Self {
+		Self {
+			balance,
+			nonce,
 			storage_root: KECCAK_NULL_RLP,
 			storage_cache: Self::empty_storage_cache(),
 			original_storage_cache: None,
@@ -123,24 +123,24 @@ impl Account {
 	}
 
 	/// General constructor.
-	pub fn from_pod(pod: PodAccount) -> Account {
-		Account {
+	pub fn from_pod(pod: PodAccount) -> Self {
+		Self {
 			balance: pod.balance,
 			nonce: pod.nonce,
 			storage_root: KECCAK_NULL_RLP,
 			storage_cache: Self::empty_storage_cache(),
 			original_storage_cache: None,
 			storage_changes: pod.storage.into_iter().collect(),
-			code_hash: pod.code.as_ref().map_or(KECCAK_EMPTY, |c| keccak(c)),
+			code_hash: pod.code.as_ref().map_or(KECCAK_EMPTY, keccak),
 			code_filth: Filth::Dirty,
-			code_size: Some(pod.code.as_ref().map_or(0, |c| c.len())),
-			code_cache: Arc::new(pod.code.map_or_else(|| { warn!("POD account with unknown code is being created! Assuming no code."); vec![] }, |c| c)),
+			code_size: Some(pod.code.as_ref().map_or(0, Vec::len)),
+			code_cache: Arc::new(pod.code.map_or_else(|| { warn!("POD account with unknown code is being created! Assuming no code."); Vec::new() }, |c| c)),
 			code_version: pod.version,
 			address_hash: Cell::new(None),
 		}
 	}
 
-	/// Convert Account to a PodAccount.
+	/// Convert Account to a `PodAccount`.
 	/// NOTE: This will silently fail unless the account is fully cached.
 	pub fn to_pod(&self) -> PodAccount {
 		PodAccount {
@@ -156,16 +156,16 @@ impl Account {
 	}
 
 	/// Create a new account with the given balance.
-	pub fn new_basic(balance: U256, nonce: U256) -> Account {
-		Account {
-			balance: balance,
-			nonce: nonce,
+	pub fn new_basic(balance: U256, nonce: U256) -> Self {
+		Self {
+			balance,
+			nonce,
 			storage_root: KECCAK_NULL_RLP,
 			storage_cache: Self::empty_storage_cache(),
 			original_storage_cache: None,
 			storage_changes: HashMap::new(),
 			code_hash: KECCAK_EMPTY,
-			code_cache: Arc::new(vec![]),
+			code_cache: Arc::new(Vec::new()),
 			code_size: Some(0),
 			code_version: U256::zero(),
 			code_filth: Filth::Clean,
@@ -174,15 +174,15 @@ impl Account {
 	}
 
 	/// Create a new account from RLP.
-	pub fn from_rlp(rlp: &[u8]) -> Result<Account, DecoderError> {
+	pub fn from_rlp(rlp: &[u8]) -> Result<Self, DecoderError> {
 		::rlp::decode::<BasicAccount>(rlp)
 			.map(|ba| ba.into())
 	}
 
 	/// Create a new contract account.
 	/// NOTE: make sure you use `init_code` on this before `commit`ing.
-	pub fn new_contract(balance: U256, nonce: U256, version: U256, original_storage_root: H256) -> Account {
-		Account {
+	pub fn new_contract(balance: U256, nonce: U256, version: U256, original_storage_root: H256) -> Self {
+		Self {
 			balance,
 			nonce,
 			storage_root: KECCAK_NULL_RLP,
@@ -194,7 +194,7 @@ impl Account {
 			},
 			storage_changes: HashMap::new(),
 			code_hash: KECCAK_EMPTY,
-			code_cache: Arc::new(vec![]),
+			code_cache: Arc::new(Vec::new()),
 			code_size: None,
 			code_version: version,
 			code_filth: Filth::Clean,
@@ -255,7 +255,7 @@ impl Account {
 			return Ok(value);
 		}
 		match &self.original_storage_cache {
-			Some((ref original_storage_root, ref original_storage_cache)) =>
+			Some((original_storage_root, original_storage_cache)) =>
 				Self::get_and_cache_storage(
 					original_storage_root,
 					&mut original_storage_cache.borrow_mut(),
@@ -274,7 +274,7 @@ impl Account {
 
 	fn get_and_cache_storage(storage_root: &H256, storage_cache: &mut LruCache<H256, H256>, db: &dyn HashDB<KeccakHasher, DBValue>, key: &H256) -> TrieResult<H256> {
 		let db = SecTrieDB::new(&db, storage_root)?;
-		let panicky_decoder = |bytes:&[u8]| ::rlp::decode(&bytes).expect("decoding db value failed");
+		let panicky_decoder = |bytes:&[u8]| ::rlp::decode(bytes).expect("decoding db value failed");
 		let item: U256 = db.get_with(key.as_bytes(), panicky_decoder)?.unwrap_or_else(U256::zero);
 		let value: H256 = BigEndianHash::from_uint(&item);
 		storage_cache.insert(key.clone(), value.clone());
@@ -285,7 +285,7 @@ impl Account {
 	/// key is not in the cache.
 	pub fn cached_storage_at(&self, key: &H256) -> Option<H256> {
 		if let Some(value) = self.storage_changes.get(key) {
-			return Some(value.clone())
+			return Some(*value)
 		}
 		self.cached_moved_original_storage_at(key)
 	}
@@ -293,9 +293,9 @@ impl Account {
 	/// Get cached original storage value after last state commitment. Returns `None` if the key is not in the cache.
 	pub fn cached_original_storage_at(&self, key: &H256) -> Option<H256> {
 		match &self.original_storage_cache {
-			Some((_, ref original_storage_cache)) => {
+			Some((_, original_storage_cache)) => {
 				if let Some(value) = original_storage_cache.borrow_mut().get_mut(key) {
-					Some(value.clone())
+					Some(*value)
 				} else {
 					None
 				}
@@ -315,24 +315,24 @@ impl Account {
 		}
 
 		if let Some(value) = self.storage_cache.borrow_mut().get_mut(key) {
-			Some(value.clone())
+			Some(*value)
 		} else {
 			None
 		}
 	}
 
 	/// return the balance associated with this account.
-	pub fn balance(&self) -> &U256 { &self.balance }
+	pub const fn balance(&self) -> &U256 { &self.balance }
 
 	/// return the nonce associated with this account.
-	pub fn nonce(&self) -> &U256 { &self.nonce }
+	pub const fn nonce(&self) -> &U256 { &self.nonce }
 
 	/// return the code version associated with this account.
-	pub fn code_version(&self) -> &U256 { &self.code_version }
+	pub const fn code_version(&self) -> &U256 { &self.code_version }
 
 	/// return the code hash associated with this account.
-	pub fn code_hash(&self) -> H256 {
-		self.code_hash.clone()
+	pub const fn code_hash(&self) -> H256 {
+		self.code_hash
 	}
 
 	/// return and cache `keccak(address)`, `address` must be the address of this
@@ -341,7 +341,7 @@ impl Account {
 		let hash = self.address_hash.get();
 		hash.unwrap_or_else(|| {
 			let hash = keccak(address);
-			self.address_hash.set(Some(hash.clone()));
+			self.address_hash.set(Some(hash));
 			hash
 		})
 	}
@@ -357,8 +357,8 @@ impl Account {
 
 	/// returns the account's code size. If `None` then the code cache or code size cache isn't available -
 	/// get someone who knows to call `note_code`.
-	pub fn code_size(&self) -> Option<usize> {
-		self.code_size.clone()
+	pub const fn code_size(&self) -> Option<usize> {
+		self.code_size
 	}
 
 	#[cfg(test)]
@@ -387,16 +387,13 @@ impl Account {
 
 		if self.is_cached() { return Some(self.code_cache.clone()); }
 
-		match db.get(&self.code_hash, hash_db::EMPTY_PREFIX) {
-			Some(x) => {
-				self.code_size = Some(x.len());
-				self.code_cache = Arc::new(x);
-				Some(self.code_cache.clone())
-			},
-			_ => {
-				warn!("Failed reverse get of {}", self.code_hash);
-				None
-			},
+		if let Some(x) = db.get(&self.code_hash, hash_db::EMPTY_PREFIX) {
+			self.code_size = Some(x.len());
+			self.code_cache = Arc::new(x);
+			Some(self.code_cache.clone())
+		} else {
+			warn!("Failed reverse get of {}", self.code_hash);
+			None
 		}
 	}
 
@@ -416,15 +413,12 @@ impl Account {
 		trace!("Account::cache_code_size: ic={}; self.code_hash={:?}, self.code_cache={}", self.is_cached(), self.code_hash, self.code_cache.pretty());
 		self.code_size.is_some() ||
 			if self.code_hash != KECCAK_EMPTY {
-				match db.get(&self.code_hash, hash_db::EMPTY_PREFIX) {
-					Some(x) => {
-						self.code_size = Some(x.len());
-						true
-					},
-					_ => {
-						warn!("Failed reverse get of {}", self.code_hash);
-						false
-					},
+				if let Some(x) = db.get(&self.code_hash, hash_db::EMPTY_PREFIX) {
+					self.code_size = Some(x.len());
+					true
+				} else {
+					warn!("Failed reverse get of {}", self.code_hash);
+					false
 				}
 			} else {
 				// If the code hash is empty hash, then the code size is zero.
@@ -480,16 +474,16 @@ impl Account {
 	}
 
 	/// Storage root where the account changes are based upon.
-	pub fn base_storage_root(&self) -> H256 {
+	pub const fn base_storage_root(&self) -> H256 {
 		self.storage_root
 	}
 
 	/// Return the storage overlay.
-	pub fn storage_changes(&self) -> &HashMap<H256, H256> { &self.storage_changes }
+	pub const fn storage_changes(&self) -> &HashMap<H256, H256> { &self.storage_changes }
 
 	/// Increment the nonce of the account by one.
 	pub fn inc_nonce(&mut self) {
-		self.nonce = self.nonce.saturating_add(U256::from(1u8));
+		self.nonce = self.nonce.saturating_add(U256::from(1_u8));
 	}
 
 	/// Increase account balance.
@@ -501,7 +495,7 @@ impl Account {
 	/// Panics if balance is less than `x`
 	pub fn sub_balance(&mut self, x: &U256) {
 		assert!(self.balance >= *x);
-		self.balance = self.balance - *x;
+		self.balance -= *x;
 	}
 
 	/// Commit the `storage_changes` to the backing DB and update `storage_root`.
@@ -510,10 +504,11 @@ impl Account {
 		for (k, v) in self.storage_changes.drain() {
 			// cast key and value to trait type,
 			// so we can call overloaded `to_bytes` method
-			match v.is_zero() {
-				true => t.remove(k.as_bytes())?,
-				false => t.insert(k.as_bytes(), &encode(&v.into_uint()))?,
-			};
+			if v.is_zero() {
+				t.remove(k.as_bytes())?;
+			} else {
+				t.insert(k.as_bytes(), &encode(&v.into_uint()))?;
+			}
 
 			self.storage_cache.borrow_mut().insert(k, v);
 		}
@@ -552,16 +547,16 @@ impl Account {
 	}
 
 	/// Clone basic account data
-	pub fn clone_basic(&self) -> Account {
-		Account {
-			balance: self.balance.clone(),
-			nonce: self.nonce.clone(),
-			storage_root: self.storage_root.clone(),
+	pub fn clone_basic(&self) -> Self {
+		Self {
+			balance: self.balance,
+			nonce: self.nonce,
+			storage_root: self.storage_root,
 			storage_cache: Self::empty_storage_cache(),
 			original_storage_cache: self.original_storage_cache.as_ref().map(|(r, _)| (*r, Self::empty_storage_cache())),
 			storage_changes: HashMap::new(),
-			code_hash: self.code_hash.clone(),
-			code_size: self.code_size.clone(),
+			code_hash: self.code_hash,
+			code_size: self.code_size,
 			code_cache: self.code_cache.clone(),
 			code_version: self.code_version,
 			code_filth: self.code_filth,
@@ -570,14 +565,14 @@ impl Account {
 	}
 
 	/// Clone account data and dirty storage keys
-	pub fn clone_dirty(&self) -> Account {
+	pub fn clone_dirty(&self) -> Self {
 		let mut account = self.clone_basic();
 		account.storage_changes = self.storage_changes.clone();
 		account
 	}
 
 	/// Clone account data, dirty storage keys and cached storage keys.
-	pub fn clone_all(&self) -> Account {
+	pub fn clone_all(&self) -> Self {
 		let mut account = self.clone_dirty();
 		account.storage_cache = self.storage_cache.clone();
 		account.original_storage_cache = self.original_storage_cache.clone();
@@ -587,7 +582,7 @@ impl Account {
 	/// Replace self with the data from other account merging storage cache.
 	/// Basic account data and all modifications are overwritten
 	/// with new values.
-	pub fn overwrite_with(&mut self, other: Account) {
+	pub fn overwrite_with(&mut self, other: Self) {
 		self.balance = other.balance;
 		self.nonce = other.nonce;
 		self.code_hash = other.code_hash;
@@ -671,7 +666,7 @@ mod tests {
 			let mut a = Account::new_contract(69.into(), 0.into(), 0.into(), KECCAK_NULL_RLP);
 			a.set_storage(H256::zero(), H256::from_low_u64_be(0x1234));
 			a.commit_storage(&Default::default(), &mut db).unwrap();
-			a.init_code(vec![]);
+			a.init_code(Vec::new());
 			a.commit_code(&mut db);
 			a.rlp()
 		};
@@ -689,7 +684,7 @@ mod tests {
 
 		let rlp = {
 			let mut a = Account::new_contract(69.into(), 0.into(), 0.into(), KECCAK_NULL_RLP);
-			a.init_code(vec![0x55, 0x44, 0xffu8]);
+			a.init_code(vec![0x55, 0x44, 0xff_u8]);
 			a.commit_code(&mut db);
 			a.rlp()
 		};
@@ -698,7 +693,7 @@ mod tests {
 		assert!(a.cache_code(&db.immutable()).is_some());
 
 		let mut a = Account::from_rlp(&rlp).expect("decoding db value failed");
-		assert_eq!(a.note_code(vec![0x55, 0x44, 0xffu8]), Ok(()));
+		assert_eq!(a.note_code(vec![0x55, 0x44, 0xff_u8]), Ok(()));
 	}
 
 	#[test]
@@ -731,7 +726,7 @@ mod tests {
 		let mut a = Account::new_contract(69.into(), 0.into(), 0.into(), KECCAK_NULL_RLP);
 		let mut db = new_memory_db();
 		let mut db = AccountDBMut::from_hash(&mut db, keccak(&Address::zero()));
-		a.init_code(vec![0x55, 0x44, 0xffu8]);
+		a.init_code(vec![0x55, 0x44, 0xff_u8]);
 		assert_eq!(a.code_filth, Filth::Dirty);
 		assert_eq!(a.code_size(), Some(3));
 		a.commit_code(&mut db);
@@ -743,7 +738,7 @@ mod tests {
 		let mut a = Account::new_contract(69.into(), 0.into(), 0.into(), KECCAK_NULL_RLP);
 		let mut db = new_memory_db();
 		let mut db = AccountDBMut::from_hash(&mut db, keccak(&Address::zero()));
-		a.init_code(vec![0x55, 0x44, 0xffu8]);
+		a.init_code(vec![0x55, 0x44, 0xff_u8]);
 		assert_eq!(a.code_filth, Filth::Dirty);
 		a.commit_code(&mut db);
 		assert_eq!(a.code_filth, Filth::Clean);
@@ -756,7 +751,7 @@ mod tests {
 
 	#[test]
 	fn rlpio() {
-		let a = Account::new(69u8.into(), 0u8.into(), HashMap::new(), Bytes::new(), 0.into());
+		let a = Account::new(69_u8.into(), 0_u8.into(), HashMap::new(), Bytes::new(), 0.into());
 		let b = Account::from_rlp(&a.rlp()).unwrap();
 		assert_eq!(a.balance(), b.balance());
 		assert_eq!(a.nonce(), b.nonce());
@@ -766,10 +761,10 @@ mod tests {
 
 	#[test]
 	fn new_account() {
-		let a = Account::new(69u8.into(), 0u8.into(), HashMap::new(), Bytes::new(), 0.into());
+		let a = Account::new(69_u8.into(), 0_u8.into(), HashMap::new(), Bytes::new(), 0.into());
 		assert_eq!(a.rlp().to_hex(), "f8448045a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a0c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470");
-		assert_eq!(*a.balance(), 69u8.into());
-		assert_eq!(*a.nonce(), 0u8.into());
+		assert_eq!(*a.balance(), 69_u8.into());
+		assert_eq!(*a.nonce(), 0_u8.into());
 		assert_eq!(a.code_hash(), KECCAK_EMPTY);
 		assert_eq!(a.storage_root().unwrap(), KECCAK_NULL_RLP);
 	}

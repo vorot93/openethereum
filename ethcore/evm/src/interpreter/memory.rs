@@ -57,10 +57,10 @@ impl Memory for Vec<u8> {
 	fn read_slice(&self, init_off_u: U256, init_size_u: U256) -> &[u8] {
 		let off = init_off_u.low_u64() as usize;
 		let size = init_size_u.low_u64() as usize;
-		if !is_valid_range(off, size) {
-			&self[0..0]
-		} else {
+		if is_valid_range(off, size) {
 			&self[off..off+size]
+		} else {
+			&self[0..0]
 		}
 	}
 
@@ -72,10 +72,10 @@ impl Memory for Vec<u8> {
 	fn writeable_slice(&mut self, offset: U256, size: U256) -> &mut [u8] {
 		let off = offset.low_u64() as usize;
 		let s = size.low_u64() as usize;
-		if !is_valid_range(off, s) {
-			&mut self[0..0]
-		} else {
+		if is_valid_range(off, s) {
 			&mut self[off..off+s]
+		} else {
+			&mut self[0..0]
 		}
 	}
 
@@ -136,20 +136,20 @@ mod tests {
 	#[test]
 	fn test_memory_read_and_write() {
 		// given
-		let mem: &mut dyn Memory = &mut vec![];
+		let mem: &mut dyn Memory = &mut Vec::new();
 		mem.resize(0x80 + 32);
 
 		// when
-		mem.write(U256::from(0x80), U256::from(0xabcdef));
+		mem.write(U256::from(0x80), U256::from(0x00ab_cdef));
 
 		// then
-		assert_eq!(mem.read(U256::from(0x80)), U256::from(0xabcdef));
+		assert_eq!(mem.read(U256::from(0x80)), U256::from(0x00ab_cdef));
 	}
 
 	#[test]
 	fn test_memory_read_and_write_byte() {
 		// given
-		let mem: &mut dyn Memory = &mut vec![];
+		let mem: &mut dyn Memory = &mut Vec::new();
 		mem.resize(32);
 
 		// when
@@ -158,16 +158,16 @@ mod tests {
 		mem.write_byte(U256::from(0x1f), U256::from(0xef));
 
 		// then
-		assert_eq!(mem.read(U256::from(0x00)), U256::from(0xabcdef));
+		assert_eq!(mem.read(U256::from(0x00)), U256::from(0x00ab_cdef));
 	}
 
 	#[test]
 	fn test_memory_read_slice_and_write_slice() {
-		let mem: &mut dyn Memory = &mut vec![];
+		let mem: &mut dyn Memory = &mut Vec::new();
 		mem.resize(32);
 
 		{
-			let slice = "abcdefghijklmnopqrstuvwxyz012345".as_bytes();
+			let slice = b"abcdefghijklmnopqrstuvwxyz012345";
 			mem.write_slice(U256::from(0), slice);
 
 			assert_eq!(mem.read_slice(U256::from(0), U256::from(32)), slice);
@@ -175,10 +175,10 @@ mod tests {
 
 		// write again
 		{
-			let slice = "67890".as_bytes();
+			let slice = b"67890";
 			mem.write_slice(U256::from(0x1), slice);
 
-			assert_eq!(mem.read_slice(U256::from(0), U256::from(7)), "a67890g".as_bytes());
+			assert_eq!(mem.read_slice(U256::from(0), U256::from(7)), b"a67890g");
 		}
 
 		// write empty slice out of bounds

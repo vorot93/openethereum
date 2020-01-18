@@ -80,7 +80,7 @@ impl MultiTransaction {
 			r: Default::default(),
 			s: Default::default(),
 			v: Default::default(),
-			secret: self.secret.clone(),
+			secret: self.secret,
 		}
 	}
 }
@@ -107,7 +107,7 @@ pub struct PostStateResult {
 
 #[cfg(test)]
 mod tests {
-	use serde_json;
+	
 	use super::{MultiTransaction, State};
 
 	#[test]

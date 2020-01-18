@@ -34,7 +34,7 @@ pub struct Builder<T> {
 
 impl<T> Default for Builder<T> {
 	fn default() -> Self {
-		Builder {
+		Self {
 			output_kinds: HashMap::new(),
 			requests: Vec::new(),
 		}
@@ -80,13 +80,14 @@ pub struct Batch<T> {
 	answered: usize,
 }
 
+#[allow(clippy::use_self)]
 impl<T> Batch<T> {
 	/// Get access to the underlying slice of requests.
 	// TODO: unimplemented -> Vec<Request>, // do we _have to_ allocate?
 	pub fn requests(&self) -> &[T] { &self.requests }
 
 	/// Get the number of answered requests.
-	pub fn num_answered(&self) -> usize { self.answered }
+	pub const fn num_answered(&self) -> usize { self.answered }
 
 	/// Whether the batch is complete.
 	pub fn is_complete(&self) -> bool {
@@ -143,7 +144,7 @@ impl<T: IncompleteRequest + Clone> Batch<T> {
 		self.answered += 1;
 
 		// fill as much of the next request as we can.
-		if let Some(ref mut req) = self.requests.get_mut(self.answered) {
+		if let Some(req) = self.requests.get_mut(self.answered) {
 			req.fill(|req_idx, out_idx| outputs.get(&(req_idx, out_idx)).cloned().ok_or(NoSuchOutput))
 		}
 	}
@@ -288,7 +289,7 @@ mod tests {
 
 		assert!(batch.next_complete().is_some());
 		let hdr_proof_res = header_proof::Response {
-			proof: vec![],
+			proof: Vec::new(),
 			hash: H256::from_low_u64_be(12),
 			td: 21.into(),
 		};

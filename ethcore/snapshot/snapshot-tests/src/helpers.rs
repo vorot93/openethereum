@@ -21,7 +21,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 use account_db::AccountDBMut;
-use account_state;
+
 use blockchain::{BlockChain, BlockChainDB};
 use client_traits::ChainInfo;
 use common_types::{
@@ -35,14 +35,14 @@ use ethcore::client::Client;
 use ethereum_types::H256;
 use ethtrie::{SecTrieDBMut, TrieDB, TrieDBMut};
 use hash_db::HashDB;
-use journaldb;
+
 use keccak_hash::{KECCAK_NULL_RLP};
 use keccak_hasher::KeccakHasher;
 use kvdb::DBValue;
 use log::trace;
 use parking_lot::RwLock;
 use rand::Rng;
-use rlp;
+
 use snapshot::{
 	SnapshotClient,
 	StateRebuilder,
@@ -65,7 +65,7 @@ pub struct StateProducer {
 impl StateProducer {
 	/// Create a new `StateProducer`.
 	pub fn new() -> Self {
-		StateProducer {
+		Self {
 			state_root: KECCAK_NULL_RLP,
 			storage_seed: H256::zero(),
 		}
@@ -77,17 +77,20 @@ impl StateProducer {
 		// modify existing accounts.
 		let mut accounts_to_modify: Vec<_> = {
 			let trie = TrieDB::new(&db, &self.state_root).unwrap();
-			let temp = trie.iter().unwrap() // binding required due to complicated lifetime stuff
-				.filter(|_| rng.gen::<f32>() < ACCOUNT_CHURN)
-				.map(Result::unwrap)
-				.map(|(k, v)| (H256::from_slice(&k), v.to_owned()))
-				.collect();
-
-			temp
+			trie.iter().unwrap() // binding required due to complicated lifetime stuff
+				.filter_map(|res| {
+					if rng.gen::<f32>() < ACCOUNT_CHURN {
+						let (k, v) = res.unwrap();
+						Some((H256::from_slice(&k), v))
+					} else {
+						None
+					}
+				})
+				.collect()
 		};
 
 		// sweep once to alter storage tries.
-		for &mut (ref mut address_hash, ref mut account_data) in &mut accounts_to_modify {
+		for (address_hash, account_data) in &mut accounts_to_modify {
 			let mut account: BasicAccount = rlp::decode(&*account_data).expect("error decoding basic account");
 			let acct_db = AccountDBMut::from_hash(db, *address_hash);
 			fill_storage(acct_db, &mut account.storage_root, &mut self.storage_seed);
@@ -114,7 +117,7 @@ impl StateProducer {
 	}
 
 	/// Get the current state root.
-	pub fn state_root(&self) -> H256 {
+	pub const fn state_root(&self) -> H256 {
 		self.state_root
 	}
 }
@@ -178,7 +181,7 @@ pub fn restore(
 	let mut snappy_buffer = Vec::new();
 
 	trace!(target: "snapshot", "restoring state");
-	for state_chunk_hash in manifest.state_hashes.iter() {
+	for state_chunk_hash in &manifest.state_hashes {
 		trace!(target: "snapshot", "state chunk hash: {}", state_chunk_hash);
 		let chunk = reader.chunk(*state_chunk_hash).unwrap();
 		let len = snappy::decompress_into(&chunk, &mut snappy_buffer).unwrap();
@@ -186,7 +189,7 @@ pub fn restore(
 	}
 
 	trace!(target: "snapshot", "restoring secondary");
-	for chunk_hash in manifest.block_hashes.iter() {
+	for chunk_hash in &manifest.block_hashes {
 		let chunk = reader.chunk(*chunk_hash).unwrap();
 		let len = snappy::decompress_into(&chunk, &mut snappy_buffer).unwrap();
 		secondary.feed(&snappy_buffer[..len], engine, &flag)?;

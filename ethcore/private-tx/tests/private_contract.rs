@@ -16,6 +16,54 @@
 
 //! Contract for private transactions tests.
 
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
+
 extern crate client_traits;
 extern crate common_types as types;
 extern crate env_logger;
@@ -74,7 +122,7 @@ fn private_contract() {
 	let pm = Arc::new(Provider::new(
 			client.clone(),
 			miner,
-			signer.clone(),
+			signer,
 			Box::new(NoopEncryptor::default()),
 			config,
 			io,
@@ -89,48 +137,48 @@ fn private_contract() {
 	let mut private_create_tx = Transaction::default();
 	private_create_tx.action = Action::Create;
 	private_create_tx.data = private_contract_test;
-	private_create_tx.gas = 200000.into();
-	let private_create_tx_signed = private_create_tx.sign(&key1.secret(), None);
+	private_create_tx.gas = 200_000.into();
+	let private_create_tx_signed = private_create_tx.sign(key1.secret(), None);
 	let validators = vec![key3.address(), key4.address()];
 	let (public_tx, _) = pm.public_creation_transaction(BlockId::Latest, &private_create_tx_signed, &validators, 0.into()).unwrap();
-	let public_tx = public_tx.sign(&key1.secret(), chain_id);
+	let public_tx = public_tx.sign(key1.secret(), chain_id);
 	trace!("Transaction created. Pushing block");
 	push_block_with_transactions(&client, &[public_tx]);
 
 	trace!("Querying default private state");
 	let mut query_tx = Transaction::default();
-	query_tx.action = Action::Call(address.clone());
+	query_tx.action = Action::Call(address);
 	query_tx.data = "0c55699c".from_hex().unwrap();  // getX
 	query_tx.gas = 50000.into();
 	query_tx.nonce = 1.into();
-	let query_tx = query_tx.sign(&key1.secret(), chain_id);
+	let query_tx = query_tx.sign(key1.secret(), chain_id);
 	let result = pm.private_call(BlockId::Latest, &query_tx).unwrap();
 	assert_eq!(&result.output[..], &("0000000000000000000000000000000000000000000000000000000000000000".from_hex().unwrap()[..]));
 	assert_eq!(pm.get_validators(BlockId::Latest, &address).unwrap(), validators);
 
 	trace!("Modifying private state");
 	let mut private_tx = Transaction::default();
-	private_tx.action = Action::Call(address.clone());
+	private_tx.action = Action::Call(address);
 	private_tx.data = "bc64b76d2a00000000000000000000000000000000000000000000000000000000000000".from_hex().unwrap(); //setX(42)
-	private_tx.gas = 120000.into();
+	private_tx.gas = 120_000.into();
 	private_tx.nonce = 1.into();
-	let private_tx = private_tx.sign(&key1.secret(), None);
+	let private_tx = private_tx.sign(key1.secret(), None);
 	let private_contract_nonce = pm.get_contract_nonce(&address, BlockId::Latest).unwrap();
 	let private_state = pm.execute_private_transaction(BlockId::Latest, &private_tx).unwrap();
 	let nonced_state_hash = pm.calculate_state_hash(&private_state, private_contract_nonce);
 	let signatures: Vec<_> = [&key3, &key4].iter().map(|k|
-		Signature::from(parity_crypto::publickey::sign(&k.secret(), &nonced_state_hash).unwrap().into_electrum())).collect();
+		Signature::from(parity_crypto::publickey::sign(k.secret(), &nonced_state_hash).unwrap().into_electrum())).collect();
 	let public_tx = pm.public_transaction(private_state, &private_tx, &signatures, 1.into(), 0.into()).unwrap();
-	let public_tx = public_tx.sign(&key1.secret(), chain_id);
+	let public_tx = public_tx.sign(key1.secret(), chain_id);
 	push_block_with_transactions(&client, &[public_tx]);
 
 	trace!("Querying private state");
 	let mut query_tx = Transaction::default();
-	query_tx.action = Action::Call(address.clone());
+	query_tx.action = Action::Call(address);
 	query_tx.data = "0c55699c".from_hex().unwrap();  // getX
 	query_tx.gas = 50000.into();
 	query_tx.nonce = 2.into();
-	let query_tx = query_tx.sign(&key1.secret(), chain_id);
+	let query_tx = query_tx.sign(key1.secret(), chain_id);
 	let result = pm.private_call(BlockId::Latest, &query_tx).unwrap();
 	assert_eq!(&result.output[..], &("2a00000000000000000000000000000000000000000000000000000000000000".from_hex().unwrap()[..]));
 	assert_eq!(pm.get_validators(BlockId::Latest, &address).unwrap(), validators);
@@ -138,26 +186,26 @@ fn private_contract() {
 	// Now try modification with just one signature
 	trace!("Modifying private state");
 	let mut private_tx = Transaction::default();
-	private_tx.action = Action::Call(address.clone());
+	private_tx.action = Action::Call(address);
 	private_tx.data = "bc64b76d2b00000000000000000000000000000000000000000000000000000000000000".from_hex().unwrap(); //setX(43)
-	private_tx.gas = 120000.into();
+	private_tx.gas = 120_000.into();
 	private_tx.nonce = 2.into();
-	let private_tx = private_tx.sign(&key1.secret(), None);
+	let private_tx = private_tx.sign(key1.secret(), None);
 	let private_state = pm.execute_private_transaction(BlockId::Latest, &private_tx).unwrap();
 	let private_state_hash = keccak(&private_state);
 	let signatures: Vec<_> = [&key4].iter().map(|k|
-		Signature::from(parity_crypto::publickey::sign(&k.secret(), &private_state_hash).unwrap().into_electrum())).collect();
+		Signature::from(parity_crypto::publickey::sign(k.secret(), &private_state_hash).unwrap().into_electrum())).collect();
 	let public_tx = pm.public_transaction(private_state, &private_tx, &signatures, 2.into(), 0.into()).unwrap();
-	let public_tx = public_tx.sign(&key1.secret(), chain_id);
+	let public_tx = public_tx.sign(key1.secret(), chain_id);
 	push_block_with_transactions(&client, &[public_tx]);
 
 	trace!("Querying private state");
 	let mut query_tx = Transaction::default();
-	query_tx.action = Action::Call(address.clone());
+	query_tx.action = Action::Call(address);
 	query_tx.data = "0c55699c".from_hex().unwrap();  // getX
 	query_tx.gas = 50000.into();
 	query_tx.nonce = 3.into();
-	let query_tx = query_tx.sign(&key1.secret(), chain_id);
+	let query_tx = query_tx.sign(key1.secret(), chain_id);
 	let result = pm.private_call(BlockId::Latest, &query_tx).unwrap();
 	assert_eq!(result.output, "2a00000000000000000000000000000000000000000000000000000000000000".from_hex().unwrap());
 }
@@ -212,7 +260,7 @@ fn call_other_private_contract() {
 	let pm = Arc::new(Provider::new(
 			client.clone(),
 			miner,
-			signer.clone(),
+			signer,
 			Box::new(NoopEncryptor::default()),
 			config,
 			io,
@@ -227,12 +275,12 @@ fn call_other_private_contract() {
 	let mut private_create_tx1 = Transaction::default();
 	private_create_tx1.action = Action::Create;
 	private_create_tx1.data = private_contract_a_test;
-	private_create_tx1.gas = 200000.into();
+	private_create_tx1.gas = 200_000.into();
 	private_create_tx1.nonce = 0.into();
-	let private_create_tx_signed = private_create_tx1.sign(&key1.secret(), None);
+	let private_create_tx_signed = private_create_tx1.sign(key1.secret(), None);
 	let validators = vec![key3.address(), key4.address()];
 	let (public_tx1, _) = pm.public_creation_transaction(BlockId::Latest, &private_create_tx_signed, &validators, 0.into()).unwrap();
-	let public_tx1 = public_tx1.sign(&key1.secret(), chain_id);
+	let public_tx1 = public_tx1.sign(key1.secret(), chain_id);
 	trace!("Transaction created. Pushing block");
 	push_block_with_transactions(&client, &[public_tx1]);
 
@@ -246,42 +294,42 @@ fn call_other_private_contract() {
 	let mut private_create_tx2 = Transaction::default();
 	private_create_tx2.action = Action::Create;
 	private_create_tx2.data = private_contract_b_test;
-	private_create_tx2.gas = 200000.into();
+	private_create_tx2.gas = 200_000.into();
 	private_create_tx2.nonce = 1.into();
-	let private_create_tx_signed = private_create_tx2.sign(&key1.secret(), None);
+	let private_create_tx_signed = private_create_tx2.sign(key1.secret(), None);
 	let (public_tx2, _) = pm.public_creation_transaction(BlockId::Latest, &private_create_tx_signed, &validators, 0.into()).unwrap();
-	let public_tx2 = public_tx2.sign(&key1.secret(), chain_id);
+	let public_tx2 = public_tx2.sign(key1.secret(), chain_id);
 	trace!("Transaction created. Pushing block");
 	push_block_with_transactions(&client, &[public_tx2]);
 
 	// Let provider know, that it has access to both keys for A and B
-	private_keys.set_available_keys(&vec![address_a, address_b]);
+	private_keys.set_available_keys(&[address_a, address_b]);
 
 	// Call A.setx(42)
 	trace!("Modifying private state");
 	let mut private_tx = Transaction::default();
-	private_tx.action = Action::Call(address_a.clone());
+	private_tx.action = Action::Call(address_a);
 	private_tx.data = "bc64b76d2a00000000000000000000000000000000000000000000000000000000000000".from_hex().unwrap(); //setX(42)
-	private_tx.gas = 120000.into();
+	private_tx.gas = 120_000.into();
 	private_tx.nonce = 2.into();
-	let private_tx = private_tx.sign(&key1.secret(), None);
+	let private_tx = private_tx.sign(key1.secret(), None);
 	let private_contract_nonce = pm.get_contract_nonce(&address_b, BlockId::Latest).unwrap();
 	let private_state = pm.execute_private_transaction(BlockId::Latest, &private_tx).unwrap();
 	let nonced_state_hash = pm.calculate_state_hash(&private_state, private_contract_nonce);
 	let signatures: Vec<_> = [&key3, &key4].iter().map(|k|
-		Signature::from(parity_crypto::publickey::sign(&k.secret(), &nonced_state_hash).unwrap().into_electrum())).collect();
+		Signature::from(parity_crypto::publickey::sign(k.secret(), &nonced_state_hash).unwrap().into_electrum())).collect();
 	let public_tx = pm.public_transaction(private_state, &private_tx, &signatures, 2.into(), 0.into()).unwrap();
-	let public_tx = public_tx.sign(&key1.secret(), chain_id);
+	let public_tx = public_tx.sign(key1.secret(), chain_id);
 	push_block_with_transactions(&client, &[public_tx]);
 
 	// Call B.getX()
 	trace!("Querying private state");
 	let mut query_tx = Transaction::default();
-	query_tx.action = Action::Call(address_b.clone());
+	query_tx.action = Action::Call(address_b);
 	query_tx.data = "5197c7aa".from_hex().unwrap();  // getX
 	query_tx.gas = 50000.into();
 	query_tx.nonce = 3.into();
-	let query_tx = query_tx.sign(&key1.secret(), chain_id);
+	let query_tx = query_tx.sign(key1.secret(), chain_id);
 	let result = pm.private_call(BlockId::Latest, &query_tx).unwrap();
 	assert_eq!(&result.output[..], &("2a00000000000000000000000000000000000000000000000000000000000000".from_hex().unwrap()[..]));
 }

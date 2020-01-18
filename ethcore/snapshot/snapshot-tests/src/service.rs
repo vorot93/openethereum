@@ -36,7 +36,7 @@ use snapshot::{
 	service::{Service, ServiceParams, Guard, Restoration, RestorationParams},
 	PowSnapshot,
 };
-use spec;
+
 use ethcore::{
 	miner,
 	test_helpers::{new_db, new_temp_db, generate_dummy_client_with_spec_and_data, restoration_db_handler}
@@ -75,8 +75,8 @@ fn sends_async_messages() {
 
 	let manifest = ManifestData {
 		version: 2,
-		state_hashes: vec![],
-		block_hashes: vec![],
+		state_hashes: Vec::new(),
+		block_hashes: Vec::new(),
 		state_root: Default::default(),
 		block_number: 0,
 		block_hash: Default::default(),
@@ -84,8 +84,8 @@ fn sends_async_messages() {
 
 	service.begin_restore(manifest);
 	service.abort_restore();
-	service.restore_state_chunk(Default::default(), vec![]);
-	service.restore_block_chunk(Default::default(), vec![]);
+	service.restore_state_chunk(Default::default(), Vec::new());
+	service.restore_block_chunk(Default::default(), Vec::new());
 }
 
 #[test]
@@ -109,7 +109,7 @@ fn cannot_finish_with_invalid_chunks() {
 			state_hashes: state_hashes.clone(),
 			block_hashes: block_hashes.clone(),
 			state_root: H256::zero(),
-			block_number: 100000,
+			block_number: 100_000,
 			block_hash: H256::zero(),
 		},
 		Algorithm::Archive,
@@ -218,7 +218,7 @@ fn guards_delete_folders() {
 		pruning: ::journaldb::Algorithm::Archive,
 		channel: IoChannel::disconnected(),
 		snapshot_root: tempdir.path().to_owned(),
-		client: client,
+		client,
 	};
 
 	let service = Service::new(service_params).unwrap();
@@ -226,8 +226,8 @@ fn guards_delete_folders() {
 
 	let manifest = ManifestData {
 		version: 2,
-		state_hashes: vec![],
-		block_hashes: vec![],
+		state_hashes: Vec::new(),
+		block_hashes: Vec::new(),
 		block_number: 0,
 		block_hash: Default::default(),
 		state_root: Default::default(),
@@ -242,7 +242,7 @@ fn guards_delete_folders() {
 	assert!(!path.join("db").exists());
 	assert!(path.join("temp").exists());
 
-	service.init_restore(manifest.clone(), true).unwrap();
+	service.init_restore(manifest, true).unwrap();
 	assert!(path.exists());
 
 	drop(service);
@@ -305,7 +305,7 @@ fn keep_ancient_blocks() {
 
 	// Initialize the Client
 	let db_config = DatabaseConfig::with_columns(ethcore_db::NUM_COLUMNS);
-	let client_db = new_temp_db(&tempdir.path());
+	let client_db = new_temp_db(tempdir.path());
 	let client2 = Client::new(
 		ClientConfig::default(),
 		&spec,
@@ -394,7 +394,7 @@ fn recover_aborted_recovery() {
 		pruning: ::journaldb::Algorithm::Archive,
 		channel: IoChannel::disconnected(),
 		snapshot_root: tempdir.path().to_owned(),
-		client: client2.clone(),
+		client: client2,
 	};
 
 	let service = Service::new(service_params).unwrap();
@@ -436,7 +436,7 @@ fn recover_aborted_recovery() {
 	fs::remove_dir_all(tempdir.path()).unwrap();
 
 	// And try again!
-	service.init_restore(manifest.clone(), true).unwrap();
+	service.init_restore(manifest, true).unwrap();
 
 	match service.status() {
 		RestorationStatus::Ongoing { block_chunks_done, state_chunks_done, .. } => {

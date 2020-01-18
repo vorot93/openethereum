@@ -52,24 +52,24 @@ pub enum Fail {
 }
 
 impl Fail {
-	fn runtime(err: vm::Error) -> Vec<Fail> {
-		vec![Fail::Runtime(format!("{}", err))]
+	fn runtime(err: vm::Error) -> Vec<Self> {
+		vec![Self::Runtime(format!("{}", err))]
 	}
 
-	fn load(err: io::Error) -> Vec<Fail> {
-		vec![Fail::Load(err)]
+	fn load(err: io::Error) -> Vec<Self> {
+		vec![Self::Load(err)]
 	}
 
-	fn nononformity(kind: SpecNonconformity) -> Vec<Fail> {
-		vec![Fail::Nonconformity(kind)]
+	fn nononformity(kind: SpecNonconformity) -> Vec<Self> {
+		vec![Self::Nonconformity(kind)]
 	}
 }
 
 impl fmt::Display for Fail {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		use self::Fail::*;
-		match *self {
-			Return { ref expected, ref actual } =>
+		match self {
+			Return { expected, actual } =>
 				write!(
 					f,
 					"Expected to return result: 0x{} ({} bytes), but got 0x{} ({} bytes)",
@@ -82,16 +82,16 @@ impl fmt::Display for Fail {
 			UsedGas { expected, actual } =>
 				write!(f, "Expected to use gas: {}, but got actual gas used: {}", expected, actual),
 
-			Runtime(ref s) =>
+			Runtime(s) =>
 				write!(f, "WASM Runtime error: {}", s),
 
-			Load(ref e) =>
+			Load(e) =>
 				write!(f, "Load i/o error: {}", e),
 
-			NoCall(ref call) =>
+			NoCall(call) =>
 				write!(f, "Call not found: {:?}", call),
 
-			StorageMismatch { ref key, ref expected, actual: Some(ref actual)} =>
+			StorageMismatch { key, expected, actual: Some(actual) } =>
 				write!(
 					f,
 					"Storage key {} value mismatch, expected {}, got: {}",
@@ -100,7 +100,7 @@ impl fmt::Display for Fail {
 					actual.as_bytes().to_vec().to_hex(),
 				),
 
-			StorageMismatch { ref key, ref expected, actual: None} =>
+			StorageMismatch { key, expected, actual: None } =>
 				write!(
 					f,
 					"No expected storage value for key {} found, expected {}",
@@ -148,7 +148,7 @@ pub fn run_fixture(fixture: &Fixture) -> Vec<Fail> {
 
 	let mut ext = FakeExt::new().with_wasm();
 	params.code = Some(Arc::new(
-		if let Source::Constructor { ref arguments, ref sender, ref at, .. } = fixture.source {
+		if let Source::Constructor { arguments, sender, at, .. } = &fixture.source {
 			match construct(&mut ext, source, arguments.clone().into(), sender.clone().into(), at.clone().into()) {
 				Ok(code) => code,
 				Err(e) => { return Fail::runtime(e); }
@@ -158,17 +158,17 @@ pub fn run_fixture(fixture: &Fixture) -> Vec<Fail> {
 		}
 	));
 
-	if let Some(ref sender) = fixture.sender {
+	if let Some(sender) = fixture.sender {
 		params.sender = sender.clone().into();
 	}
 
-	if let Some(ref address) = fixture.address {
+	if let Some(address) = fixture.address {
 		if let Source::Constructor { .. } = fixture.source {
 			return Fail::nononformity(SpecNonconformity::Address);
 		}
 
 		params.address = address.clone().into();
-	} else if let Source::Constructor { ref at, .. } = fixture.source {
+	} else if let Source::Constructor { at, .. } = fixture.source {
 		params.address = at.clone().into();
 	}
 
@@ -176,7 +176,7 @@ pub fn run_fixture(fixture: &Fixture) -> Vec<Fail> {
 		params.gas = U256::from(gas_limit);
 	}
 
-	if let Some(ref data) = fixture.payload {
+	if let Some(data) = &fixture.payload {
 		params.data = Some(data.clone().into())
 	}
 
@@ -184,7 +184,7 @@ pub fn run_fixture(fixture: &Fixture) -> Vec<Fail> {
 		params.value = ActionValue::Transfer(value.clone().into())
 	}
 
-	if let Some(ref storage) = fixture.storage {
+	if let Some(storage) = &fixture.storage {
 		for storage_entry in storage.iter() {
 			let key: U256 = storage_entry.key.into();
 			let val: U256 = storage_entry.value.into();
@@ -205,38 +205,38 @@ pub fn run_fixture(fixture: &Fixture) -> Vec<Fail> {
 
 	let mut fails = Vec::new();
 
-	for assert in fixture.asserts.iter() {
-		match *assert {
-			Assert::Return(ref data) => {
-				if &data[..] != &result[..] {
+	for assert in &fixture.asserts {
+		match assert {
+			Assert::Return(data) => {
+				if data[..] != result[..] {
 					fails.push(Fail::Return { expected: (&data[..]).to_vec(), actual: (&result[..]).to_vec() })
 				}
 			},
 			Assert::UsedGas(gas) => {
 				let used_gas = fixture.gas_limit.unwrap_or(0) - gas_left.low_u64();
-				if gas != used_gas {
-					fails.push(Fail::UsedGas { expected: gas, actual: used_gas });
+				if *gas != used_gas {
+					fails.push(Fail::UsedGas { expected: *gas, actual: used_gas });
 				}
 			},
-			Assert::HasCall(ref locator) => {
+			Assert::HasCall(locator) => {
 				let mut found = false;
 
-				for fake_call in ext.calls.iter() {
+				for fake_call in &ext.calls {
 					let mut match_ = true;
-					if let Some(ref data) = locator.data {
+					if let Some(data) = &locator.data {
 						if data.as_ref() != &fake_call.data[..] { match_ = false; }
 					}
 
-					if let Some(ref code_addr) = locator.code_address {
-						if fake_call.code_address.unwrap_or(H160::zero()) != code_addr.clone().into() { match_ = false }
+					if let Some(code_addr) = locator.code_address {
+						if fake_call.code_address.unwrap_or_else(H160::zero) != code_addr.clone().into() { match_ = false }
 					}
 
-					if let Some(ref sender) = locator.sender {
-						if fake_call.sender_address.unwrap_or(H160::zero()) != sender.clone().into() { match_ = false }
+					if let Some(sender) = locator.sender {
+						if fake_call.sender_address.unwrap_or_else(H160::zero) != sender.clone().into() { match_ = false }
 					}
 
-					if let Some(ref receiver) = locator.receiver {
-						if fake_call.receive_address.unwrap_or(H160::zero()) != receiver.clone().into() { match_ = false }
+					if let Some(receiver) = locator.receiver {
+						if fake_call.receive_address.unwrap_or_else(H160::zero) != receiver.clone().into() { match_ = false }
 					}
 
 					if match_ {
@@ -249,7 +249,7 @@ pub fn run_fixture(fixture: &Fixture) -> Vec<Fail> {
 					fails.push(Fail::NoCall(locator.clone()))
 				}
 			},
-			Assert::HasStorage(ref storage_entry) => {
+			Assert::HasStorage(storage_entry) => {
 				let expected_storage_key: H256 = storage_entry.key.clone().into();
 				let expected_storage_value: H256 = storage_entry.value.clone().into();
 				let val = ext.store.get(&expected_storage_key);
@@ -259,7 +259,7 @@ pub fn run_fixture(fixture: &Fixture) -> Vec<Fail> {
 						fails.push(Fail::StorageMismatch {
 							key: expected_storage_key,
 							expected: expected_storage_value,
-							actual: Some(val.clone())
+							actual: Some(*val)
 						})
 					}
 				} else {

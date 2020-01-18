@@ -15,7 +15,7 @@
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Types pertaining to sending messages and finding routes through the chain. Used mostly by the
-//! ChainNotify trait.
+//! `ChainNotify` trait.
 
 use bytes::Bytes;
 use ethereum_types::H256;
@@ -55,8 +55,8 @@ pub struct ChainRoute {
 }
 
 impl<'a> From<&'a [ImportRoute]> for ChainRoute {
-	fn from(import_results: &'a [ImportRoute]) -> ChainRoute {
-		ChainRoute::new(import_results.iter().flat_map(|route| {
+	fn from(import_results: &'a [ImportRoute]) -> Self {
+		Self::new(import_results.iter().flat_map(|route| {
 			route.retracted.iter().map(|h| (*h, ChainRouteType::Retracted))
 				.chain(route.enacted.iter().map(|h| (*h, ChainRouteType::Enacted)))
 		}).collect())
@@ -64,7 +64,7 @@ impl<'a> From<&'a [ImportRoute]> for ChainRoute {
 }
 
 impl ChainRoute {
-	/// Create a new ChainRoute based on block hash and route type pairs.
+	/// Create a new `ChainRoute` based on block hash and route type pairs.
 	pub fn new(route: Vec<(H256, ChainRouteType)>) -> Self {
 		let (enacted, retracted) = Self::to_enacted_retracted(&route);
 
@@ -72,6 +72,7 @@ impl ChainRoute {
 	}
 
 	/// Gather all non-duplicate enacted and retracted blocks.
+	#[allow(clippy::wrong_self_convention)]
 	fn to_enacted_retracted(route: &[(H256, ChainRouteType)]) -> (Vec<H256>, Vec<H256>) {
 		fn map_to_vec(map: Vec<(H256, bool)>) -> Vec<H256> {
 			map.into_iter().map(|(k, _v)| k).collect()
@@ -83,10 +84,10 @@ impl ChainRoute {
 		// will be in the hashmap
 		let map = route.iter().fold(HashMap::new(), |mut map, route| {
 			match &route.1 {
-				&ChainRouteType::Enacted => {
+				ChainRouteType::Enacted => {
 					map.insert(route.0, true);
 				},
-				&ChainRouteType::Retracted => {
+				ChainRouteType::Retracted => {
 					map.insert(route.0, false);
 				},
 			}
@@ -100,6 +101,7 @@ impl ChainRoute {
 	}
 
 	/// Consume route and return the enacted retracted form.
+	#[allow(clippy::missing_const_for_fn)]
 	pub fn into_enacted_retracted(self) -> (Vec<H256>, Vec<H256>) {
 		(self.enacted, self.retracted)
 	}
@@ -149,8 +151,8 @@ impl NewBlocks {
 		proposed: Vec<Bytes>,
 		duration: Duration,
 		has_more_blocks_to_import: bool,
-	) -> NewBlocks {
-		NewBlocks {
+	) -> Self {
+		Self {
 			imported,
 			invalid,
 			route,

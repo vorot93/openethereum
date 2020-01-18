@@ -22,7 +22,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use ansi_term::Colour;
-use blooms_db;
+
 use common_types::{
 	BlockNumber,
 	blockchain_info::BlockChainInfo,
@@ -257,7 +257,7 @@ impl BlockProvider for BlockChain {
 	}
 
 	fn first_block(&self) -> Option<H256> {
-		self.first_block.clone()
+		self.first_block
 	}
 
 	fn best_ancient_block(&self) -> Option<H256> {
@@ -385,13 +385,12 @@ impl BlockProvider for BlockChain {
 			.chunks(128)
 			.flat_map(move |blocks_chunk| {
 				blocks_chunk.into_par_iter()
-					.filter_map(|hash| self.block_number(&hash).map(|r| (r, hash)))
-					.filter_map(|(number, hash)| self.block_receipts(&hash).map(|r| (number, hash, r.receipts)))
-					.filter_map(|(number, hash, receipts)| self.block_body(&hash).map(|ref b| (number, hash, receipts, b.transaction_hashes())))
+					.filter_map(|hash| self.block_number(hash).map(|r| (r, hash)))
+					.filter_map(|(number, hash)| self.block_receipts(hash).map(|r| (number, hash, r.receipts)))
+					.filter_map(|(number, hash, receipts)| self.block_body(hash).map(|ref b| (number, hash, receipts, b.transaction_hashes())))
 					.flat_map(|(number, hash, mut receipts, mut hashes)| {
 						if receipts.len() != hashes.len() {
-							warn!("Block {} ({}) has different number of receipts ({}) to transactions ({}). Database corrupt?", number, hash, receipts.len(), hashes.len());
-							assert!(false);
+							panic!("Block {} ({}) has different number of receipts ({}) to transactions ({}). Database corrupt?", number, hash, receipts.len(), hashes.len());
 						}
 						let mut log_index = receipts.iter().fold(0, |sum, receipt| sum + receipt.logs.len());
 
@@ -422,12 +421,12 @@ impl BlockProvider for BlockChain {
 									})
 							})
 							.filter(|log_entry| matches(&log_entry.entry))
-							.take(limit.unwrap_or(::std::usize::MAX))
+							.take(limit.unwrap_or(usize::max_value()))
 							.collect::<Vec<_>>()
 					})
 					.collect::<Vec<_>>()
 			})
-			.take(limit.unwrap_or(::std::usize::MAX))
+			.take(limit.unwrap_or(usize::max_value()))
 			.collect::<Vec<LocalizedLogEntry>>();
 		logs.reverse();
 		logs
@@ -482,19 +481,16 @@ impl<'a> Iterator for AncestryWithMetadataIter<'a> {
 			let header = self.chain.block_header_data(&self.current)
 				.map(|h| h.decode().expect("Stored block header data is valid RLP; qed"));
 
-			match (details, header) {
-				(Some(details), Some(header)) => {
-					self.current = details.parent;
-					Some(ExtendedHeader {
-						parent_total_difficulty: details.total_difficulty - *header.difficulty(),
-						is_finalized: details.is_finalized,
-						header,
-					})
-				},
-				_ => {
-					self.current = H256::zero();
-					None
-				},
+			if let (Some(details), Some(header)) = (details, header) {
+				self.current = details.parent;
+				Some(ExtendedHeader {
+					parent_total_difficulty: details.total_difficulty - *header.difficulty(),
+					is_finalized: details.is_finalized,
+					header,
+				})
+			} else {
+				self.current = H256::zero();
+				None
 			}
 		}
 	}
@@ -525,7 +521,7 @@ impl<'a> Iterator for EpochTransitionIter<'a> {
 
 			// if there are multiple candidates, at most one will be on the
 			// canon chain.
-			for transition in transitions.candidates.into_iter() {
+			for transition in transitions.candidates {
 				let is_in_canon_chain = self.chain.block_hash(transition.block_number)
 					.map_or(false, |hash| hash == transition.block_hash);
 
@@ -544,11 +540,11 @@ impl<'a> Iterator for EpochTransitionIter<'a> {
 
 impl BlockChain {
 	/// Create new instance of blockchain from given Genesis.
-	pub fn new(config: Config, genesis: &[u8], db: Arc<dyn BlockChainDB>) -> BlockChain {
+	pub fn new(config: Config, genesis: &[u8], db: Arc<dyn BlockChainDB>) -> Self {
 		// 400 is the average size of the key
 		let cache_man = CacheManager::new(config.pref_cache_size, config.max_cache_size, 400);
 
-		let mut bc = BlockChain {
+		let mut bc = Self {
 			first_block: None,
 			best_block: RwLock::new(BestBlock {
 				// BestBlock will be overwritten anyway.
@@ -573,13 +569,12 @@ impl BlockChain {
 		};
 
 		// load best block
-		let best_block_hash = match bc.db.key_value().get(db::COL_EXTRA, b"best")
-			.expect("Low-level database error when fetching 'best' block. Some issue with disk?")
-		{
-			Some(best) => {
+		let best_block_hash = {
+			if let Some(best) = bc.db.key_value().get(db::COL_EXTRA, b"best")
+				.expect("Low-level database error when fetching 'best' block. Some issue with disk?")
+			{
 				H256::from_slice(&best)
-			}
-			None => {
+			} else {
 				// best block does not exist
 				// we need to insert genesis into the cache
 				let block = view!(BlockView, genesis);
@@ -590,7 +585,7 @@ impl BlockChain {
 					number: header.number(),
 					total_difficulty: header.difficulty(),
 					parent: header.parent_hash(),
-					children: vec![],
+					children: Vec::new(),
 					is_finalized: false,
 				};
 
@@ -632,13 +627,12 @@ impl BlockChain {
 			let mut best_ancient = bc.db.key_value().get(db::COL_EXTRA, b"ancient")
 				.expect("Low level database error when fetching 'best ancient' block. Some issue with disk?")
 				.map(|h| H256::from_slice(&h));
-			let best_ancient_number;
-			if best_ancient.is_none() && best_block_number > 1 && bc.block_hash(1).is_none() {
+			let best_ancient_number = if best_ancient.is_none() && best_block_number > 1 && bc.block_hash(1).is_none() {
 				best_ancient = Some(bc.genesis_hash());
-				best_ancient_number = Some(0);
+				Some(0)
 			} else {
-				best_ancient_number = best_ancient.as_ref().and_then(|h| bc.block_number(h));
-			}
+				best_ancient.as_ref().and_then(|h| bc.block_number(h))
+			};
 
 			// binary search for the first block (unless they warp synced their db we'll search back to genesis).
 			match raw_first {
@@ -737,9 +731,9 @@ impl BlockChain {
 	/// route contains a finalized block. This only holds if the two parts (from
 	/// and to) are on different branches, ie. on 2 different forks.
 	pub fn tree_route(&self, from: H256, to: H256) -> Option<TreeRoute> {
-		let mut from_branch = vec![];
+		let mut from_branch = Vec::new();
 		let mut is_from_route_finalized = false;
-		let mut to_branch = vec![];
+		let mut to_branch = Vec::new();
 
 		let mut from_details = self.block_details(&from)?;
 		let mut to_details = self.block_details(&to)?;
@@ -750,13 +744,13 @@ impl BlockChain {
 		while from_details.number > to_details.number {
 			from_branch.push(current_from);
 			is_from_route_finalized = is_from_route_finalized || from_details.is_finalized;
-			current_from = from_details.parent.clone();
+			current_from = from_details.parent;
 			from_details = self.block_details(&from_details.parent)?;
 		}
 
 		while to_details.number > from_details.number {
 			to_branch.push(current_to);
-			current_to = to_details.parent.clone();
+			current_to = to_details.parent;
 			to_details = self.block_details(&to_details.parent)?;
 		}
 
@@ -766,11 +760,11 @@ impl BlockChain {
 		while current_from != current_to {
 			from_branch.push(current_from);
 			is_from_route_finalized = is_from_route_finalized || from_details.is_finalized;
-			current_from = from_details.parent.clone();
+			current_from = from_details.parent;
 			from_details = self.block_details(&from_details.parent)?;
 
 			to_branch.push(current_to);
-			current_to = to_details.parent.clone();
+			current_to = to_details.parent;
 			to_details = self.block_details(&to_details.parent)?;
 		}
 
@@ -819,7 +813,7 @@ impl BlockChain {
 		if let Some(parent_details) = maybe_parent {
 			// parent known to be in chain.
 			let info = BlockInfo {
-				hash: hash,
+				hash,
 				number: block_number,
 				total_difficulty: parent_details.total_difficulty + block_difficulty,
 				location: BlockLocation::CanonChain,
@@ -831,7 +825,7 @@ impl BlockChain {
 				block_receipts: self.prepare_block_receipts_update(receipts, &info),
 				blocks_blooms: self.prepare_block_blooms_update(block.header_view().log_bloom(), &info),
 				transactions_addresses: self.prepare_transaction_addresses_update(block.view().transaction_hashes(), &info),
-				info: info,
+				info,
 				block,
 			}, is_best);
 
@@ -846,7 +840,7 @@ impl BlockChain {
 				.expect("parent total difficulty always supplied for first block in chunk. only first block can have missing parent; qed");
 
 			let info = BlockInfo {
-				hash: hash,
+				hash,
 				number: block_number,
 				total_difficulty: d + block_difficulty,
 				location: BlockLocation::CanonChain,
@@ -870,7 +864,7 @@ impl BlockChain {
 				block_receipts: self.prepare_block_receipts_update(receipts, &info),
 				blocks_blooms: self.prepare_block_blooms_update(block.header_view().log_bloom(), &info),
 				transactions_addresses: self.prepare_transaction_addresses_update(block.view().transaction_hashes(), &info),
-				info: info,
+				info,
 				block,
 			}, is_best);
 			true
@@ -922,8 +916,8 @@ impl BlockChain {
 			// Release the `best_ancient_block` RwLock
 			let target_hash = {
 				let best_ancient_block = self.best_ancient_block.read();
-				let cur_ancient_block = match *best_ancient_block {
-					Some(ref b) => b,
+				let cur_ancient_block = match &*best_ancient_block {
+					Some(b) => b,
 					None => return,
 				};
 
@@ -932,7 +926,7 @@ impl BlockChain {
 					return;
 				}
 
-				cur_ancient_block.hash.clone()
+				cur_ancient_block.hash
 			};
 
 			let mut block_hash = *hash;
@@ -964,7 +958,7 @@ impl BlockChain {
 	}
 
 	/// Set the best ancient block with the given value: private method
-	/// `best_ancient_block` must not be locked, otherwise a DeadLock would occur
+	/// `best_ancient_block` must not be locked, otherwise a deadlock would occur
 	fn set_best_ancient_block(&self, block_number: BlockNumber, block_hash: &H256, batch: &mut DBTransaction) {
 		let mut pending_best_ancient_block = self.pending_best_ancient_block.write();
 		let ancient_number = self.best_ancient_block.read().as_ref().map_or(0, |b| b.number);
@@ -1133,7 +1127,7 @@ impl BlockChain {
 
 		let info = self.block_info(&block.header_view(), route, &extras);
 
-		if let BlockLocation::BranchBecomingCanonChain(ref d) = info.location {
+		if let BlockLocation::BranchBecomingCanonChain(d) = &info.location {
 			info!(target: "reorg", "Reorg to {} ({} {} {})",
 				Colour::Yellow.bold().paint(format!("#{} {}", info.number, info.hash)),
 				Colour::Red.paint(d.retracted.iter().join(" ")),
@@ -1163,25 +1157,24 @@ impl BlockChain {
 		let parent_details = self.block_details(&parent_hash).unwrap_or_else(|| panic!("Invalid parent hash: {:?}", parent_hash));
 
 		BlockInfo {
-			hash: hash,
-			number: number,
+			hash,
+			number,
 			total_difficulty: parent_details.total_difficulty + header.difficulty(),
 			location: match extras.fork_choice {
 				ForkChoice::New => {
 					// On new best block we need to make sure that all ancestors
 					// are moved to "canon chain"
 					// find the route between old best block and the new one
-					match route.blocks.len() {
-						0 => BlockLocation::CanonChain,
-						_ => {
-							let retracted = route.blocks.iter().take(route.index).cloned().collect::<Vec<_>>().into_iter().collect::<Vec<_>>();
-							let enacted = route.blocks.into_iter().skip(route.index).collect::<Vec<_>>();
-							BlockLocation::BranchBecomingCanonChain(BranchBecomingCanonChainData {
-								ancestor: route.ancestor,
-								enacted: enacted,
-								retracted: retracted,
-							})
-						}
+					if route.blocks.is_empty() {
+						BlockLocation::CanonChain
+					} else {
+						let retracted = route.blocks.iter().take(route.index).cloned().collect::<Vec<_>>().into_iter().collect::<Vec<_>>();
+						let enacted = route.blocks.into_iter().skip(route.index).collect::<Vec<_>>();
+						BlockLocation::BranchBecomingCanonChain(BranchBecomingCanonChainData {
+							ancestor: route.ancestor,
+							enacted,
+							retracted,
+						})
 					}
 				},
 				ForkChoice::Old => BlockLocation::Branch,
@@ -1269,7 +1262,7 @@ impl BlockChain {
 		}
 
 		let pending_txs = mem::replace(&mut *pending_write_txs, HashMap::new());
-		let (retracted_txs, enacted_txs) = pending_txs.into_iter().partition::<HashMap<_, _>, _>(|&(_, ref value)| value.is_none());
+		let (retracted_txs, enacted_txs) = pending_txs.into_iter().partition::<HashMap<_, _>, _>(|(_, value)| value.is_none());
 
 		let pending_hashes_keys: Vec<_> = pending_write_hashes.keys().cloned().collect();
 		let enacted_txs_keys: Vec<_> = enacted_txs.keys().cloned().collect();
@@ -1310,7 +1303,7 @@ impl BlockChain {
 	}
 
 	/// Iterator that lists `first` and then all of `first`'s ancestors, by extended header.
-	pub fn ancestry_with_metadata_iter<'a>(&'a self, first: H256) -> AncestryWithMetadataIter {
+	pub fn ancestry_with_metadata_iter(&self, first: H256) -> AncestryWithMetadataIter {
 		AncestryWithMetadataIter {
 			current: if self.is_known(&first) {
 				first
@@ -1362,12 +1355,12 @@ impl BlockChain {
 	fn prepare_block_hashes_update(&self, info: &BlockInfo) -> HashMap<BlockNumber, H256> {
 		let mut block_hashes = HashMap::new();
 
-		match info.location {
+		match &info.location {
 			BlockLocation::Branch => (),
 			BlockLocation::CanonChain => {
 				block_hashes.insert(info.number, info.hash);
 			},
-			BlockLocation::BranchBecomingCanonChain(ref data) => {
+			BlockLocation::BranchBecomingCanonChain(data) => {
 				let ancestor_number = self.block_number(&data.ancestor).expect("Block number of ancestor is always in DB");
 				let start_number = ancestor_number + 1;
 
@@ -1394,8 +1387,8 @@ impl BlockChain {
 			number: info.number,
 			total_difficulty: info.total_difficulty,
 			parent: parent_hash,
-			children: vec![],
-			is_finalized: is_finalized,
+			children: Vec::new(),
+			is_finalized,
 		};
 
 		// write to batch
@@ -1414,7 +1407,7 @@ impl BlockChain {
 
 	/// This function returns modified transaction addresses.
 	fn prepare_transaction_addresses_update(&self, transaction_hashes: Vec<H256>, info: &BlockInfo) -> HashMap<H256, Option<TransactionAddress>> {
-		match info.location {
+		match &info.location {
 			BlockLocation::CanonChain => {
 				transaction_hashes.into_iter()
 					.enumerate()
@@ -1426,7 +1419,7 @@ impl BlockChain {
 					})
 					.collect()
 			},
-			BlockLocation::BranchBecomingCanonChain(ref data) => {
+			BlockLocation::BranchBecomingCanonChain(data) => {
 				let addresses = data.enacted.iter()
 					.flat_map(|hash| {
 						let body = self.block_body(hash).expect("Enacted block must be in database.");
@@ -1465,21 +1458,21 @@ impl BlockChain {
 	/// This functions returns modified blocks blooms.
 	///
 	/// To accelerate blooms lookups, blomms are stored in multiple
-	/// layers (BLOOM_LEVELS, currently 3).
-	/// ChainFilter is responsible for building and rebuilding these layers.
-	/// It returns them in HashMap, where values are Blooms and
-	/// keys are BloomIndexes. BloomIndex represents bloom location on one
+	/// layers (`BLOOM_LEVELS`, currently 3).
+	/// `ChainFilter` is responsible for building and rebuilding these layers.
+	/// It returns them in `HashMap`, where values are Blooms and
+	/// keys are `BloomIndexes`. `BloomIndex` represents bloom location on one
 	/// of these layers.
 	///
 	/// To reduce number of queries to databse, block blooms are stored
-	/// in BlocksBlooms structure which contains info about several
-	/// (BLOOM_INDEX_SIZE, currently 16) consecutive blocks blooms.
+	/// in `BlocksBlooms` structure which contains info about several
+	/// (`BLOOM_INDEX_SIZE`, currently 16) consecutive blocks blooms.
 	///
-	/// Later, BloomIndexer is used to map bloom location on filter layer (BloomIndex)
-	/// to bloom location in database (BlocksBloomLocation).
+	/// Later, `BloomIndexer` is used to map bloom location on filter layer (`BloomIndex`)
+	/// to bloom location in database (`BlocksBloomLocation`).
 	///
 	fn prepare_block_blooms_update(&self, log_bloom: Bloom, info: &BlockInfo) -> Option<(u64, Vec<Bloom>)> {
-		match info.location {
+		match &info.location {
 			BlockLocation::Branch => None,
 			BlockLocation::CanonChain => {
 				if log_bloom.is_zero() {
@@ -1488,7 +1481,7 @@ impl BlockChain {
 					Some((info.number, vec![log_bloom]))
 				}
 			},
-			BlockLocation::BranchBecomingCanonChain(ref data) => {
+			BlockLocation::BranchBecomingCanonChain(data) => {
 				let ancestor_number = self.block_number(&data.ancestor)
 					.expect("hash belongs to an ancestor of an inserted block; this branch is only reachable for normal block insertion (non-ancient); ancestors of an inserted block are always available for normal block insertion; block number of an inserted block is always available; qed");
 				let start_number = ancestor_number + 1;
@@ -1555,13 +1548,13 @@ impl BlockChain {
 		let mut cache_man = self.cache_man.lock();
 		cache_man.collect_garbage(current_size, | ids | {
 			for id in &ids {
-				match *id {
-					CacheId::BlockHeader(ref h) => { block_headers.remove(h); },
-					CacheId::BlockBody(ref h) => { block_bodies.remove(h); },
-					CacheId::BlockDetails(ref h) => { block_details.remove(h); }
-					CacheId::BlockHashes(ref h) => { block_hashes.remove(h); }
-					CacheId::TransactionAddresses(ref h) => { transaction_addresses.remove(h); }
-					CacheId::BlockReceipts(ref h) => { block_receipts.remove(h); }
+				match id {
+					CacheId::BlockHeader(h) => { block_headers.remove(h); },
+					CacheId::BlockBody(h) => { block_bodies.remove(h); },
+					CacheId::BlockDetails(h) => { block_details.remove(h); }
+					CacheId::BlockHashes(h) => { block_hashes.remove(h); }
+					CacheId::TransactionAddresses(h) => { transaction_addresses.remove(h); }
+					CacheId::BlockReceipts(h) => { block_receipts.remove(h); }
 				}
 			}
 
@@ -1596,7 +1589,7 @@ impl BlockChain {
 		// Make sure to call internal methods first to avoid
 		// recursive locking of `best_block`.
 		let first_block_hash = self.first_block();
-		let first_block_number = self.first_block_number().into();
+		let first_block_number = self.first_block_number();
 		let genesis_hash = self.genesis_hash();
 
 		// ensure data consistency by locking everything first
@@ -1702,7 +1695,7 @@ mod tests {
 		};
 
 		bc.insert_block(batch, block, receipts, ExtrasInsert {
-			fork_choice: fork_choice,
+			fork_choice,
 			is_finalized: false,
 		})
 	}
@@ -1718,7 +1711,7 @@ mod tests {
 		assert_eq!(bc.best_block_number(), 0);
 
 		// when
-		insert_block_commit(&db, &bc, first.last().encoded(), vec![], false);
+		insert_block_commit(&db, &bc, first.last().encoded(), Vec::new(), false);
 		assert_eq!(bc.best_block_number(), 0);
 		bc.commit();
 		// NOTE no db.write here (we want to check if best block is cached)
@@ -1745,10 +1738,10 @@ mod tests {
 		assert_eq!(bc.best_block_hash(), genesis_hash);
 		assert_eq!(bc.block_hash(0), Some(genesis_hash));
 		assert_eq!(bc.block_hash(1), None);
-		assert_eq!(bc.block_details(&genesis_hash).unwrap().children, vec![]);
+		assert_eq!(bc.block_details(&genesis_hash).unwrap().children, Vec::new());
 
 		let mut batch = db.key_value().transaction();
-		insert_block_batch(&mut batch, &bc, first.encoded(), vec![]);
+		insert_block_batch(&mut batch, &bc, first.encoded(), Vec::new());
 		db.key_value().write(batch).unwrap();
 		bc.commit();
 
@@ -1774,7 +1767,7 @@ mod tests {
 		let mut batch = db.key_value().transaction();
 		for block in generator {
 			block_hashes.push(block.hash());
-			insert_block_batch(&mut batch, &bc, block.encoded(), vec![]);
+			insert_block_batch(&mut batch, &bc, block.encoded(), Vec::new());
 			bc.commit();
 		}
 		db.key_value().write(batch).unwrap();
@@ -1815,7 +1808,7 @@ mod tests {
 		let bc = new_chain(genesis.last().encoded(), db.clone());
 
 		for b in generator {
-			insert_block(&db, &bc, b.encoded(), vec![]);
+			insert_block(&db, &bc, b.encoded(), Vec::new());
 		}
 
 		assert_eq!(uncle_headers, bc.find_uncle_headers(&b4a_hash, 3).unwrap());
@@ -1851,9 +1844,9 @@ mod tests {
 		let bc = new_chain(genesis.last().encoded(), db.clone());
 
 		let mut batch = db.key_value().transaction();
-		let _ = insert_block_batch(&mut batch, &bc, b1a.last().encoded(), vec![]);
+		let _ = insert_block_batch(&mut batch, &bc, b1a.last().encoded(), Vec::new());
 		bc.commit();
-		let _ = insert_block_batch(&mut batch, &bc, b1b.last().encoded(), vec![]);
+		let _ = insert_block_batch(&mut batch, &bc, b1b.last().encoded(), Vec::new());
 		bc.commit();
 		db.key_value().write(batch).unwrap();
 
@@ -1865,7 +1858,7 @@ mod tests {
 
 		// now let's make forked chain the canon chain
 		let mut batch = db.key_value().transaction();
-		let _ = insert_block_batch(&mut batch, &bc, b2.last().encoded(), vec![]);
+		let _ = insert_block_batch(&mut batch, &bc, b2.last().encoded(), Vec::new());
 		bc.commit();
 		db.key_value().write(batch).unwrap();
 
@@ -1926,9 +1919,9 @@ mod tests {
 		let bc = new_chain(genesis.last().encoded(), db.clone());
 
 		let mut batch = db.key_value().transaction();
-		let _ = insert_block_batch(&mut batch, &bc, b1a.last().encoded(), vec![]);
+		let _ = insert_block_batch(&mut batch, &bc, b1a.last().encoded(), Vec::new());
 		bc.commit();
-		let _ = insert_block_batch(&mut batch, &bc, b1b.last().encoded(), vec![]);
+		let _ = insert_block_batch(&mut batch, &bc, b1b.last().encoded(), Vec::new());
 		bc.commit();
 		db.key_value().write(batch).unwrap();
 
@@ -1944,7 +1937,7 @@ mod tests {
 
 		// now let's make forked chain the canon chain
 		let mut batch = db.key_value().transaction();
-		let _ = insert_block_batch(&mut batch, &bc, b2.last().encoded(), vec![]);
+		let _ = insert_block_batch(&mut batch, &bc, b2.last().encoded(), Vec::new());
 		bc.commit();
 		db.key_value().write(batch).unwrap();
 
@@ -1984,41 +1977,41 @@ mod tests {
 		let bc = new_chain(genesis.last().encoded(), db.clone());
 
 		let mut batch = db.key_value().transaction();
-		let ir1 = insert_block_batch(&mut batch, &bc, b1.last().encoded(), vec![]);
+		let ir1 = insert_block_batch(&mut batch, &bc, b1.last().encoded(), Vec::new());
 		bc.commit();
-		let ir2 = insert_block_batch(&mut batch, &bc, b2.last().encoded(), vec![]);
+		let ir2 = insert_block_batch(&mut batch, &bc, b2.last().encoded(), Vec::new());
 		bc.commit();
-		let ir3b = insert_block_batch(&mut batch, &bc, b3b.last().encoded(), vec![]);
+		let ir3b = insert_block_batch(&mut batch, &bc, b3b.last().encoded(), Vec::new());
 		bc.commit();
 		db.key_value().write(batch).unwrap();
 		assert_eq!(bc.block_hash(3).unwrap(), b3b_hash);
 		let mut batch = db.key_value().transaction();
-		let ir3a = insert_block_batch(&mut batch, &bc, b3a.last().encoded(), vec![]);
+		let ir3a = insert_block_batch(&mut batch, &bc, b3a.last().encoded(), Vec::new());
 		bc.commit();
 		db.key_value().write(batch).unwrap();
 
 		assert_eq!(ir1, ImportRoute {
 			enacted: vec![b1_hash],
-			retracted: vec![],
-			omitted: vec![],
+			retracted: Vec::new(),
+			omitted: Vec::new(),
 		});
 
 		assert_eq!(ir2, ImportRoute {
 			enacted: vec![b2_hash],
-			retracted: vec![],
-			omitted: vec![],
+			retracted: Vec::new(),
+			omitted: Vec::new(),
 		});
 
 		assert_eq!(ir3b, ImportRoute {
 			enacted: vec![b3b_hash],
-			retracted: vec![],
-			omitted: vec![],
+			retracted: Vec::new(),
+			omitted: Vec::new(),
 		});
 
 		assert_eq!(ir3a, ImportRoute {
 			enacted: vec![b3a_hash],
 			retracted: vec![b3b_hash],
-			omitted: vec![],
+			omitted: Vec::new(),
 		});
 
 		assert_eq!(bc.best_block_hash(), best_block_hash);
@@ -2098,7 +2091,7 @@ mod tests {
 			let bc = new_chain(genesis.last().encoded(), db.clone());
 			assert_eq!(bc.best_block_hash(), genesis_hash);
 			let mut batch = db.key_value().transaction();
-			insert_block_batch(&mut batch, &bc, first.last().encoded(), vec![]);
+			insert_block_batch(&mut batch, &bc, first.last().encoded(), Vec::new());
 			db.key_value().write(batch).unwrap();
 			bc.commit();
 			assert_eq!(bc.best_block_hash(), first_hash);
@@ -2120,7 +2113,7 @@ mod tests {
 		let db = new_db();
 		let bc = new_chain(encoded::Block::new(genesis), db.clone());
 		let mut batch = db.key_value().transaction();
-		insert_block_batch(&mut batch, &bc, encoded::Block::new(b1), vec![]);
+		insert_block_batch(&mut batch, &bc, encoded::Block::new(b1), Vec::new());
 		db.key_value().write(batch).unwrap();
 		bc.commit();
 
@@ -2192,8 +2185,8 @@ mod tests {
 			gas_used: 10_000.into(),
 			log_bloom: Default::default(),
 			logs: vec![
-				LogEntry { address: Default::default(), topics: vec![], data: vec![1], },
-				LogEntry { address: Default::default(), topics: vec![], data: vec![2], },
+				LogEntry { address: Default::default(), topics: Vec::new(), data: vec![1], },
+				LogEntry { address: Default::default(), topics: Vec::new(), data: vec![2], },
 			],
 		},
 		Receipt {
@@ -2201,7 +2194,7 @@ mod tests {
 			gas_used: 10_000.into(),
 			log_bloom: Default::default(),
 			logs: vec![
-				LogEntry { address: Default::default(), topics: vec![], data: vec![3], },
+				LogEntry { address: Default::default(), topics: Vec::new(), data: vec![3], },
 			],
 		}]);
 		insert_block(&db, &bc, b2.last().encoded(), vec![
@@ -2210,7 +2203,7 @@ mod tests {
 				gas_used: 10_000.into(),
 				log_bloom: Default::default(),
 				logs: vec![
-					LogEntry { address: Default::default(), topics: vec![], data: vec![4], },
+					LogEntry { address: Default::default(), topics: Vec::new(), data: vec![4], },
 				],
 			}
 		]);
@@ -2220,7 +2213,7 @@ mod tests {
 				gas_used: 10_000.into(),
 				log_bloom: Default::default(),
 				logs: vec![
-					LogEntry { address: Default::default(), topics: vec![], data: vec![5], },
+					LogEntry { address: Default::default(), topics: Vec::new(), data: vec![5], },
 				],
 			}
 		]);
@@ -2233,7 +2226,7 @@ mod tests {
 		// then
 		assert_eq!(logs1, vec![
 			LocalizedLogEntry {
-				entry: LogEntry { address: Default::default(), topics: vec![], data: vec![1] },
+				entry: LogEntry { address: Default::default(), topics: Vec::new(), data: vec![1] },
 				block_hash: b1_hash,
 				block_number: b1_number,
 				transaction_hash: tx_hash1,
@@ -2242,7 +2235,7 @@ mod tests {
 				log_index: 0,
 			},
 			LocalizedLogEntry {
-				entry: LogEntry { address: Default::default(), topics: vec![], data: vec![2] },
+				entry: LogEntry { address: Default::default(), topics: Vec::new(), data: vec![2] },
 				block_hash: b1_hash,
 				block_number: b1_number,
 				transaction_hash: tx_hash1,
@@ -2251,7 +2244,7 @@ mod tests {
 				log_index: 1,
 			},
 			LocalizedLogEntry {
-				entry: LogEntry { address: Default::default(), topics: vec![], data: vec![3] },
+				entry: LogEntry { address: Default::default(), topics: Vec::new(), data: vec![3] },
 				block_hash: b1_hash,
 				block_number: b1_number,
 				transaction_hash: tx_hash2,
@@ -2260,7 +2253,7 @@ mod tests {
 				log_index: 2,
 			},
 			LocalizedLogEntry {
-				entry: LogEntry { address: Default::default(), topics: vec![], data: vec![4] },
+				entry: LogEntry { address: Default::default(), topics: Vec::new(), data: vec![4] },
 				block_hash: b2_hash,
 				block_number: b2_number,
 				transaction_hash: tx_hash3,
@@ -2271,7 +2264,7 @@ mod tests {
 		]);
 		assert_eq!(logs2, vec![
 			LocalizedLogEntry {
-				entry: LogEntry { address: Default::default(), topics: vec![], data: vec![4] },
+				entry: LogEntry { address: Default::default(), topics: Vec::new(), data: vec![4] },
 				block_hash: b2_hash,
 				block_number: b2_number,
 				transaction_hash: tx_hash3,
@@ -2282,7 +2275,7 @@ mod tests {
 		]);
 		assert_eq!(logs3, vec![
 			LocalizedLogEntry {
-				entry: LogEntry { address: Default::default(), topics: vec![], data: vec![5] },
+				entry: LogEntry { address: Default::default(), topics: Vec::new(), data: vec![5] },
 				block_hash: b3_hash,
 				block_number: b3_number,
 				transaction_hash: tx_hash4,
@@ -2303,7 +2296,7 @@ mod tests {
 
 		let genesis = BlockBuilder::genesis();
 		let b1 = genesis.add_block_with(|| BlockOptions {
-			bloom: bloom_b1.clone(),
+			bloom: bloom_b1,
 			difficulty: 9.into(),
 			..Default::default()
 		});
@@ -2321,20 +2314,20 @@ mod tests {
 		assert!(blocks_b1.is_empty());
 		assert!(blocks_b2.is_empty());
 
-		insert_block(&db, &bc, b1.last().encoded(), vec![]);
+		insert_block(&db, &bc, b1.last().encoded(), Vec::new());
 		let blocks_b1 = bc.blocks_with_bloom(Some(&bloom_b1), 0, 5);
 		let blocks_b2 = bc.blocks_with_bloom(Some(&bloom_b2), 0, 5);
 		assert_eq!(blocks_b1, vec![1]);
 		assert!(blocks_b2.is_empty());
 
-		insert_block(&db, &bc, b2.last().encoded(), vec![]);
+		insert_block(&db, &bc, b2.last().encoded(), Vec::new());
 		let blocks_b1 = bc.blocks_with_bloom(Some(&bloom_b1), 0, 5);
 		let blocks_b2 = bc.blocks_with_bloom(Some(&bloom_b2), 0, 5);
 		assert_eq!(blocks_b1, vec![1]);
 		assert_eq!(blocks_b2, vec![2]);
 
 		// hasn't been forked yet
-		insert_block(&db, &bc, b1a.last().encoded(), vec![]);
+		insert_block(&db, &bc, b1a.last().encoded(), Vec::new());
 		let blocks_b1 = bc.blocks_with_bloom(Some(&bloom_b1), 0, 5);
 		let blocks_b2 = bc.blocks_with_bloom(Some(&bloom_b2), 0, 5);
 		let blocks_ba = bc.blocks_with_bloom(Some(&bloom_ba), 0, 5);
@@ -2343,7 +2336,7 @@ mod tests {
 		assert!(blocks_ba.is_empty());
 
 		// fork has happend
-		insert_block(&db, &bc, b2a.last().encoded(), vec![]);
+		insert_block(&db, &bc, b2a.last().encoded(), Vec::new());
 		let blocks_b1 = bc.blocks_with_bloom(Some(&bloom_b1), 0, 5);
 		let blocks_b2 = bc.blocks_with_bloom(Some(&bloom_b2), 0, 5);
 		let blocks_ba = bc.blocks_with_bloom(Some(&bloom_ba), 0, 5);
@@ -2352,7 +2345,7 @@ mod tests {
 		assert_eq!(blocks_ba, vec![1, 2]);
 
 		// fork back
-		insert_block(&db, &bc, b3.last().encoded(), vec![]);
+		insert_block(&db, &bc, b3.last().encoded(), Vec::new());
 		let blocks_b1 = bc.blocks_with_bloom(Some(&bloom_b1), 0, 5);
 		let blocks_b2 = bc.blocks_with_bloom(Some(&bloom_b2), 0, 5);
 		let blocks_ba = bc.blocks_with_bloom(Some(&bloom_ba), 0, 5);
@@ -2378,11 +2371,11 @@ mod tests {
 		let db = new_db();
 		let bc = new_chain(genesis.last().encoded(), db.clone());
 		let mut batch = db.key_value().transaction();
-		bc.insert_unordered_block(&mut batch, b2.last().encoded(), vec![], Some(b1_total_difficulty), false, false);
+		bc.insert_unordered_block(&mut batch, b2.last().encoded(), Vec::new(), Some(b1_total_difficulty), false, false);
 		bc.commit();
-		bc.insert_unordered_block(&mut batch, b3.last().encoded(), vec![], None, true, false);
+		bc.insert_unordered_block(&mut batch, b3.last().encoded(), Vec::new(), None, true, false);
 		bc.commit();
-		bc.insert_unordered_block(&mut batch, b1.last().encoded(), vec![], None, false, false);
+		bc.insert_unordered_block(&mut batch, b1.last().encoded(), Vec::new(), None, false, false);
 		bc.commit();
 		db.key_value().write(batch).unwrap();
 
@@ -2414,12 +2407,12 @@ mod tests {
 			let mut batch = db.key_value().transaction();
 			// create a longer fork
 			for block in generator {
-				insert_block_batch(&mut batch, &bc, block.encoded(), vec![]);
+				insert_block_batch(&mut batch, &bc, block.encoded(), Vec::new());
 				bc.commit();
 			}
 
 			assert_eq!(bc.best_block_number(), 5);
-			insert_block_batch(&mut batch, &bc, uncle.last().encoded(), vec![]);
+			insert_block_batch(&mut batch, &bc, uncle.last().encoded(), Vec::new());
 			db.key_value().write(batch).unwrap();
 			bc.commit();
 		}
@@ -2444,24 +2437,24 @@ mod tests {
 
 			let mut batch = db.key_value().transaction();
 			// create a longer fork
-			for (i, block) in generator.into_iter().enumerate() {
+			for (i, block) in generator.enumerate() {
 
-				insert_block_batch(&mut batch, &bc, block.encoded(), vec![]);
+				insert_block_batch(&mut batch, &bc, block.encoded(), Vec::new());
 				bc.insert_epoch_transition(&mut batch, i as u64, EpochTransition {
 					block_hash: block.hash(),
 					block_number: i as u64 + 1,
-					proof: vec![],
+					proof: Vec::new(),
 				});
 				bc.commit();
 			}
 
 			assert_eq!(bc.best_block_number(), 5);
 
-			insert_block_batch(&mut batch, &bc, uncle.last().encoded(), vec![]);
+			insert_block_batch(&mut batch, &bc, uncle.last().encoded(), Vec::new());
 			bc.insert_epoch_transition(&mut batch, 999, EpochTransition {
 				block_hash: uncle.last().hash(),
 				block_number: 1,
-				proof: vec![],
+				proof: Vec::new(),
 			});
 
 			db.key_value().write(batch).unwrap();
@@ -2499,7 +2492,7 @@ mod tests {
 		bc.insert_epoch_transition(&mut batch, 0, EpochTransition {
 			block_hash: bc.genesis_hash(),
 			block_number: 0,
-			proof: vec![],
+			proof: Vec::new(),
 		});
 		db.key_value().write(batch).unwrap();
 
@@ -2507,7 +2500,7 @@ mod tests {
 		// and a non-canonical fork of 8 from genesis.
 		let fork_hash = {
 			for block in fork_generator {
-				insert_block(&db, &bc, block.encoded(), vec![]);
+				insert_block(&db, &bc, block.encoded(), Vec::new());
 			}
 
 			assert_eq!(bc.best_block_number(), 7);
@@ -2515,7 +2508,7 @@ mod tests {
 		};
 
 		for block in next_generator {
-			insert_block(&db, &bc, block.encoded(), vec![]);
+			insert_block(&db, &bc, block.encoded(), Vec::new());
 		}
 
 		assert_eq!(bc.best_block_number(), 10);
@@ -2524,7 +2517,7 @@ mod tests {
 		bc.insert_epoch_transition(&mut batch, 4, EpochTransition {
 			block_hash: bc.block_hash(4).unwrap(),
 			block_number: 4,
-			proof: vec![],
+			proof: Vec::new(),
 		});
 		db.key_value().write(batch).unwrap();
 
@@ -2573,7 +2566,7 @@ mod tests {
 			let bc = new_chain(genesis.last().encoded(), db.clone());
 			let mut batch = db.key_value().transaction();
 			for block in blocks {
-				insert_block_batch(&mut batch, &bc, block.last().encoded(), vec![]);
+				insert_block_batch(&mut batch, &bc, block.last().encoded(), Vec::new());
 				bc.commit();
 			}
 			db.key_value().write(batch).unwrap();

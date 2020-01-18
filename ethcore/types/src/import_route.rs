@@ -32,34 +32,34 @@ pub struct ImportRoute {
 
 impl ImportRoute {
 	/// Empty import route.
-	pub fn none() -> Self {
-		ImportRoute {
-			retracted: vec![],
-			enacted: vec![],
-			omitted: vec![],
+	pub const fn none() -> Self {
+		Self {
+			retracted: Vec::new(),
+			enacted: Vec::new(),
+			omitted: Vec::new(),
 		}
 	}
 }
 
 impl From<BlockInfo> for ImportRoute {
-	fn from(info: BlockInfo) -> ImportRoute {
+	fn from(info: BlockInfo) -> Self {
 		match info.location {
-			BlockLocation::CanonChain => ImportRoute {
-				retracted: vec![],
+			BlockLocation::CanonChain => Self {
+				retracted: Vec::new(),
 				enacted: vec![info.hash],
-				omitted: vec![],
+				omitted: Vec::new(),
 			},
-			BlockLocation::Branch => ImportRoute {
-				retracted: vec![],
-				enacted: vec![],
+			BlockLocation::Branch => Self {
+				retracted: Vec::new(),
+				enacted: Vec::new(),
 				omitted: vec![info.hash],
 			},
 			BlockLocation::BranchBecomingCanonChain(mut data) => {
 				data.enacted.push(info.hash);
-				ImportRoute {
+				Self {
 					retracted: data.retracted,
 					enacted: data.enacted,
-					omitted: vec![],
+					omitted: Vec::new(),
 				}
 			}
 		}
@@ -75,9 +75,9 @@ mod tests {
 	#[test]
 	fn import_route_none() {
 		assert_eq!(ImportRoute::none(), ImportRoute {
-			enacted: vec![],
-			retracted: vec![],
-			omitted: vec![],
+			enacted: Vec::new(),
+			retracted: Vec::new(),
+			omitted: Vec::new(),
 		});
 	}
 
@@ -91,8 +91,8 @@ mod tests {
 		};
 
 		assert_eq!(ImportRoute::from(info), ImportRoute {
-			retracted: vec![],
-			enacted: vec![],
+			retracted: Vec::new(),
+			enacted: Vec::new(),
 			omitted: vec![BigEndianHash::from_uint(&U256::from(1))],
 		});
 	}
@@ -107,9 +107,9 @@ mod tests {
 		};
 
 		assert_eq!(ImportRoute::from(info), ImportRoute {
-			retracted: vec![],
+			retracted: Vec::new(),
 			enacted: vec![BigEndianHash::from_uint(&U256::from(1))],
-			omitted: vec![],
+			omitted: Vec::new(),
 		});
 	}
 
@@ -129,7 +129,7 @@ mod tests {
 		assert_eq!(ImportRoute::from(info), ImportRoute {
 			retracted: vec![BigEndianHash::from_uint(&U256::from(3)), BigEndianHash::from_uint(&U256::from(4))],
 			enacted: vec![BigEndianHash::from_uint(&U256::from(1)), BigEndianHash::from_uint(&U256::from(2))],
-			omitted: vec![],
+			omitted: Vec::new(),
 		});
 	}
 }

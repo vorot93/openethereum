@@ -105,29 +105,29 @@ impl ShareChangeSession {
 	pub fn new(params: ShareChangeSessionParams) -> Result<Self, Error> {
 		// we can't create sessions right now, because key share is read when session is created, but it can change in previous session
 		let key_version = params.plan.key_version;
-		let consensus_group = if !params.plan.consensus_group.is_empty() { Some(params.plan.consensus_group) } else { None };
-		let version_holders = if !params.plan.version_holders.is_empty() { Some(params.plan.version_holders) } else { None };
-		let new_nodes_map = if !params.plan.new_nodes_map.is_empty() { Some(params.plan.new_nodes_map) } else { None };
+		let consensus_group = if params.plan.consensus_group.is_empty() { None } else { Some(params.plan.consensus_group) };
+		let version_holders = if params.plan.version_holders.is_empty() { None } else { Some(params.plan.version_holders) };
+		let new_nodes_map = if params.plan.new_nodes_map.is_empty() { None } else { Some(params.plan.new_nodes_map) };
 		debug_assert!(new_nodes_map.is_some());
 
 		let is_finished = new_nodes_map.is_none();
-		Ok(ShareChangeSession {
+		Ok(Self {
 			session_id: params.session_id,
 			nonce: params.nonce,
 			meta: params.meta,
 			cluster: params.cluster,
 			key_storage: params.key_storage,
-			key_version: key_version,
-			version_holders: version_holders,
-			consensus_group: consensus_group,
-			new_nodes_map: new_nodes_map,
+			key_version,
+			version_holders,
+			consensus_group,
+			new_nodes_map,
 			share_add_session: None,
-			is_finished: is_finished,
+			is_finished,
 		})
 	}
 
 	/// Is finished?.
-	pub fn is_finished(&self) -> bool {
+	pub const fn is_finished(&self) -> bool {
 		self.is_finished
 	}
 
@@ -148,12 +148,11 @@ impl ShareChangeSession {
 		}
 
 		let change_state_needed = self.share_add_session.as_ref()
-			.map(|share_add_session| {
+			.map_or(Err(Error::InvalidMessage), |share_add_session| {
 				let was_finished = share_add_session.is_finished();
 				share_add_session.process_message(sender, message)
 					.map(|_| share_add_session.is_finished() && !was_finished)
-			})
-			.unwrap_or(Err(Error::InvalidMessage))?;
+			})?;
 		if change_state_needed {
 			self.proceed_to_next_state()?;
 		}
@@ -202,10 +201,10 @@ impl ShareChangeSession {
 
 impl ShareChangeTransport {
 	pub fn new(session_id: SessionId, nonce: u64, cluster: Arc<dyn Cluster>) -> Self {
-		ShareChangeTransport {
-			session_id: session_id,
-			nonce: nonce,
-			cluster: cluster,
+		Self {
+			session_id,
+			nonce,
+			cluster,
 		}
 	}
 }
@@ -236,7 +235,7 @@ impl ShareAddSessionTransport for ShareChangeTransport {
 		self.cluster.send(node, Message::ServersSetChange(ServersSetChangeMessage::ServersSetChangeShareAddMessage(ServersSetChangeShareAddMessage {
 			session: self.session_id.clone().into(),
 			session_nonce: self.nonce,
-			message: message,
+			message,
 		})))
 	}
 }
@@ -248,7 +247,7 @@ pub fn prepare_share_change_session_plan(cluster_nodes: &BTreeSet<NodeId>, thres
 		warn!("cannot add shares to key {} with threshold {}: only {} shares owners are available",
 			key_id, threshold, old_key_version_owners.len());
 		return Ok(ShareChangeSessionPlan {
-			key_version: key_version,
+			key_version,
 			version_holders: Default::default(),
 			consensus_group: Default::default(),
 			new_nodes_map: Default::default(),
@@ -264,8 +263,8 @@ pub fn prepare_share_change_session_plan(cluster_nodes: &BTreeSet<NodeId>, thres
 	// make new nodes map, so that:
 	// all non-isolated old nodes will have their id number preserved
 	// all new nodes will have new id number
-	let mut new_nodes_map = new_nodes_set.difference(&old_key_version_owners)
-		.map(|n| math::generate_random_scalar().map(|id| (n.clone(), Some(id))))
+	let mut new_nodes_map = new_nodes_set.difference(old_key_version_owners)
+		.map(|n| math::generate_random_scalar().map(|id| (*n, Some(id))))
 		.collect::<Result<BTreeMap<_, _>, _>>()?;
 	if !new_nodes_map.is_empty() {
 		for old_node in old_key_version_owners.iter().filter(|n| cluster_nodes.contains(n)) {
@@ -274,22 +273,22 @@ pub fn prepare_share_change_session_plan(cluster_nodes: &BTreeSet<NodeId>, thres
 	}
 
 	// select consensus group if there are some nodes to add
-	let consensus_group = if !new_nodes_map.is_empty() {
-			::std::iter::once(master.clone())
-				.chain(old_key_version_owners.iter()
-					.filter(|n| *n != master && cluster_nodes.contains(*n))
-					.take(threshold)
-					.cloned())
-				.collect()
-		} else {
-			BTreeSet::new()
-		};
+	let consensus_group = if new_nodes_map.is_empty() {
+		BTreeSet::new()
+	} else {
+		std::iter::once(*master)
+			.chain(old_key_version_owners.iter()
+				.filter(|n| *n != master && cluster_nodes.contains(*n))
+				.take(threshold)
+				.cloned())
+			.collect()
+	};
 
 	Ok(ShareChangeSessionPlan {
-		key_version: key_version,
+		key_version,
 		version_holders: old_key_version_owners.clone(),
-		consensus_group: consensus_group,
-		new_nodes_map: new_nodes_map,
+		consensus_group,
+		new_nodes_map,
 	})
 }
 
@@ -308,7 +307,7 @@ mod tests {
 	#[test]
 	fn share_change_plan_creates_empty_plan() {
 		let cluster_nodes: Vec<_> = (0..3).map(|_| math::generate_random_point().unwrap()).collect();
-		let master = cluster_nodes[0].clone();
+		let master = cluster_nodes[0];
 		let old_key_version_owners = cluster_nodes.iter().cloned().collect();
 		let new_nodes_set = cluster_nodes.iter().cloned().collect();
 		let plan = prepare_share_change_session_plan(&cluster_nodes.iter().cloned().collect(),
@@ -320,7 +319,7 @@ mod tests {
 	#[test]
 	fn share_change_plan_adds_new_nodes() {
 		let cluster_nodes: Vec<_> = (0..3).map(|_| math::generate_random_point().unwrap()).collect();
-		let master = cluster_nodes[0].clone();
+		let master = cluster_nodes[0];
 		let old_key_version_owners = cluster_nodes[0..2].iter().cloned().collect();
 		let new_nodes_set = cluster_nodes.iter().cloned().collect();
 		let plan = prepare_share_change_session_plan(&cluster_nodes.iter().cloned().collect(),

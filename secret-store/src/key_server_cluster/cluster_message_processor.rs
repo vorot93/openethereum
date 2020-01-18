@@ -35,7 +35,7 @@ pub trait MessageProcessor: Send + Sync {
 	/// Process single message from the connection.
 	fn process_connection_message(&self, connection: Arc<dyn Connection>, message: Message);
 
-	/// Start servers set change session. This is typically used by ConnectionManager when
+	/// Start servers set change session. This is typically used by `ConnectionManager` when
 	/// it detects that auto-migration session needs to be started.
 	fn start_servers_set_change_session(&self, params: ServersSetChangeParams) -> Result<Arc<AdminSession>, Error>;
 	/// Try to continue session after key version negotiation session is completed.
@@ -43,12 +43,12 @@ pub trait MessageProcessor: Send + Sync {
 		&self,
 		session: Option<Arc<KeyVersionNegotiationSession<KeyVersionNegotiationSessionTransport>>>
 	);
-	/// Maintain active sessions. Typically called by the ConnectionManager at some intervals.
+	/// Maintain active sessions. Typically called by the `ConnectionManager` at some intervals.
 	/// Should cancel stalled sessions and send keep-alive messages for sessions that support it.
 	fn maintain_sessions(&self);
 }
 
-/// Bridge between ConnectionManager and ClusterSessions.
+/// Bridge between `ConnectionManager` and `ClusterSessions`.
 pub struct SessionsMessageProcessor {
 	self_key_pair: Arc<dyn SigningKeyPair>,
 	servers_set_change_creator_connector: Arc<dyn ServersSetChangeSessionCreatorConnector>,
@@ -57,14 +57,14 @@ pub struct SessionsMessageProcessor {
 }
 
 impl SessionsMessageProcessor {
-	/// Create new instance of SessionsMessageProcessor.
+	/// Create new instance of `SessionsMessageProcessor`.
 	pub fn new(
 		self_key_pair: Arc<dyn SigningKeyPair>,
 		servers_set_change_creator_connector: Arc<dyn ServersSetChangeSessionCreatorConnector>,
 		sessions: Arc<ClusterSessions>,
 		connections: Arc<dyn ConnectionProvider>,
 	) -> Self {
-		SessionsMessageProcessor {
+		Self {
 			self_key_pair,
 			servers_set_change_creator_connector,
 			sessions,
@@ -162,7 +162,7 @@ impl SessionsMessageProcessor {
 			Message: IntoSessionId<S::Id>
 	{
 		fn requires_all_connections(message: &Message) -> bool {
-			match *message {
+			match message {
 				Message::Generation(_) => true,
 				Message::ShareAdd(_) => true,
 				Message::ServersSetChange(_) => true,
@@ -177,24 +177,25 @@ impl SessionsMessageProcessor {
 				qed");
 		let is_initialization_message = message.is_initialization_message();
 		let is_delegation_message = message.is_delegation_message();
-		match is_initialization_message || is_delegation_message {
-			false => sessions.get(&session_id, true).ok_or(Error::NoActiveSessionWithId),
-			true => {
-				let creation_data = SC::creation_data_from_message(&message)?;
-				let master = if is_initialization_message {
+		if is_initialization_message || is_delegation_message {
+			let creation_data = SC::creation_data_from_message(message)?;
+			let master = {
+				if is_initialization_message {
 					*sender
 				} else {
 					*self.self_key_pair.public()
-				};
-				let cluster = create_cluster_view(
-					self.self_key_pair.clone(),
-					self.connections.clone(),
-					requires_all_connections(&message))?;
+				}
+			};
+			let cluster = create_cluster_view(
+				self.self_key_pair.clone(),
+				self.connections.clone(),
+				requires_all_connections(message))?;
 
-				let nonce = Some(message.session_nonce().ok_or(Error::InvalidMessage)?);
-				let exclusive = message.is_exclusive_session_message();
-				sessions.insert(cluster, master, session_id, nonce, exclusive, creation_data).map(|s| s.session)
-			},
+			let nonce = Some(message.session_nonce().ok_or(Error::InvalidMessage)?);
+			let exclusive = message.is_exclusive_session_message();
+			sessions.insert(cluster, master, session_id, nonce, exclusive, creation_data).map(|s| s.session)
+		} else {
+			sessions.get(&session_id, true).ok_or(Error::NoActiveSessionWithId)
 		}
 	}
 
@@ -249,7 +250,7 @@ impl MessageProcessor for SessionsMessageProcessor {
 				if is_initialization_message {
 					if let Some(session) = session {
 						self.servers_set_change_creator_connector
-							.set_key_servers_set_change_session(session.clone());
+							.set_key_servers_set_change_session(session);
 					}
 				}
 			},

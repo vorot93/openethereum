@@ -57,11 +57,11 @@ const TWO: U256 = U256([2, 0, 0, 0]);
 const TWO_POW_5: U256 = U256([0x20, 0, 0, 0]);
 const TWO_POW_8: U256 = U256([0x100, 0, 0, 0]);
 const TWO_POW_16: U256 = U256([0x10000, 0, 0, 0]);
-const TWO_POW_24: U256 = U256([0x1000000, 0, 0, 0]);
+const TWO_POW_24: U256 = U256([0x0100_0000, 0, 0, 0]);
 const TWO_POW_64: U256 = U256([0, 0x1, 0, 0]); // 0x1 00000000 00000000
-const TWO_POW_96: U256 = U256([0, 0x100000000, 0, 0]); //0x1 00000000 00000000 00000000
-const TWO_POW_224: U256 = U256([0, 0, 0, 0x100000000]); //0x1 00000000 00000000 00000000 00000000 00000000 00000000 00000000
-const TWO_POW_248: U256 = U256([0, 0, 0, 0x100000000000000]); //0x1 00000000 00000000 00000000 00000000 00000000 00000000 00000000 000000
+const TWO_POW_96: U256 = U256([0, 0x0001_0000_0000, 0, 0]); //0x1 00000000 00000000 00000000
+const TWO_POW_224: U256 = U256([0, 0, 0, 0x0001_0000_0000]); //0x1 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+const TWO_POW_248: U256 = U256([0, 0, 0, 0x0100_0000_0000_0000]); //0x1 00000000 00000000 00000000 00000000 00000000 00000000 00000000 000000
 
 /// Abstraction over raw vector of Bytes. Easier state management of PC.
 struct CodeReader {
@@ -71,8 +71,8 @@ struct CodeReader {
 
 impl CodeReader {
 	/// Create new code reader - starting at position 0.
-	fn new(code: Arc<Bytes>) -> Self {
-		CodeReader {
+	const fn new(code: Arc<Bytes>) -> Self {
+		Self {
 			code,
 			position: 0,
 		}
@@ -106,10 +106,10 @@ enum InstructionResult<Gas> {
 		apply: bool,
 	},
 	StopExecution,
-	Trap(TrapKind),
+	Trap(Box<TrapKind>),
 }
 
-/// ActionParams without code, so that it can be feed into CodeReader.
+/// `ActionParams` without code, so that it can be feed into `CodeReader`.
 #[derive(Debug)]
 struct InterpreterParams {
 	/// Address of currently executed code.
@@ -141,7 +141,7 @@ struct InterpreterParams {
 
 impl From<ActionParams> for InterpreterParams {
 	fn from(params: ActionParams) -> Self {
-		InterpreterParams {
+		Self {
 			code_address: params.code_address,
 			code_hash: params.code_hash,
 			code_version: params.code_version,
@@ -166,7 +166,7 @@ pub enum InterpreterResult {
 	Done(vm::Result<GasLeft>),
 	/// The VM can continue to run.
 	Continue,
-	Trap(TrapKind),
+	Trap(Box<TrapKind>),
 }
 
 /// Intepreter EVM implementation
@@ -195,7 +195,7 @@ impl<Cost: 'static + CostType> vm::Exec for Interpreter<Cost> {
 			match result {
 				InterpreterResult::Continue => {},
 				InterpreterResult::Done(value) => return Ok(value),
-				InterpreterResult::Trap(trap) => match trap {
+				InterpreterResult::Trap(trap) => match *trap {
 					TrapKind::Call(params) => {
 						return Err(TrapError::Call(params, self));
 					},
@@ -267,15 +267,15 @@ impl<Cost: 'static + CostType> vm::ResumeCreate for Interpreter<Cost> {
 
 impl<Cost: CostType> Interpreter<Cost> {
 	/// Create a new `Interpreter` instance with shared cache.
-	pub fn new(mut params: ActionParams, cache: Arc<SharedCache>, schedule: &Schedule, depth: usize) -> Interpreter<Cost> {
+	pub fn new(mut params: ActionParams, cache: Arc<SharedCache>, schedule: &Schedule, depth: usize) -> Self {
 		let reader = CodeReader::new(params.code.take().expect("VM always called with code; qed"));
 		let params = InterpreterParams::from(params);
 		let informant = informant::EvmInformant::new(depth);
 		let valid_jump_destinations = None;
-		let gasometer = Cost::from_u256(params.gas).ok().map(|gas| Gasometer::<Cost>::new(gas));
+		let gasometer = Cost::from_u256(params.gas).ok().map(Gasometer::<Cost>::new);
 		let stack = VecStack::with_capacity(schedule.stack_limit, U256::zero());
 
-		Interpreter {
+		Self {
 			cache, params, reader, informant,
 			valid_jump_destinations, gasometer, stack,
 			done: false,
@@ -311,7 +311,7 @@ impl<Cost: CostType> Interpreter<Cost> {
 			self.step_inner(ext)
 		};
 
-		if let &InterpreterResult::Done(_) = &result {
+		if let InterpreterResult::Done(_) = &result {
 			self.done = true;
 			self.informant.done();
 		}
@@ -321,9 +321,10 @@ impl<Cost: CostType> Interpreter<Cost> {
 	/// Inner helper function for step.
 	#[inline(always)]
 	fn step_inner(&mut self, ext: &mut dyn vm::Ext) -> InterpreterResult {
-		let result = match self.resume_result.take() {
-			Some(result) => result,
-			None => {
+		let result = {
+			if let Some(result) = self.resume_result.take() {
+				result
+			} else {
 				let opcode = self.reader.code[self.reader.position];
 				let instruction = Instruction::from_u8(opcode);
 				self.reader.position += 1;
@@ -368,6 +369,8 @@ impl<Cost: CostType> Interpreter<Cost> {
 
 				// Execute instruction
 				let current_gas = self.gasometer.as_mut().expect(GASOMETER_PROOF).current_gas;
+
+				#[allow(clippy::let_and_return)]
 				let result = match self.exec_instruction(
 					current_gas, ext, instruction, requirements.provide_gas
 				) {
@@ -381,15 +384,15 @@ impl<Cost: CostType> Interpreter<Cost> {
 				};
 				evm_debug!({ self.informant.after_instruction(instruction) });
 				result
-			},
+			}
 		};
 
 		if let InstructionResult::Trap(trap) = result {
 			return InterpreterResult::Trap(trap);
 		}
 
-		if let InstructionResult::UnusedGas(ref gas) = result {
-			self.gasometer.as_mut().expect(GASOMETER_PROOF).current_gas = self.gasometer.as_mut().expect(GASOMETER_PROOF).current_gas + *gas;
+		if let InstructionResult::UnusedGas(gas) = result {
+			self.gasometer.as_mut().expect(GASOMETER_PROOF).current_gas = self.gasometer.as_mut().expect(GASOMETER_PROOF).current_gas + gas;
 		}
 
 		if self.do_trace {
@@ -495,7 +498,7 @@ impl<Cost: CostType> Interpreter<Cost> {
 		stack: &dyn Stack<U256>
 	) -> Option<(U256, U256)> {
 		match instruction {
-			instructions::SSTORE => Some((stack.peek(0).clone(), stack.peek(1).clone())),
+			instructions::SSTORE => Some((*stack.peek(0), *stack.peek(1))),
 			_ => None,
 		}
 	}
@@ -569,7 +572,7 @@ impl<Cost: CostType> Interpreter<Cost> {
 						Ok(InstructionResult::Ok)
 					},
 					Err(trap) => {
-						Ok(InstructionResult::Trap(trap))
+						Ok(InstructionResult::Trap(Box::new(trap)))
 					},
 				};
 			},
@@ -595,9 +598,10 @@ impl<Cost: CostType> Interpreter<Cost> {
 				let out_size = self.stack.pop_back();
 
 				// Add stipend (only CALL|CALLCODE when value > 0)
-				let call_gas = call_gas.overflow_add(value.map_or_else(|| Cost::from(0), |val| match val.is_zero() {
-					false => Cost::from(ext.schedule().call_stipend),
-					true => Cost::from(0),
+				let call_gas = call_gas.overflow_add(value.map_or_else(|| Cost::from(0), |val| if val.is_zero() {
+					Cost::from(0)
+				} else {
+					Cost::from(ext.schedule().call_stipend)
 				})).0;
 
 				// Get sender & receive addresses, check if we have balance
@@ -658,7 +662,7 @@ impl<Cost: CostType> Interpreter<Cost> {
 						Ok(InstructionResult::Ok)
 					},
 					Err(trap) => {
-						Ok(InstructionResult::Trap(trap))
+						Ok(InstructionResult::Trap(Box::new(trap)))
 					},
 				};
 			},
@@ -666,13 +670,13 @@ impl<Cost: CostType> Interpreter<Cost> {
 				let init_off = self.stack.pop_back();
 				let init_size = self.stack.pop_back();
 
-				return Ok(InstructionResult::StopExecutionNeedsReturn {gas: gas, init_off: init_off, init_size: init_size, apply: true})
+				return Ok(InstructionResult::StopExecutionNeedsReturn {gas, init_off, init_size, apply: true})
 			},
 			instructions::REVERT => {
 				let init_off = self.stack.pop_back();
 				let init_size = self.stack.pop_back();
 
-				return Ok(InstructionResult::StopExecutionNeedsReturn {gas: gas, init_off: init_off, init_size: init_size, apply: false})
+				return Ok(InstructionResult::StopExecutionNeedsReturn {gas, init_off, init_size, apply: false})
 			},
 			instructions::STOP => {
 				return Ok(InstructionResult::StopExecution);
@@ -707,7 +711,7 @@ impl<Cost: CostType> Interpreter<Cost> {
 			},
 			instructions::MLOAD => {
 				let word = self.mem.read(self.stack.pop_back());
-				self.stack.push(U256::from(word));
+				self.stack.push(word);
 			},
 			instructions::MSTORE => {
 				let offset = self.stack.pop_back();
@@ -742,11 +746,9 @@ impl<Cost: CostType> Interpreter<Cost> {
 				if ext.schedule().eip1283 {
 					let original_val = ext.initial_storage_at(&address)?.into_uint();
 					gasometer::handle_eip1283_sstore_clears_refund(ext, &original_val, &current_val, &val);
-				} else {
-					if !current_val.is_zero() && val.is_zero() {
-						let sstore_clears_schedule = ext.schedule().sstore_refund_gas;
-						ext.add_sstore_refund(sstore_clears_schedule);
-					}
+				} else if !current_val.is_zero() && val.is_zero() {
+					let sstore_clears_schedule = ext.schedule().sstore_refund_gas;
+					ext.add_sstore_refund(sstore_clears_schedule);
 				}
 				ext.set_storage(address, BigEndianHash::from_uint(&val))?;
 			},
@@ -757,10 +759,10 @@ impl<Cost: CostType> Interpreter<Cost> {
 				self.stack.push(gas.as_u256());
 			},
 			instructions::ADDRESS => {
-				self.stack.push(address_to_u256(self.params.address.clone()));
+				self.stack.push(address_to_u256(self.params.address));
 			},
 			instructions::ORIGIN => {
-				self.stack.push(address_to_u256(self.params.origin.clone()));
+				self.stack.push(address_to_u256(self.params.origin));
 			},
 			instructions::BALANCE => {
 				let address = u256_to_address(&self.stack.pop_back());
@@ -768,7 +770,7 @@ impl<Cost: CostType> Interpreter<Cost> {
 				self.stack.push(balance);
 			},
 			instructions::CALLER => {
-				self.stack.push(address_to_u256(self.params.sender.clone()));
+				self.stack.push(address_to_u256(self.params.sender));
 			},
 			instructions::CALLVALUE => {
 				self.stack.push(match self.params.value {
@@ -782,8 +784,8 @@ impl<Cost: CostType> Interpreter<Cost> {
 				if let Some(data) = self.params.data.as_ref() {
 					let bound = cmp::min(data.len(), max);
 					if id < bound && big_id < U256::from(data.len()) {
-						let mut v = [0u8; 32];
-						v[0..bound-id].clone_from_slice(&data[id..bound]);
+						let mut v = [0_u8; 32];
+						v[0..bound-id].copy_from_slice(&data[id..bound]);
 						self.stack.push(U256::from(&v[..]))
 					} else {
 						self.stack.push(U256::zero())
@@ -793,7 +795,7 @@ impl<Cost: CostType> Interpreter<Cost> {
 				}
 			},
 			instructions::CALLDATASIZE => {
-				self.stack.push(U256::from(self.params.data.as_ref().map_or(0, |l| l.len())));
+				self.stack.push(U256::from(self.params.data.as_ref().map_or(0, Vec::len)));
 			},
 			instructions::CODESIZE => {
 				self.stack.push(U256::from(self.reader.len()));
@@ -812,7 +814,7 @@ impl<Cost: CostType> Interpreter<Cost> {
 				self.stack.push(hash.into_uint());
 			},
 			instructions::CALLDATACOPY => {
-				Self::copy_data_to_memory(&mut self.mem, &mut self.stack, &self.params.data.as_ref().map_or_else(|| &[] as &[u8], |d| &*d as &[u8]));
+				Self::copy_data_to_memory(&mut self.mem, &mut self.stack, self.params.data.as_ref().map_or_else(|| &[] as &[u8], |d| &*d as &[u8]));
 			},
 			instructions::RETURNDATACOPY => {
 				{
@@ -834,7 +836,7 @@ impl<Cost: CostType> Interpreter<Cost> {
 				Self::copy_data_to_memory(
 					&mut self.mem,
 					&mut self.stack,
-					code.as_ref().map(|c| &(*c)[..]).unwrap_or(&[])
+					code.as_ref().map_or(&[], |c| &(*c)[..])
 				);
 			},
 			instructions::GASPRICE => {
@@ -846,7 +848,7 @@ impl<Cost: CostType> Interpreter<Cost> {
 				self.stack.push(block_hash.into_uint());
 			},
 			instructions::COINBASE => {
-				self.stack.push(address_to_u256(ext.env_info().author.clone()));
+				self.stack.push(address_to_u256(ext.env_info().author));
 			},
 			instructions::TIMESTAMP => {
 				self.stack.push(U256::from(ext.env_info().timestamp));
@@ -874,7 +876,7 @@ impl<Cost: CostType> Interpreter<Cost> {
 			instructions::DUP9 | instructions::DUP10 | instructions::DUP11 | instructions::DUP12 |
 			instructions::DUP13 | instructions::DUP14 | instructions::DUP15 | instructions::DUP16 => {
 				let position = instruction.dup_position().expect("dup_position always return some for DUP* instructions");
-				let val = self.stack.peek(position).clone();
+				let val = *self.stack.peek(position);
 				self.stack.push(val);
 			},
 			instructions::SWAP1 | instructions::SWAP2 | instructions::SWAP3 | instructions::SWAP4 |
@@ -905,7 +907,9 @@ impl<Cost: CostType> Interpreter<Cost> {
 			instructions::DIV => {
 				let a = self.stack.pop_back();
 				let b = self.stack.pop_back();
-				self.stack.push(if !b.is_zero() {
+				self.stack.push(if b.is_zero() {
+					U256::zero()
+				} else {
 					match b {
 						ONE => a,
 						TWO => a >> 1,
@@ -919,17 +923,15 @@ impl<Cost: CostType> Interpreter<Cost> {
 						TWO_POW_248 => a >> 248,
 						_ => a / b,
 					}
-				} else {
-					U256::zero()
 				});
 			},
 			instructions::MOD => {
 				let a = self.stack.pop_back();
 				let b = self.stack.pop_back();
-				self.stack.push(if !b.is_zero() {
-					a % b
-				} else {
+				self.stack.push(if b.is_zero() {
 					U256::zero()
+				} else {
+					a % b
 				});
 			},
 			instructions::SDIV => {
@@ -953,11 +955,11 @@ impl<Cost: CostType> Interpreter<Cost> {
 				let (a, sign_a) = get_and_reset_sign(ua);
 				let b = get_and_reset_sign(ub).0;
 
-				self.stack.push(if !b.is_zero() {
+				self.stack.push(if b.is_zero() {
+					U256::zero()
+				} else {
 					let c = a % b;
 					set_sign(c, sign_a)
-				} else {
-					U256::zero()
 				});
 			},
 			instructions::EXP => {
@@ -1027,9 +1029,10 @@ impl<Cost: CostType> Interpreter<Cost> {
 			instructions::BYTE => {
 				let word = self.stack.pop_back();
 				let val = self.stack.pop_back();
-				let byte = match word < U256::from(32) {
-					true => (val >> (8 * (31 - word.low_u64() as usize))) & U256::from(0xff),
-					false => U256::zero()
+				let byte = if word < U256::from(32) {
+					(val >> (8 * (31 - word.low_u64() as usize))) & U256::from(0xff)
+				} else {
+					U256::zero()
 				};
 				self.stack.push(byte);
 			},
@@ -1038,15 +1041,15 @@ impl<Cost: CostType> Interpreter<Cost> {
 				let b = self.stack.pop_back();
 				let c = self.stack.pop_back();
 
-				self.stack.push(if !c.is_zero() {
+				self.stack.push(if c.is_zero() {
+					U256::zero()
+				} else {
 					let a_512 = U512::from(a);
 					let b_512 = U512::from(b);
 					let c_512 = U512::from(c);
 					let res = a_512 + b_512;
 					let x = res % c_512;
 					U256::try_from(x).expect("U512 % U256 fits U256; qed")
-				} else {
-					U256::zero()
 				});
 			},
 			instructions::MULMOD => {
@@ -1054,15 +1057,15 @@ impl<Cost: CostType> Interpreter<Cost> {
 				let b = self.stack.pop_back();
 				let c = self.stack.pop_back();
 
-				self.stack.push(if !c.is_zero() {
+				self.stack.push(if c.is_zero() {
+					U256::zero()
+				} else {
 					let a_512 = U512::from(a);
 					let b_512 = U512::from(b);
 					let c_512 = U512::from(c);
 					let res = a_512 * b_512;
 					let x = res % c_512;
 					U256::try_from(x).expect("U512 % U256 fits U256; qed")
-				} else {
-					U256::zero()
 				});
 			},
 			instructions::SIGNEXTEND => {
@@ -1110,7 +1113,7 @@ impl<Cost: CostType> Interpreter<Cost> {
 				// We cannot use get_and_reset_sign/set_sign here, because the rounding looks different.
 
 				const CONST_256: U256 = U256([256, 0, 0, 0]);
-				const CONST_HIBIT: U256 = U256([0, 0, 0, 0x8000000000000000]);
+				const CONST_HIBIT: U256 = U256([0, 0, 0, 0x8000_0000_0000_0000]);
 
 				let shift = self.stack.pop_back();
 				let value = self.stack.pop_back();
@@ -1142,19 +1145,18 @@ impl<Cost: CostType> Interpreter<Cost> {
 		let size = stack.pop_back();
 		let source_size = U256::from(source.len());
 
-		let output_end = match source_offset > source_size || size > source_size || source_offset + size > source_size {
-			true => {
-				let zero_slice = if source_offset > source_size {
-					mem.writeable_slice(dest_offset, size)
-				} else {
-					mem.writeable_slice(dest_offset + source_size - source_offset, source_offset + size - source_size)
-				};
-				for i in zero_slice.iter_mut() {
-					*i = 0;
-				}
-				source.len()
-			},
-			false => (size.low_u64() + source_offset.low_u64()) as usize
+		let output_end = if source_offset > source_size || size > source_size || source_offset + size > source_size {
+			let zero_slice = if source_offset > source_size {
+				mem.writeable_slice(dest_offset, size)
+			} else {
+				mem.writeable_slice(dest_offset + source_size - source_offset, source_offset + size - source_size)
+			};
+			for i in zero_slice.iter_mut() {
+				*i = 0;
+			}
+			source.len()
+		} else {
+			(size.low_u64() + source_offset.low_u64()) as usize
 		};
 
 		if source_offset < source_size {

@@ -37,7 +37,7 @@ impl SignerService {
 	/// Creates new Signer Service given function to generate new tokens.
 	pub fn new<F>(new_token: F, is_enabled: bool) -> Self
 		where F: Fn() -> Result<String, String> + Send + Sync + 'static {
-		SignerService {
+		Self {
 			queue: Arc::new(ConfirmationsQueue::default()),
 			generate_new_token: Box::new(new_token),
 			is_enabled,
@@ -55,14 +55,14 @@ impl SignerService {
 	}
 
 	/// Returns true if Signer is enabled.
-	pub fn is_enabled(&self) -> bool {
+	pub const fn is_enabled(&self) -> bool {
 		self.is_enabled
 	}
 
 	#[cfg(test)]
 	/// Creates new Signer Service for tests.
 	pub fn new_test(is_enabled: bool) -> Self {
-		SignerService::new(|| Ok("new_token".into()), is_enabled)
+		Self::new(|| Ok("new_token".into()), is_enabled)
 	}
 }
 

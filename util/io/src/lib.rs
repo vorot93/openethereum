@@ -28,31 +28,29 @@
 //!
 //! #[derive(Clone)]
 //! struct MyMessage {
-//! 	data: u32
+//!     data: u32
 //! }
 //!
 //! impl IoHandler<MyMessage> for MyHandler {
-//! 	fn initialize(&self, io: &IoContext<MyMessage>) {
-//!			io.register_timer(0, Duration::from_secs(1)).unwrap();
-//!		}
+//!     fn initialize(&self, io: &IoContext<MyMessage>) {
+//!         io.register_timer(0, Duration::from_secs(1)).unwrap();
+//!     }
 //!
-//!		fn timeout(&self, _io: &IoContext<MyMessage>, timer: TimerToken) {
-//!			println!("Timeout {}", timer);
-//!		}
+//!     fn timeout(&self, _io: &IoContext<MyMessage>, timer: TimerToken) {
+//!         println!("Timeout {}", timer);
+//!     }
 //!
-//!		fn message(&self, _io: &IoContext<MyMessage>, message: &MyMessage) {
-//!			println!("Message {}", message.data);
-//!		}
+//!     fn message(&self, _io: &IoContext<MyMessage>, message: &MyMessage) {
+//!         println!("Message {}", message.data);
+//!     }
 //! }
 //!
-//! fn main () {
-//! 	let mut service = IoService::<MyMessage>::start().expect("Error creating network service");
-//! 	service.register_handler(Arc::new(MyHandler)).unwrap();
+//! let mut service = IoService::<MyMessage>::start().expect("Error creating network service");
+//! service.register_handler(Arc::new(MyHandler)).unwrap();
 //!
-//! 	// Wait for quit condition
-//! 	// ...
-//! 	// Drop the service
-//! }
+//! // Wait for quit condition
+//! // ...
+//! // Drop the service
 //! ```
 //!
 //! # Mio vs non-mio
@@ -68,6 +66,54 @@
 
 //TODO: use Poll from mio
 #![allow(deprecated)]
+
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
 
 #[cfg(feature = "mio")]
 mod service_mio;
@@ -104,10 +150,9 @@ impl fmt::Display for IoError {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		// just defer to the std implementation for now.
 		// we can refine the formatting when more variants are added.
-		match *self {
+		match self {
 			#[cfg(feature = "mio")]
-			IoError::Mio(ref std_err) => std_err.fmt(f),
-			IoError::StdIo(ref std_err) => std_err.fmt(f),
+			Self::Mio(std_err) | Self::StdIo(std_err) => std_err.fmt(f),
 		}
 	}
 }
@@ -119,15 +164,15 @@ impl error::Error for IoError {
 }
 
 impl From<::std::io::Error> for IoError {
-	fn from(err: ::std::io::Error) -> IoError {
-		IoError::StdIo(err)
+	fn from(err: ::std::io::Error) -> Self {
+		Self::StdIo(err)
 	}
 }
 
 #[cfg(feature = "mio")]
 impl<Message> From<NotifyError<service_mio::IoMessage<Message>>> for IoError where Message: Send {
-	fn from(_err: NotifyError<service_mio::IoMessage<Message>>) -> IoError {
-		IoError::Mio(::std::io::Error::new(::std::io::ErrorKind::ConnectionAborted, "Network IO notification error"))
+	fn from(_err: NotifyError<service_mio::IoMessage<Message>>) -> Self {
+		Self::Mio(::std::io::Error::new(::std::io::ErrorKind::ConnectionAborted, "Network IO notification error"))
 	}
 }
 

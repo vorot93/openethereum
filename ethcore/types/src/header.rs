@@ -88,8 +88,8 @@ pub struct Header {
 }
 
 impl PartialEq for Header {
-	fn eq(&self, c: &Header) -> bool {
-		if let (&Some(ref h1), &Some(ref h2)) = (&self.hash, &c.hash) {
+	fn eq(&self, c: &Self) -> bool {
+		if let (&Some(h1), &Some(h2)) = (&self.hash, &c.hash) {
 			if h1 == h2 {
 				return true
 			}
@@ -114,7 +114,14 @@ impl PartialEq for Header {
 
 impl Default for Header {
 	fn default() -> Self {
-		Header {
+		Self::new()
+	}
+}
+
+impl Header {
+	/// Create a new, default-valued, header.
+	pub fn new() -> Self {
+		Self {
 			parent_hash: H256::zero(),
 			timestamp: 0,
 			number: 0,
@@ -122,65 +129,60 @@ impl Default for Header {
 
 			transactions_root: KECCAK_NULL_RLP,
 			uncles_hash: KECCAK_EMPTY_LIST_RLP,
-			extra_data: vec![],
+			extra_data: Vec::new(),
 
 			state_root: KECCAK_NULL_RLP,
 			receipts_root: KECCAK_NULL_RLP,
-			log_bloom: Bloom::default(),
-			gas_used: U256::default(),
-			gas_limit: U256::default(),
+			log_bloom: Bloom::zero(),
+			gas_used: U256::zero(),
+			gas_limit: U256::zero(),
 
-			difficulty: U256::default(),
-			seal: vec![],
+			difficulty: U256::zero(),
+			seal: Vec::new(),
 			hash: None,
 		}
 	}
-}
 
-impl Header {
-	/// Create a new, default-valued, header.
-	pub fn new() -> Self { Self::default() }
+	/// Get the `parent_hash` field of the header.
+	pub const fn parent_hash(&self) -> &H256 { &self.parent_hash }
 
-	/// Get the parent_hash field of the header.
-	pub fn parent_hash(&self) -> &H256 { &self.parent_hash }
+	/// Get the `timestamp` field of the header.
+	pub const fn timestamp(&self) -> u64 { self.timestamp }
 
-	/// Get the timestamp field of the header.
-	pub fn timestamp(&self) -> u64 { self.timestamp }
+	/// Get the `number` field of the header.
+	pub const fn number(&self) -> BlockNumber { self.number }
 
-	/// Get the number field of the header.
-	pub fn number(&self) -> BlockNumber { self.number }
+	/// Get the `author` field of the header.
+	pub const fn author(&self) -> &Address { &self.author }
 
-	/// Get the author field of the header.
-	pub fn author(&self) -> &Address { &self.author }
+	/// Get the `extra_data` field of the header.
+	pub const fn extra_data(&self) -> &Bytes { &self.extra_data }
 
-	/// Get the extra data field of the header.
-	pub fn extra_data(&self) -> &Bytes { &self.extra_data }
+	/// Get the `state_root` field of the header.
+	pub const fn state_root(&self) -> &H256 { &self.state_root }
 
-	/// Get the state root field of the header.
-	pub fn state_root(&self) -> &H256 { &self.state_root }
+	/// Get the `receipts_root` field of the header.
+	pub const fn receipts_root(&self) -> &H256 { &self.receipts_root }
 
-	/// Get the receipts root field of the header.
-	pub fn receipts_root(&self) -> &H256 { &self.receipts_root }
+	/// Get the `log_bloom` field of the header.
+	pub const fn log_bloom(&self) -> &Bloom { &self.log_bloom }
 
-	/// Get the log bloom field of the header.
-	pub fn log_bloom(&self) -> &Bloom { &self.log_bloom }
+	/// Get the `transactions_root` field of the header.
+	pub const fn transactions_root(&self) -> &H256 { &self.transactions_root }
 
-	/// Get the transactions root field of the header.
-	pub fn transactions_root(&self) -> &H256 { &self.transactions_root }
+	/// Get the `uncles_hash` field of the header.
+	pub const fn uncles_hash(&self) -> &H256 { &self.uncles_hash }
 
-	/// Get the uncles hash field of the header.
-	pub fn uncles_hash(&self) -> &H256 { &self.uncles_hash }
+	/// Get the `gas_used` field of the header.
+	pub const fn gas_used(&self) -> &U256 { &self.gas_used }
 
-	/// Get the gas used field of the header.
-	pub fn gas_used(&self) -> &U256 { &self.gas_used }
+	/// Get the `gas_limit` field of the header.
+	pub const fn gas_limit(&self) -> &U256 { &self.gas_limit }
 
-	/// Get the gas limit field of the header.
-	pub fn gas_limit(&self) -> &U256 { &self.gas_limit }
+	/// Get the `difficulty` field of the header.
+	pub const fn difficulty(&self) -> &U256 { &self.difficulty }
 
-	/// Get the difficulty field of the header.
-	pub fn difficulty(&self) -> &U256 { &self.difficulty }
-
-	/// Get the seal field of the header.
+	/// Get the `seal` field of the header.
 	pub fn seal(&self) -> &[Bytes] { &self.seal }
 
 	/// Get the seal field with RLP-decoded values as bytes.
@@ -329,7 +331,7 @@ fn change_field<T>(hash: &mut Option<H256>, field: &mut T, value: T) where T: Pa
 
 impl Decodable for Header {
 	fn decode(r: &Rlp) -> Result<Self, DecoderError> {
-		let mut blockheader = Header {
+		let mut blockheader = Self {
 			parent_hash: r.val_at(0)?,
 			uncles_hash: r.val_at(1)?,
 			author: r.val_at(2)?,
@@ -343,7 +345,7 @@ impl Decodable for Header {
 			gas_used: r.val_at(10)?,
 			timestamp: r.val_at(11)?,
 			extra_data: r.val_at(12)?,
-			seal: vec![],
+			seal: Vec::new(),
 			hash: keccak(r.as_raw()).into(),
 		};
 

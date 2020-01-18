@@ -21,10 +21,10 @@ use std::time::{Instant, Duration};
 use common_types::transaction;
 use ethcore::test_helpers::{EvmTestClient, EvmTestError, TransactErr, TransactSuccess, TrieSpec};
 use ethereum_types::{H256, U256};
-use ethjson;
+
 use pod::PodState;
-use spec;
-use trace;
+
+
 use vm::ActionParams;
 
 /// EVM execution informant.
@@ -141,34 +141,33 @@ pub fn run_transaction<T: Informant>(
 		state_test_name, tx_index, fork_spec_name, pre_state, post_root, env_info, transaction, mut informant, trie_spec, ..
 	} = tx_input;
 	let fork_spec_name_formatted = format!("{:?}", fork_spec_name).to_lowercase();
-	let fork_spec = match EvmTestClient::fork_spec_from_json(&fork_spec_name) {
-		Some(spec) => {
+	let fork_spec = {
+		if let Some(spec) = EvmTestClient::fork_spec_from_json(fork_spec_name) {
 			informant.before_test(
 				&format!("{}:{}:{}", &state_test_name, &fork_spec_name_formatted, tx_index), "starting");
 			spec
-		},
-		None => {
+		} else {
 			informant.before_test(&format!("{}:{}:{}",
 				&state_test_name, fork_spec_name_formatted, &tx_index), "skipping because of missing fork specification");
 			return false;
-		},
+		}
 	};
 
 	informant.set_gas(env_info.gas_limit);
 
 	let mut sink = informant.clone_sink();
-	let result = run(&fork_spec, trie_spec, transaction.gas, &pre_state, |mut client| {
-		let result = client.transact(&env_info, transaction, trace::NoopTracer, informant);
+	let result = run(&fork_spec, trie_spec, transaction.gas, pre_state, |mut client| {
+		let result = client.transact(env_info, transaction, trace::NoopTracer, informant);
 		match result {
 			Ok(TransactSuccess { state_root, gas_left, output, vm_trace, end_state, .. }) => {
-				if state_root != post_root {
+				if state_root == post_root {
+					(Ok(output), state_root, end_state, Some(gas_left), vm_trace)
+				} else {
 					(Err(EvmTestError::PostCondition(format!(
 						"State root mismatch (got: {:#x}, expected: {:#x})",
 						state_root,
 						post_root,
 					))), state_root, end_state, Some(gas_left), None)
-				} else {
-					(Ok(output), state_root, end_state, Some(gas_left), vm_trace)
 				}
 			},
 			Err(TransactErr { state_root, error, end_state }) => {
@@ -217,14 +216,14 @@ pub fn run<'a, F, X>(
 	match result {
 		(Ok(output), state_root, end_state, gas_left, traces) => Ok(Success {
 			state_root,
-			gas_used: gas_left.map(|gas_left| initial_gas - gas_left).unwrap_or(initial_gas),
+			gas_used: gas_left.map_or(initial_gas, |gas_left| initial_gas - gas_left),
 			output,
 			time,
 			traces,
 			end_state,
 		}),
 		(Err(error), state_root, end_state, gas_left, traces) => Err(Failure {
-			gas_used: gas_left.map(|gas_left| initial_gas - gas_left).unwrap_or(initial_gas),
+			gas_used: gas_left.map_or(initial_gas, |gas_left| initial_gas - gas_left),
 			error,
 			time,
 			traces,

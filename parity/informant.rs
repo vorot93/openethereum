@@ -227,7 +227,7 @@ impl<T: InformantData> Informant<T> {
 		rpc_stats: Option<Arc<RpcStats>>,
 		with_color: bool,
 	) -> Self {
-		Informant {
+		Self {
 			last_tick: RwLock::new(Instant::now()),
 			with_color,
 			target,
@@ -237,7 +237,7 @@ impl<T: InformantData> Informant<T> {
 			skipped: AtomicUsize::new(0),
 			skipped_txs: AtomicUsize::new(0),
 			in_shutdown: AtomicBool::new(false),
-			last_report: Mutex::new(Default::default()),
+			last_report: Mutex::new(ClientReport::default()),
 		}
 	}
 
@@ -280,15 +280,31 @@ impl<T: InformantData> Informant<T> {
 		*self.last_tick.write() = now;
 		*self.last_report.lock() = full_report.client_report.clone();
 
-		let paint = |c: Style, t: String| match self.with_color && atty::is(atty::Stream::Stdout) {
-			true => format!("{}", c.paint(t)),
-			false => t,
-		};
+		let paint = |c: Style, t: String| { if self.with_color && atty::is(atty::Stream::Stdout) { format!("{}", c.paint(t)) } else { t } };
 
 		info!(target: "import", "{}  {}  {}  {}",
-			match importing {
-				true => match snapshot_sync {
-					false => format!("Syncing {} {}  {}  {}+{} Qed",
+			if importing {
+				if snapshot_sync {
+					self.snapshot.as_ref().map_or(String::new(), |s|
+						match s.status() {
+							RestorationStatus::Ongoing { state_chunks, block_chunks, state_chunks_done, block_chunks_done } => {
+								format!("Syncing snapshot {}/{}", state_chunks_done + block_chunks_done, state_chunks + block_chunks)
+							},
+							RestorationStatus::Initializing { chunks_done, state_chunks, block_chunks } => {
+								let total_chunks = state_chunks + block_chunks;
+								// Note that the percentage here can be slightly misleading when
+								// they have chunks already on disk: we'll import the local
+								// chunks first and then download the rest.
+								format!("Snapshot initializing ({}/{} chunks restored, {:.0}%)", chunks_done, total_chunks, (chunks_done as f32 / total_chunks as f32) * 100.0)
+							},
+							RestorationStatus::Finalizing => {
+								"Snapshot finalization under way".to_string()
+							}
+							_ => String::new(),
+						}
+					)
+				} else {
+					format!("Syncing {} {}  {}  {}+{} Qed",
 						paint(White.bold(), format!("{:>8}", format!("#{}", chain_info.best_block_number))),
 						paint(White.bold(), format!("{}", chain_info.best_block_hash)),
 						if self.target.executes_transactions() {
@@ -304,44 +320,19 @@ impl<T: InformantData> Informant<T> {
 						},
 						paint(Green.bold(), format!("{:5}", queue_info.unverified_queue_size)),
 						paint(Green.bold(), format!("{:5}", queue_info.verified_queue_size))
-					),
-					true => {
-						self.snapshot.as_ref().map_or(String::new(), |s|
-							match s.status() {
-								RestorationStatus::Ongoing { state_chunks, block_chunks, state_chunks_done, block_chunks_done } => {
-									format!("Syncing snapshot {}/{}", state_chunks_done + block_chunks_done, state_chunks + block_chunks)
-								},
-								RestorationStatus::Initializing { chunks_done, state_chunks, block_chunks } => {
-									let total_chunks = state_chunks + block_chunks;
-									// Note that the percentage here can be slightly misleading when
-									// they have chunks already on disk: we'll import the local
-									// chunks first and then download the rest.
-									format!("Snapshot initializing ({}/{} chunks restored, {:.0}%)", chunks_done, total_chunks, (chunks_done as f32 / total_chunks as f32) * 100.0)
-								},
-								RestorationStatus::Finalizing => {
-									format!("Snapshot finalization under way")
-								}
-								_ => String::new(),
-							}
-						)
-					},
-				},
-				false => String::new(),
+					)
+				}
+			} else {
+				String::new()
 			},
 			match sync_info.as_ref() {
-				Some(ref sync_info) => format!("{}{}/{} peers",
-					match importing {
-						true => format!("{}",
-							if self.target.executes_transactions() {
-								paint(Green.bold(), format!("{:>8}   ", format!("#{}", sync_info.last_imported_block_number)))
-							} else {
-								String::new()
-							}
-						),
-						false => match sync_info.last_imported_old_block_number {
-							Some(number) => format!("{}   ", paint(Yellow.bold(), format!("{:>8}", format!("#{}", number)))),
-							None => String::new(),
-						}
+				Some(sync_info) => format!("{}{}/{} peers",
+					if importing && self.target.executes_transactions() {
+						paint(Green.bold(), format!("{:>8}   ", format!("#{}", sync_info.last_imported_block_number)))
+					} else if let Some(number) = sync_info.last_imported_old_block_number {
+						format!("{}   ", paint(Yellow.bold(), format!("{:>8}", format!("#{}", number))))
+					} else {
+						String::new()
 					},
 					paint(Cyan.bold(), format!("{:2}", sync_info.num_peers)),
 					paint(Cyan.bold(), format!("{:2}", sync_info.max_peers)),
@@ -350,7 +341,7 @@ impl<T: InformantData> Informant<T> {
 			},
 			cache_sizes.display(Blue.bold(), &paint),
 			match rpc_stats {
-				Some(ref rpc_stats) => format!(
+				Some(rpc_stats) => format!(
 					"RPC: {} conn, {} req/s, {} µs",
 					paint(Blue.bold(), format!("{:2}", rpc_stats.sessions())),
 					paint(Blue.bold(), format!("{:4}", rpc_stats.requests_rate())),
@@ -372,8 +363,7 @@ impl ChainNotify for Informant<FullNodeInformantData> {
 		let ripe = Instant::now() > *last_import + Duration::from_secs(1) && !importing;
 		let txs_imported = new_blocks.imported.iter()
 			.take(new_blocks.imported.len().saturating_sub(if ripe { 1 } else { 0 }))
-			.filter_map(|h| client.block(BlockId::Hash(*h)))
-			.map(|b| b.transactions_count())
+			.filter_map(|h| client.block(BlockId::Hash(*h)).map(|b| b.transactions_count()))
 			.sum();
 
 		if ripe {
@@ -385,9 +375,9 @@ impl ChainNotify for Informant<FullNodeInformantData> {
 					Colour::White.bold().paint(format!("#{}", header_view.number())),
 					Colour::White.bold().paint(format!("{}", header_view.hash())),
 					Colour::Yellow.bold().paint(format!("{}", block.transactions_count())),
-					Colour::Yellow.bold().paint(format!("{:.2}", header_view.gas_used().low_u64() as f32 / 1000000f32)),
+					Colour::Yellow.bold().paint(format!("{:.2}", header_view.gas_used().low_u64() as f32 / 1_000_000_f32)),
 					Colour::Purple.bold().paint(format!("{}", new_blocks.duration.as_millis())),
-					Colour::Blue.bold().paint(format!("{:.2}", size as f32 / 1024f32)),
+					Colour::Blue.bold().paint(format!("{:.2}", size as f32 / 1024_f32)),
 					if skipped > 0 {
 						format!(" + another {} block(s) containing {} tx(s)",
 							Colour::Red.bold().paint(format!("{}", skipped)),
@@ -421,7 +411,7 @@ impl LightChainNotify for Informant<LightNodeInformantData> {
 				info!(target: "import", "Imported {} {} ({} Mgas){}",
 					Colour::White.bold().paint(format!("#{}", header.number())),
 					Colour::White.bold().paint(format!("{}", header.hash())),
-					Colour::Yellow.bold().paint(format!("{:.2}", header.gas_used().low_u64() as f32 / 1000000f32)),
+					Colour::Yellow.bold().paint(format!("{:.2}", header.gas_used().low_u64() as f32 / 1_000_000_f32)),
 					if good.len() > 1 {
 						format!(" + another {} header(s)",
 								Colour::Red.bold().paint(format!("{}", good.len() - 1)))

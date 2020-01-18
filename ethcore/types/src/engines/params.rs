@@ -174,7 +174,7 @@ impl CommonParams {
 		schedule.have_chain_id = block_number >= self.eip1344_transition;
 		schedule.eip1283 =
 			(block_number >= self.eip1283_transition &&
-			 !(block_number >= self.eip1283_disable_transition)) ||
+			 block_number < self.eip1283_disable_transition) ||
 			block_number >= self.eip1283_reenable_transition;
 		schedule.eip1706 = block_number >= self.eip1706_transition;
 
@@ -194,10 +194,7 @@ impl CommonParams {
 			schedule.blockhash_gas = 800;
 		}
 		if block_number >= self.dust_protection_transition {
-			schedule.kill_dust = match self.remove_dust_contracts {
-				true => vm::CleanDustMode::WithCodeAndStorage,
-				false => vm::CleanDustMode::BasicOnly,
-			};
+			schedule.kill_dust = if self.remove_dust_contracts { vm::CleanDustMode::WithCodeAndStorage } else { vm::CleanDustMode::BasicOnly }
 		}
 		if block_number >= self.wasm_activation_transition {
 			let mut wasm = vm::WasmCosts::default();
@@ -234,7 +231,7 @@ impl CommonParams {
 
 impl From<ethjson::spec::Params> for CommonParams {
 	fn from(p: ethjson::spec::Params) -> Self {
-		CommonParams {
+		Self {
 			account_start_nonce: p.account_start_nonce.map_or_else(U256::zero, Into::into),
 			maximum_extra_data_size: p.maximum_extra_data_size.into(),
 			network_id: p.network_id.into(),
@@ -274,7 +271,7 @@ impl From<ethjson::spec::Params> for CommonParams {
 				|| DEFAULT_BLOCKHASH_CONTRACT.to_vec(),
 				Into::into,
 			),
-			eip210_contract_gas: p.eip210_contract_gas.map_or(1000000.into(), Into::into),
+			eip210_contract_gas: p.eip210_contract_gas.map_or(1_000_000.into(), Into::into),
 			eip211_transition: p.eip211_transition.map_or_else(
 				BlockNumber::max_value,
 				Into::into,

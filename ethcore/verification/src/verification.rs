@@ -135,8 +135,8 @@ pub fn verify_block_family<C: BlockInfo + CallContract>(
 	params: FullFamilyParams<C>
 ) -> Result<(), Error> {
 	// TODO: verify timestamp
-	verify_parent(&header, &parent, engine)?;
-	engine.verify_block_family(&header, &parent)?;
+	verify_parent(header, parent, engine)?;
+	engine.verify_block_family(header, parent)?;
 	verify_uncles(params.block, params.block_provider, engine)?;
 
 	for tx in &params.block.transactions {
@@ -163,7 +163,7 @@ fn verify_uncles(block: &PreverifiedBlock, bc: &dyn BlockProvider, engine: &dyn 
 
 		let mut excluded = HashSet::new();
 		excluded.insert(header.hash());
-		let mut hash = header.parent_hash().clone();
+		let mut hash = *header.parent_hash();
 		excluded.insert(hash.clone());
 		for _ in 0..MAX_UNCLE_AGE {
 			match bc.block_details(&hash) {
@@ -213,8 +213,8 @@ fn verify_uncles(block: &PreverifiedBlock, bc: &dyn BlockProvider, engine: &dyn 
 			// cB.p^6	-----------/  6
 			// cB.p^7	-------------/
 			// cB.p^8
-			let mut expected_uncle_parent = header.parent_hash().clone();
-			let uncle_parent = bc.block_header_data(&uncle.parent_hash())
+			let mut expected_uncle_parent = *header.parent_hash();
+			let uncle_parent = bc.block_header_data(uncle.parent_hash())
 				.ok_or_else(|| BlockError::UnknownUncleParent(*uncle.parent_hash()))?;
 			for _ in 0..depth {
 				match bc.block_details(&expected_uncle_parent) {
@@ -229,8 +229,8 @@ fn verify_uncles(block: &PreverifiedBlock, bc: &dyn BlockProvider, engine: &dyn 
 			}
 
 			let uncle_parent = uncle_parent.decode()?;
-			verify_parent(&uncle, &uncle_parent, engine)?;
-			engine.verify_block_family(&uncle, &uncle_parent)?;
+			verify_parent(uncle, &uncle_parent, engine)?;
+			engine.verify_block_family(uncle, &uncle_parent)?;
 			verified.insert(uncle.hash());
 		}
 	}
@@ -278,12 +278,12 @@ pub(crate) fn verify_header_params(header: &Header, engine: &dyn Engine, check_s
 		}
 	}
 
-	if header.number() >= From::from(BlockNumber::max_value()) {
-		return Err(From::from(BlockError::RidiculousNumber(OutOfBounds {
-			max: Some(From::from(BlockNumber::max_value())),
+	if header.number() >= BlockNumber::max_value() {
+		return Err(BlockError::RidiculousNumber(OutOfBounds {
+			max: Some(BlockNumber::max_value()),
 			min: None,
 			found: header.number()
-		})))
+		}).into());
 	}
 	if header.gas_used() > header.gas_limit() {
 		return Err(From::from(BlockError::TooMuchGasUsed(OutOfBounds {
@@ -294,7 +294,7 @@ pub(crate) fn verify_header_params(header: &Header, engine: &dyn Engine, check_s
 	}
 	if engine.gas_limit_override(header).is_none() {
 		let min_gas_limit = engine.min_gas_limit();
-		if header.gas_limit() < &min_gas_limit {
+		if *header.gas_limit() < min_gas_limit {
 			return Err(From::from(BlockError::InvalidGasLimit(OutOfBounds {
 				min: Some(min_gas_limit),
 				max: None,
@@ -302,7 +302,7 @@ pub(crate) fn verify_header_params(header: &Header, engine: &dyn Engine, check_s
 			})));
 		}
 		if let Some(limit) = engine.maximum_gas_limit() {
-			if header.gas_limit() > &limit {
+			if *header.gas_limit() > limit {
 				return Err(From::from(BlockError::InvalidGasLimit(OutOfBounds {
 					min: None,
 					max: Some(limit),
@@ -320,7 +320,7 @@ pub(crate) fn verify_header_params(header: &Header, engine: &dyn Engine, check_s
 		})));
 	}
 
-	if let Some(ref ext) = engine.machine().ethash_extensions() {
+	if let Some(ext) = engine.machine().ethash_extensions() {
 		if header.number() >= ext.dao_hardfork_transition &&
 			header.number() <= ext.dao_hardfork_transition + 9 &&
 			header.extra_data()[..] != b"dao-hard-fork"[..] {
@@ -395,7 +395,7 @@ fn verify_parent(header: &Header, parent: &Header, engine: &dyn Engine) -> Resul
 		let parent_gas_limit = *parent.gas_limit();
 		let min_gas = parent_gas_limit - parent_gas_limit / gas_limit_divisor;
 		let max_gas = parent_gas_limit + parent_gas_limit / gas_limit_divisor;
-		if header.gas_limit() <= &min_gas || header.gas_limit() >= &max_gas {
+		if *header.gas_limit() <= min_gas || *header.gas_limit() >= max_gas {
 			return Err(From::from(BlockError::InvalidGasLimit(OutOfBounds {
 				min: Some(min_gas),
 				max: Some(max_gas),
@@ -440,7 +440,7 @@ mod tests {
 	use keccak_hash::keccak;
 	use engine::Engine;
 	use parity_crypto::publickey::{Random, Generator};
-	use spec;
+	
 	use ethcore::test_helpers::{
 		create_test_block_with_data, create_test_block, TestBlockChainClient
 	};
@@ -449,7 +449,7 @@ mod tests {
 		errors::BlockError::*,
 		transaction::{SignedTransaction, Transaction, UnverifiedTransaction, Action},
 	};
-	use rlp;
+	
 	use triehash::ordered_trie_root;
 	use machine::Machine;
 	use null_engine::NullEngine;
@@ -462,7 +462,7 @@ mod tests {
 
 	fn check_fail(result: Result<(), Error>, e: BlockError) {
 		match result {
-			Err(Error::Block(ref error)) if *error == e => (),
+			Err(Error::Block(error)) if error == e => (),
 			Err(other) => panic!("Block verification failed.\nExpected: {:?}\nGot: {:?}", e, other),
 			Ok(_) => panic!("Block verification failed.\nExpected: {:?}\nGot: Ok", e),
 		}
@@ -497,7 +497,7 @@ mod tests {
 		// is fine.
 		let client = TestBlockChainClient::default();
 		let parent = bc.block_header_data(header.parent_hash())
-			.ok_or(BlockError::UnknownParent(*header.parent_hash()))?
+			.ok_or_else(|| BlockError::UnknownParent(*header.parent_hash()))?
 			.decode()?;
 
 		let block = PreverifiedBlock {
@@ -530,7 +530,7 @@ mod tests {
 			let mut rlp = rlp::RlpStream::new_list(3);
 			let mut header = Header::default();
 			// that's an invalid transaction list rlp
-			let invalid_transactions = vec![vec![0u8]];
+			let invalid_transactions = vec![vec![0_u8]];
 			header.set_transactions_root(ordered_trie_root(&invalid_transactions));
 			header.set_gas_limit(engine.min_gas_limit());
 			rlp.append(&header);
@@ -585,8 +585,8 @@ mod tests {
 			nonce: U256::zero(),
 		}.null_sign(0);
 
-		let good_transactions = [ tr1.clone(), tr2.clone() ];
-		let eip86_transactions = [ tr3.clone() ];
+		let good_transactions = [ tr1, tr2 ];
+		let eip86_transactions = [ tr3 ];
 
 		let diff_inc = U256::from(0x40);
 
@@ -595,33 +595,33 @@ mod tests {
 		let mut parent7 = good.clone();
 		parent7.set_number(7);
 		parent7.set_parent_hash(parent6.hash());
-		parent7.set_difficulty(parent6.difficulty().clone() + diff_inc);
+		parent7.set_difficulty(*parent6.difficulty() + diff_inc);
 		parent7.set_timestamp(parent6.timestamp() + 10);
 		let mut parent8 = good.clone();
 		parent8.set_number(8);
 		parent8.set_parent_hash(parent7.hash());
-		parent8.set_difficulty(parent7.difficulty().clone() + diff_inc);
+		parent8.set_difficulty(*parent7.difficulty() + diff_inc);
 		parent8.set_timestamp(parent7.timestamp() + 10);
 
 		let mut good_uncle1 = good.clone();
 		good_uncle1.set_number(9);
 		good_uncle1.set_parent_hash(parent8.hash());
-		good_uncle1.set_difficulty(parent8.difficulty().clone() + diff_inc);
+		good_uncle1.set_difficulty(*parent8.difficulty() + diff_inc);
 		good_uncle1.set_timestamp(parent8.timestamp() + 10);
 		let mut ex = good_uncle1.extra_data().to_vec();
-		ex.push(1u8);
+		ex.push(1_u8);
 		good_uncle1.set_extra_data(ex);
 
 		let mut good_uncle2 = good.clone();
 		good_uncle2.set_number(8);
 		good_uncle2.set_parent_hash(parent7.hash());
-		good_uncle2.set_difficulty(parent7.difficulty().clone() + diff_inc);
+		good_uncle2.set_difficulty(*parent7.difficulty() + diff_inc);
 		good_uncle2.set_timestamp(parent7.timestamp() + 10);
 		let mut ex = good_uncle2.extra_data().to_vec();
-		ex.push(2u8);
+		ex.push(2_u8);
 		good_uncle2.set_extra_data(ex);
 
-		let good_uncles = vec![ good_uncle1.clone(), good_uncle2.clone() ];
+		let good_uncles = vec![ good_uncle1.clone(), good_uncle2 ];
 		let mut uncles_rlp = RlpStream::new();
 		uncles_rlp.append_list(&good_uncles);
 		let good_uncles_hash = keccak(uncles_rlp.as_raw());
@@ -632,10 +632,10 @@ mod tests {
 		parent.set_number(9);
 		parent.set_timestamp(parent8.timestamp() + 10);
 		parent.set_parent_hash(parent8.hash());
-		parent.set_difficulty(parent8.difficulty().clone() + diff_inc);
+		parent.set_difficulty(*parent8.difficulty() + diff_inc);
 
 		good.set_parent_hash(parent.hash());
-		good.set_difficulty(parent.difficulty().clone() + diff_inc);
+		good.set_difficulty(*parent.difficulty() + diff_inc);
 		good.set_timestamp(parent.timestamp() + 10);
 
 		let mut bc = TestBlockChain::new();
@@ -651,7 +651,7 @@ mod tests {
 		bad_header.set_transactions_root(eip86_transactions_root.clone());
 		bad_header.set_uncles_hash(good_uncles_hash.clone());
 		match basic_test(&create_test_block_with_data(&bad_header, &eip86_transactions, &good_uncles), engine) {
-			Err(Error::Transaction(ref e)) if e == &parity_crypto::publickey::Error::InvalidSignature.into() => (),
+			Err(Error::Transaction(e)) if e == parity_crypto::publickey::Error::InvalidSignature.into() => (),
 			e => panic!("Block verification failed.\nExpected: Transaction Error (Invalid Signature)\nGot: {:?}", e),
 		}
 
@@ -662,7 +662,7 @@ mod tests {
 
 		header.set_gas_limit(min_gas_limit - 1);
 		check_fail(basic_test(&create_test_block(&header), engine),
-			InvalidGasLimit(OutOfBounds { min: Some(min_gas_limit), max: None, found: header.gas_limit().clone() }));
+			InvalidGasLimit(OutOfBounds { min: Some(min_gas_limit), max: None, found: *header.gas_limit() }));
 
 		header = good.clone();
 		header.set_number(BlockNumber::max_value());
@@ -670,21 +670,21 @@ mod tests {
 			RidiculousNumber(OutOfBounds { max: Some(BlockNumber::max_value()), min: None, found: header.number() }));
 
 		header = good.clone();
-		let gas_used = header.gas_limit().clone() + 1;
+		let gas_used = *header.gas_limit() + 1;
 		header.set_gas_used(gas_used);
 		check_fail(basic_test(&create_test_block(&header), engine),
-			TooMuchGasUsed(OutOfBounds { max: Some(header.gas_limit().clone()), min: None, found: header.gas_used().clone() }));
+			TooMuchGasUsed(OutOfBounds { max: Some(*header.gas_limit()), min: None, found: *header.gas_used() }));
 
 		header = good.clone();
 		let mut ex = header.extra_data().to_vec();
-		ex.resize(engine.maximum_extra_data_size() + 1, 0u8);
+		ex.resize(engine.maximum_extra_data_size() + 1, 0_u8);
 		header.set_extra_data(ex);
 		check_fail(basic_test(&create_test_block(&header), engine),
 			ExtraDataOutOfBounds(OutOfBounds { max: Some(engine.maximum_extra_data_size()), min: None, found: header.extra_data().len() }));
 
 		header = good.clone();
 		let mut ex = header.extra_data().to_vec();
-		ex.resize(engine.maximum_extra_data_size() + 1, 0u8);
+		ex.resize(engine.maximum_extra_data_size() + 1, 0_u8);
 		header.set_extra_data(ex);
 		check_fail(basic_test(&create_test_block(&header), engine),
 			ExtraDataOutOfBounds(OutOfBounds { max: Some(engine.maximum_extra_data_size()), min: None, found: header.extra_data().len() }));
@@ -692,12 +692,12 @@ mod tests {
 		header = good.clone();
 		header.set_uncles_hash(good_uncles_hash.clone());
 		check_fail(basic_test(&create_test_block_with_data(&header, &good_transactions, &good_uncles), engine),
-			InvalidTransactionsRoot(Mismatch { expected: good_transactions_root.clone(), found: header.transactions_root().clone() }));
+			InvalidTransactionsRoot(Mismatch { expected: good_transactions_root, found: *header.transactions_root() }));
 
 		header = good.clone();
 		header.set_transactions_root(good_transactions_root.clone());
 		check_fail(basic_test(&create_test_block_with_data(&header, &good_transactions, &good_uncles), engine),
-			InvalidUnclesHash(Mismatch { expected: good_uncles_hash.clone(), found: header.uncles_hash().clone() }));
+			InvalidUnclesHash(Mismatch { expected: good_uncles_hash, found: *header.uncles_hash() }));
 
 		check_ok(family_test(&create_test_block(&good), engine, &bc));
 		check_ok(family_test(&create_test_block_with_data(&good, &good_transactions, &good_uncles), engine, &bc));
@@ -705,7 +705,7 @@ mod tests {
 		header = good.clone();
 		header.set_parent_hash(H256::random());
 		check_fail(family_test(&create_test_block_with_data(&header, &good_transactions, &good_uncles), engine, &bc),
-			UnknownParent(header.parent_hash().clone()));
+			UnknownParent(*header.parent_hash()));
 
 		header = good.clone();
 		header.set_timestamp(10);
@@ -732,7 +732,7 @@ mod tests {
 			InvalidNumber(Mismatch { expected: parent.number() + 1, found: header.number() }));
 
 		header = good.clone();
-		let mut bad_uncles = good_uncles.clone();
+		let mut bad_uncles = good_uncles;
 		bad_uncles.push(good_uncle1.clone());
 		check_fail(family_test(&create_test_block_with_data(&header, &good_transactions, &bad_uncles), engine, &bc),
 			TooManyUncles(OutOfBounds { max: Some(engine.maximum_uncle_count(header.number())), min: None, found: bad_uncles.len() }));
@@ -742,13 +742,12 @@ mod tests {
 		check_fail(family_test(&create_test_block_with_data(&header, &good_transactions, &bad_uncles), engine, &bc),
 			DuplicateUncle(good_uncle1.hash()));
 
-		header = good.clone();
+		header = good;
 		header.set_gas_limit(0.into());
 		header.set_difficulty("0000000000000000000000000000000000000000000000000000000000020000".parse::<U256>().unwrap());
 		match family_test(&create_test_block(&header), engine, &bc) {
 			Err(Error::Block(InvalidGasLimit(_))) => {},
-			Err(_) => { panic!("should be invalid difficulty fail"); },
-			_ => { panic!("Should be error, got Ok"); },
+			other => { panic!("expected invalid difficulty error, got {:?}", other); },
 		}
 
 		// TODO: some additional uncle checks

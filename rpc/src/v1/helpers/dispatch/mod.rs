@@ -139,7 +139,7 @@ pub enum SignMessage {
 /// NOTE This signer is semi-correct, it's a temporary measure to avoid moving too much code.
 /// If accounts are ultimately removed all password-dealing endpoints will be wiped out.
 pub trait Accounts: Send + Sync {
-	/// Sign given filled transaction request for the specified chain_id.
+	/// Sign given filled transaction request for the specified `chain_id`.
 	fn sign_transaction(&self, filled: FilledTransactionRequest, chain_id: Option<u64>, nonce: U256, password: SignWith) -> Result<WithToken<SignedTransaction>>;
 
 	/// Sign given message.
@@ -161,9 +161,9 @@ pub trait Accounts: Send + Sync {
 /// action to execute after signing
 /// e.g importing a transaction into the chain
 pub trait PostSign: Send {
-	/// item that this PostSign returns
+	/// item that this `PostSign` returns
 	type Item: Send;
-	/// incase you need to perform async PostSign actions
+	/// incase you need to perform async `PostSign` actions
 	type Out: IntoFuture<Item = Self::Item, Error = Error> + Send;
 	/// perform an action with the signed transaction
 	fn execute(self, signer: WithToken<SignedTransaction>) -> Self::Out;
@@ -204,7 +204,7 @@ pub enum SignWith {
 impl SignWith {
 	#[cfg(any(test, feature = "accounts"))]
 	fn is_password(&self) -> bool {
-		if let SignWith::Password(_) = *self {
+		if let Self::Password(_) = *self {
 			true
 		} else {
 			false
@@ -224,13 +224,13 @@ impl<T: Debug> Deref for WithToken<T> {
 	type Target = T;
 
 	fn deref(&self) -> &Self::Target {
-		match *self {
-			WithToken::No(ref v) => v,
-			WithToken::Yes(ref v, _) => v,
+		match self {
+			Self::Yes(v, _) | Self::No(v) => v,
 		}
 	}
 }
 
+#[allow(clippy::use_self)]
 impl<T: Debug> WithToken<T> {
 	/// Map the value with the given closure, preserving the token.
 	pub fn map<S, F>(self, f: F) -> WithToken<S> where
@@ -238,39 +238,38 @@ impl<T: Debug> WithToken<T> {
 		F: FnOnce(T) -> S,
 	{
 		match self {
-			WithToken::No(v) => WithToken::No(f(v)),
-			WithToken::Yes(v, token) => WithToken::Yes(f(v), token),
+			Self::No(v) => WithToken::No(f(v)),
+			Self::Yes(v, token) => WithToken::Yes(f(v), token),
 		}
 	}
 
 	/// Convert into inner value, ignoring possible token.
 	pub fn into_value(self) -> T {
 		match self {
-			WithToken::No(v) => v,
-			WithToken::Yes(v, _) => v,
+			Self::Yes(v, _) | Self::No(v) => v
 		}
 	}
 
 	/// Convert the `WithToken` into a tuple.
 	pub fn into_tuple(self) -> (T, Option<AccountToken>) {
 		match self {
-			WithToken::No(v) => (v, None),
-			WithToken::Yes(v, token) => (v, Some(token))
+			Self::No(v) => (v, None),
+			Self::Yes(v, token) => (v, Some(token))
 		}
 	}
 }
 
 impl<T: Debug> From<(T, AccountToken)> for WithToken<T> {
 	fn from(tuple: (T, AccountToken)) -> Self {
-		WithToken::Yes(tuple.0, tuple.1)
+		Self::Yes(tuple.0, tuple.1)
 	}
 }
 
 impl<T: Debug> From<(T, Option<AccountToken>)> for WithToken<T> {
 	fn from(tuple: (T, Option<AccountToken>)) -> Self {
 		match tuple.1 {
-			Some(token) => WithToken::Yes(tuple.0, token),
-			None => WithToken::No(tuple.0),
+			Some(token) => Self::Yes(tuple.0, token),
+			None => Self::No(tuple.0),
 		}
 	}
 }
@@ -294,13 +293,13 @@ pub fn execute<D: Dispatcher + 'static>(
 			};
 
 			Box::new(
-				dispatcher.sign(request, &signer, pass, post_sign).map(|(hash, token)| {
+				dispatcher.sign(request, signer, pass, post_sign).map(|(hash, token)| {
 					WithToken::from((ConfirmationResponse::SendTransaction(hash), token))
 				})
 			)
 		},
 		ConfirmationPayload::SignTransaction(request) => {
-			Box::new(dispatcher.sign(request, &signer, pass, ())
+			Box::new(dispatcher.sign(request, signer, pass, ())
 				.map(move |result| result
 					.map(move |tx| dispatcher.enrich(tx))
 					.map(ConfirmationResponse::SignTransaction)
@@ -337,7 +336,7 @@ pub fn execute<D: Dispatcher + 'static>(
 
 /// Returns a eth_sign-compatible hash of data to sign.
 /// The data is prepended with special message to prevent
-/// malicious DApps from using the function to sign forged transactions.
+/// malicious Dapps from using the function to sign forged transactions.
 pub fn eth_data_hash(mut data: Bytes) -> H256 {
 	let mut message_data =
 		format!("\x19Ethereum Signed Message:\n{}", data.len())

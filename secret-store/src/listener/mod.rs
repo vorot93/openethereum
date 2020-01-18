@@ -49,8 +49,8 @@ pub struct Listener {
 
 impl ApiMask {
 	/// Create mask that accepts all requests.
-	pub fn all() -> Self {
-		ApiMask {
+	pub const fn all() -> Self {
+		Self {
 			server_key_generation_requests: true,
 			server_key_retrieval_requests: true,
 			document_key_store_requests: true,
@@ -63,7 +63,7 @@ impl Listener {
 	/// Create new listener.
 	pub fn new(key_server: Arc<dyn KeyServer>, http: Option<http_listener::KeyServerHttpListener>, contract: Option<Arc<service_contract_listener::ServiceContractListener>>) -> Self {
 		Self {
-			key_server: key_server,
+			key_server,
 			_http: http,
 			_contract: contract,
 		}

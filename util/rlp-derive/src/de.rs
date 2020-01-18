@@ -40,8 +40,8 @@ fn decodable_wrapper_parse_quotes() -> ParseQuotes {
 }
 
 pub fn impl_decodable(ast: &syn::DeriveInput) -> TokenStream {
-	let body = match ast.data {
-		syn::Data::Struct(ref s) => s,
+	let body = match &ast.data {
+		syn::Data::Struct(s) => s,
 		_ => panic!("#[derive(RlpDecodable)] is only defined for structs."),
 	};
 
@@ -71,8 +71,8 @@ pub fn impl_decodable(ast: &syn::DeriveInput) -> TokenStream {
 }
 
 pub fn impl_decodable_wrapper(ast: &syn::DeriveInput) -> TokenStream {
-	let body = match ast.data {
-		syn::Data::Struct(ref s) => s,
+	let body = match &ast.data {
+		syn::Data::Struct(s) => s,
 		_ => panic!("#[derive(RlpDecodableWrapper)] is only defined for structs."),
 	};
 
@@ -115,12 +115,11 @@ fn decodable_field_map(tuple: (usize, &syn::Field)) -> TokenStream {
 }
 
 fn decodable_field(index: usize, field: &syn::Field, quotes: ParseQuotes) -> TokenStream {
-	let id = match field.ident {
-		Some(ref ident) => quote! { #ident },
-		None => {
-			let index: syn::Index = index.into();
-			quote! { #index }
-		}
+	let id = if let Some(ident) = field.ident.as_ref() {
+		quote! { #ident }
+	} else {
+		let index = syn::Index::from(index);
+		quote! { #index }
 	};
 
 	let index = quote! { #index };
@@ -128,8 +127,8 @@ fn decodable_field(index: usize, field: &syn::Field, quotes: ParseQuotes) -> Tok
 	let single = quotes.single;
 	let list = quotes.list;
 
-	match field.ty {
-		syn::Type::Path(ref path) => {
+	match &field.ty {
+		syn::Type::Path(path) => {
 			let ident = &path.path.segments.first().expect("there must be at least 1 segment").value().ident;
 			if &ident.to_string() == "Vec" {
 				if quotes.takes_index {
@@ -137,12 +136,10 @@ fn decodable_field(index: usize, field: &syn::Field, quotes: ParseQuotes) -> Tok
 				} else {
 					quote! { #id: #list()?, }
 				}
+			} else if quotes.takes_index {
+				quote! { #id: #single(#index)?, }
 			} else {
-				if quotes.takes_index {
-					quote! { #id: #single(#index)?, }
-				} else {
-					quote! { #id: #single()?, }
-				}
+				quote! { #id: #single()?, }
 			}
 		},
 		_ => panic!("rlp_derive not supported"),

@@ -35,7 +35,7 @@ pub struct TransactionTest {
 	pub post_state: BTreeMap<ForkSpec, PostState>,
 }
 
-/// TransactionTest post state.
+/// `TransactionTest` post state.
 #[derive(Debug, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PostState {

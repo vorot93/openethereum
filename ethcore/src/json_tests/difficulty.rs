@@ -31,10 +31,10 @@ pub fn json_difficulty_test<H: FnMut(&str, HookType)>(
 ) -> Vec<String> {
 	let _ = env_logger::try_init();
 	let tests = DifficultyTest::load(json_data)
-		.expect(&format!("Could not parse JSON difficulty test data from {}", path.display()));
+		.unwrap_or_else(|_| panic!("Could not parse JSON difficulty test data from {}", path.display()));
 	let engine = &spec.engine;
 
-	for (name, test) in tests.into_iter() {
+	for (name, test) in tests {
 		start_stop_hook(&name, HookType::OnStart);
 
 		flush!("   - {}...", name);
@@ -57,7 +57,7 @@ pub fn json_difficulty_test<H: FnMut(&str, HookType)>(
 
 		start_stop_hook(&name, HookType::OnStop);
 	}
-	vec![]
+	Vec::new()
 }
 
 macro_rules! difficulty_json_test {

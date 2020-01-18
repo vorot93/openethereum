@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
-//! PoA block chunker and rebuilder tests.
+//! Proof-of-authority block chunker and rebuilder tests.
 
 use std::cell::RefCell;
 use std::sync::Arc;
@@ -41,7 +41,7 @@ use crate::helpers as snapshot_helpers;
 
 use_contract!(test_validator_set, "../../res/contracts/test_validator_set.json");
 
-const PASS: &'static str = "";
+const PASS: &str = "";
 const TRANSITION_BLOCK_1: usize = 2; // block at which the contract becomes activated.
 const TRANSITION_BLOCK_2: usize = 10; // block at which the second contract activates.
 
@@ -59,11 +59,11 @@ lazy_static! {
 	static ref RICH_SECRET: Secret = secret!("1");
 }
 
-/// Contract code used here: https://gist.github.com/anonymous/2a43783647e0f0dfcc359bd6fd81d6d9
+/// Contract code used here: <https://gist.github.com/anonymous/2a43783647e0f0dfcc359bd6fd81d6d9>
 /// Account with secrets keccak("1") is initially the validator.
 /// Transitions to the contract at block 2, initially same validator set.
-/// Create a new Spec with AuthorityRound which uses a contract at address 5 to determine the current validators using `getValidators`.
-/// `test_validator_set::ValidatorSet` provides a native wrapper for the ABi.
+/// Create a new Spec with `AuthorityRound` which uses a contract at address 5 to determine the current validators using `getValidators`.
+/// `test_validator_set::ValidatorSet` provides a native wrapper for the `ABi`.
 fn spec_fixed_to_contract() -> Spec {
 	let data = include_bytes!("test_validator_contract.json");
 	let tempdir = TempDir::new("").unwrap();
@@ -161,9 +161,10 @@ fn make_chain(accounts: Arc<AccountProvider>, blocks_beyond: usize, transitions:
 
 			let pending = if manual {
 				trace!(target: "snapshot", "applying set transition at block #{}", num);
-				let address = match num >= TRANSITION_BLOCK_2 {
-					true => &CONTRACT_ADDR_2 as &Address,
-					false => &CONTRACT_ADDR_1 as &Address,
+				let address = if num >= TRANSITION_BLOCK_2 {
+					&CONTRACT_ADDR_2 as &Address
+				} else {
+					&CONTRACT_ADDR_1 as &Address
 				};
 
 				let data = test_validator_set::functions::set_validators::encode_input(new_set.clone());

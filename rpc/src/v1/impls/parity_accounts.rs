@@ -39,11 +39,11 @@ pub struct ParityAccountsClient {
 }
 
 impl ParityAccountsClient {
-	/// Creates new PersonalClient
+	/// Creates new `ParityAccountsClient`
 	pub fn new(store: &Arc<AccountProvider>) -> Self {
-		ParityAccountsClient {
+		Self {
 			accounts: store.clone(),
-			deprecation_notice: Default::default(),
+			deprecation_notice: DeprecationNotice::default(),
 		}
 	}
 }
@@ -67,9 +67,8 @@ impl ParityAccountsInfo for ParityAccountsClient {
 
 		Ok(info
 			.into_iter()
-			.chain(other.into_iter())
-			.filter(|&(ref a, _)| dapp_accounts.contains(a))
-			.map(|(a, v)| (H160::from(a), AccountInfo { name: v.name }))
+			.chain(other)
+			.filter_map(|(a, v)| if dapp_accounts.contains(&a) { Some((a, AccountInfo { name: v.name })) } else { None })
 			.collect()
 		)
 	}
@@ -92,10 +91,10 @@ impl ParityAccounts for ParityAccountsClient {
 		let account_iter = info
 			.into_iter()
 			.chain(other.into_iter())
-			.map(|(address, v)| (address.into(), ExtAccountInfo {
+			.map(|(address, v)| (address, ExtAccountInfo {
 				name: v.name,
 				meta: v.meta,
-				uuid: v.uuid.map(|uuid| uuid.to_string())
+				uuid: v.uuid
 			}));
 
 		let mut accounts: BTreeMap<H160, ExtAccountInfo> = BTreeMap::new();
@@ -103,7 +102,7 @@ impl ParityAccounts for ParityAccountsClient {
 		for (address, account) in account_iter {
 			match accounts.entry(address) {
 				// Insert only if occupied entry isn't already an account with UUID
-				Entry::Occupied(ref mut occupied) if occupied.get().uuid.is_none() => {
+				Entry::Occupied(mut occupied) if occupied.get().uuid.is_none() => {
 					occupied.insert(account);
 				},
 				Entry::Vacant(vacant) => {
@@ -141,60 +140,53 @@ impl ParityAccounts for ParityAccountsClient {
 			.map_err(|e| errors::account("Could not create account.", e))
 	}
 
-	fn test_password(&self, account: H160, password: Password) -> Result<bool> {
+	fn test_password(&self, account: Address, password: Password) -> Result<bool> {
 		self.deprecation_notice("parity_testPassword");
-		let account: Address = account.into();
-
 		self.accounts
 			.test_password(&account, &password)
 			.map_err(|e| errors::account("Could not fetch account info.", e))
 	}
 
-	fn change_password(&self, account: H160, password: Password, new_password: Password) -> Result<bool> {
+	fn change_password(&self, account: Address, password: Password, new_password: Password) -> Result<bool> {
 		self.deprecation_notice("parity_changePassword");
-		let account: Address = account.into();
 		self.accounts
 			.change_password(&account, password, new_password)
 			.map(|_| true)
 			.map_err(|e| errors::account("Could not fetch account info.", e))
 	}
 
-	fn kill_account(&self, account: H160, password: Password) -> Result<bool> {
+	fn kill_account(&self, account: Address, password: Password) -> Result<bool> {
 		self.deprecation_notice("parity_killAccount");
-		let account: Address = account.into();
 		self.accounts
 			.kill_account(&account, &password)
 			.map(|_| true)
 			.map_err(|e| errors::account("Could not delete account.", e))
 	}
 
-	fn remove_address(&self, addr: H160) -> Result<bool> {
+	fn remove_address(&self, addr: Address) -> Result<bool> {
 		self.deprecation_notice("parity_removeAddresss");
-		let addr: Address = addr.into();
 
 		self.accounts.remove_address(addr);
 		Ok(true)
 	}
 
-	fn set_account_name(&self, addr: H160, name: String) -> Result<bool> {
+	fn set_account_name(&self, addr: Address, name: String) -> Result<bool> {
 		self.deprecation_notice("parity_setAccountName");
-		let addr: Address = addr.into();
 
 		self.accounts.set_account_name(addr.clone(), name.clone())
 			.unwrap_or_else(|_| self.accounts.set_address_name(addr, name));
 		Ok(true)
 	}
 
-	fn set_account_meta(&self, addr: H160, meta: String) -> Result<bool> {
+	fn set_account_meta(&self, addr: Address, meta: String) -> Result<bool> {
 		self.deprecation_notice("parity_setAccountMeta");
-		let addr: Address = addr.into();
 
 		self.accounts.set_account_meta(addr.clone(), meta.clone())
 			.unwrap_or_else(|_| self.accounts.set_address_meta(addr, meta));
 		Ok(true)
 	}
 
-	fn import_geth_accounts(&self, addresses: Vec<H160>) -> Result<Vec<H160>> {
+	fn import_geth_accounts(&self, addresses: Vec<Address>) -> Result<Vec<H160>> {
 		self.deprecation_notice("parity_importGethAccounts");
 		self.accounts
 			.import_geth_accounts(into_vec(addresses), false)
@@ -202,7 +194,7 @@ impl ParityAccounts for ParityAccountsClient {
 			.map_err(|e| errors::account("Couldn't import Geth accounts", e))
 	}
 
-	fn geth_accounts(&self) -> Result<Vec<H160>> {
+	fn geth_accounts(&self) -> Result<Vec<Address>> {
 		self.deprecation_notice("parity_listGethAccounts");
 		Ok(into_vec(self.accounts.list_geth_accounts(false)))
 	}
@@ -262,7 +254,7 @@ impl ParityAccounts for ParityAccountsClient {
 	fn change_vault(&self, address: H160, new_vault: String) -> Result<bool> {
 		self.deprecation_notice("parity_changeVault");
 		self.accounts
-			.change_vault(address.into(), &new_vault)
+			.change_vault(address, &new_vault)
 			.map_err(|e| errors::account("Could not change vault.", e))
 			.map(|_| true)
 	}
@@ -286,12 +278,11 @@ impl ParityAccounts for ParityAccountsClient {
 
 	fn derive_key_index(&self, addr: H160, password: Password, derivation: DeriveHierarchical, save_as_account: bool) -> Result<H160> {
 		self.deprecation_notice("parity_deriveAddressIndex");
-		let addr: Address = addr.into();
 		self.accounts
 			.derive_account(
 				&addr,
 				Some(password),
-				Derive::from(derivation).to_derivation()
+				Derive::from(derivation).into_derivation()
 					.map_err(|c| errors::account("Could not parse derivation request: {:?}", c))?,
 				save_as_account)
 			.map(Into::into)
@@ -300,12 +291,11 @@ impl ParityAccounts for ParityAccountsClient {
 
 	fn derive_key_hash(&self, addr: H160, password: Password, derivation: DeriveHash, save_as_account: bool) -> Result<H160> {
 		self.deprecation_notice("parity_deriveAddressHash");
-		let addr: Address = addr.into();
 		self.accounts
 			.derive_account(
 				&addr,
 				Some(password),
-				Derive::from(derivation).to_derivation()
+				Derive::from(derivation).into_derivation()
 					.map_err(|c| errors::account("Could not parse derivation request: {:?}", c))?,
 				save_as_account)
 			.map(Into::into)
@@ -314,7 +304,6 @@ impl ParityAccounts for ParityAccountsClient {
 
 	fn export_account(&self, addr: H160, password: Password) -> Result<KeyFile> {
 		self.deprecation_notice("parity_exportAccount");
-		let addr = addr.into();
 		self.accounts
 			.export_account(
 				&addr,
@@ -328,9 +317,9 @@ impl ParityAccounts for ParityAccountsClient {
 		self.deprecation_notice("parity_signMessage");
 		self.accounts
 			.sign(
-				addr.into(),
+				addr,
 				Some(password),
-				message.into()
+				message
 			)
 			.map(Into::into)
 			.map_err(|e| errors::account("Could not sign message.", e))

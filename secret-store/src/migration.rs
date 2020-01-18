@@ -45,16 +45,16 @@ pub enum Error {
 
 impl Display for Error {
 	fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
-		let out = match *self {
-			Error::UnknownDatabaseVersion =>
+		let out = match self {
+			Self::UnknownDatabaseVersion =>
 				"Current Secret Store database version cannot be read".into(),
-			Error::FutureDBVersion =>
+			Self::FutureDBVersion =>
 				"Secret Store database was created with newer client version.\
 				Upgrade your client or delete DB and resync.".into(),
-			Error::MigrationWithLegacyVersionRequired =>
+			Self::MigrationWithLegacyVersionRequired =>
 				"Secret Store database was created with an older client version.\
 				To migrate, use parity-ethereum v2.6.7, then retry using the latest.".into(),
-			Error::Io(ref err) =>
+			Self::Io(err) =>
 				format!("Unexpected io error on Secret Store database migration: {}.", err),
 		};
 		write!(f, "{}", out)
@@ -63,7 +63,7 @@ impl Display for Error {
 
 impl From<IoError> for Error {
 	fn from(err: IoError) -> Self {
-		Error::Io(err)
+		Self::Io(err)
 	}
 }
 
@@ -89,7 +89,7 @@ fn version_file_path(path: &str) -> PathBuf {
 /// If the file does not exist returns `DEFAULT_VERSION`.
 fn current_version(path: &str) -> Result<u8, Error> {
 	match fs::File::open(version_file_path(path)) {
-		Err(ref err) if err.kind() == IoErrorKind::NotFound => Ok(DEFAULT_VERSION),
+		Err(err) if err.kind() == IoErrorKind::NotFound => Ok(DEFAULT_VERSION),
 		Err(err) => Err(err.into()),
 		Ok(mut file) => {
 			let mut s = String::new();

@@ -79,7 +79,7 @@ pub struct BucketEntry {
 impl BucketEntry {
 	fn new(address: NodeEntry) -> Self {
 		let now = Instant::now();
-		BucketEntry {
+		Self {
 			id_hash: keccak(address.id),
 			address,
 			last_seen: now,
@@ -144,13 +144,13 @@ pub struct NodeBucket {
 
 impl Default for NodeBucket {
 	fn default() -> Self {
-		NodeBucket::new()
+		Self::new()
 	}
 }
 
 impl NodeBucket {
 	fn new() -> Self {
-		NodeBucket {
+		Self {
 			nodes: VecDeque::new()
 		}
 	}
@@ -234,16 +234,13 @@ impl<'a> Discovery<'a> {
 
 	fn update_bucket_record(&mut self, e: NodeEntry) -> Result<(), BucketError> {
 		let id_hash = keccak(e.id);
-		let dist = match Discovery::distance(&self.id_hash, &id_hash) {
-			Some(dist) => dist,
-			None => {
-				debug!(target: "discovery", "Attempted to update own entry: {:?}", e);
-				return Err(BucketError::Ourselves);
-			}
-		};
+		let dist = Discovery::distance(&self.id_hash, &id_hash).ok_or_else(|| {
+			debug!(target: "discovery", "Attempted to update own entry: {:?}", e);
+			BucketError::Ourselves
+		})?;
 		let bucket = &mut self.node_buckets[dist];
 		bucket.nodes.iter_mut().find(|n| n.address.id == e.id)
-			.map_or(Err(BucketError::NotInTheBucket{node_entry: e.clone(), bucket_distance: dist}.into()), |entry| {
+			.map_or(Err(BucketError::NotInTheBucket{node_entry: e.clone(), bucket_distance: dist}), |entry| {
 				entry.address = e;
 				entry.last_seen = Instant::now();
 				entry.backoff_until = Instant::now();
@@ -396,7 +393,7 @@ impl<'a> Discovery<'a> {
 			node: node.clone(),
 			echo_hash: hash,
 			deprecated_echo_hash: old_parity_hash,
-			reason: reason
+			reason
 		});
 
 		trace!(target: "discovery", "Sent Ping to {:?} ; node_id={:#x}", &node.endpoint, node.id);
@@ -528,7 +525,7 @@ impl<'a> Discovery<'a> {
 		let ping_from = if let Ok(node_endpoint) = NodeEndpoint::from_rlp(&rlp.at(1)?) {
 			node_endpoint
 		} else {
-			let mut address = from.clone();
+			let mut address = *from;
 			// address here is the node's tcp port. If we are unable to get the `NodeEndpoint` from the `ping_from`
 			// rlp field then this is most likely a BootNode, set the tcp port to 0 because it can not be used for syncing.
 			address.set_port(0);
@@ -542,7 +539,7 @@ impl<'a> Discovery<'a> {
 		self.check_timestamp(timestamp)?;
 		let mut response = RlpStream::new_list(3);
 		let pong_to = NodeEndpoint {
-			address: from.clone(),
+			address: *from,
 			udp_port: ping_from.udp_port
 		};
 		// Here the PONG's `To` field should be the node we are
@@ -557,13 +554,13 @@ impl<'a> Discovery<'a> {
 		append_expiration(&mut response);
 		self.send_packet(PACKET_PONG, from, &response.drain())?;
 
-		let entry = NodeEntry { id: *node_id, endpoint: pong_to.clone() };
+		let entry = NodeEntry { id: *node_id, endpoint: pong_to };
 		if !entry.endpoint.is_valid_discovery_node() {
 			debug!(target: "discovery", "Got bad address: {:?}", entry);
 		} else if !self.is_allowed(&entry) {
 			debug!(target: "discovery", "Address not allowed: {:?}", entry);
 		} else {
-			self.add_node(entry.clone());
+			self.add_node(entry);
 		}
 		Ok(None)
 	}
@@ -586,7 +583,7 @@ impl<'a> Discovery<'a> {
 						if request.deprecated_echo_hash == echo_hash {
 							trace!(target: "discovery", "Got Pong from an old parity-ethereum version.");
 						}
-						Some((request.node.clone(), request.reason.clone()))
+						Some((request.node.clone(), request.reason))
 					}
 				};
 
@@ -636,7 +633,7 @@ impl<'a> Discovery<'a> {
 		self.check_timestamp(timestamp)?;
 
 		let node = NodeEntry {
-			id: node_id.clone(),
+			id: *node_id,
 			endpoint: NodeEndpoint {
 				address: *from,
 				udp_port: from.port()
@@ -654,12 +651,11 @@ impl<'a> Discovery<'a> {
 
 	fn check_validity(&mut self, node: &NodeEntry) -> NodeValidity {
 		let id_hash = keccak(node.id);
-		let dist = match Discovery::distance(&self.id_hash, &id_hash) {
-			Some(dist) => dist,
-			None => {
-				debug!(target: "discovery", "Got an incoming discovery request from self: {:?}", node);
-				return NodeValidity::Ourselves;
-			}
+		let dist = if let Some(dist) = Discovery::distance(&self.id_hash, &id_hash) {
+			dist
+		} else {
+			debug!(target: "discovery", "Got an incoming discovery request from self: {:?}", node);
+			return NodeValidity::Ourselves;
 		};
 
 		let bucket = &self.node_buckets[dist];
@@ -821,7 +817,7 @@ impl<'a> Discovery<'a> {
 		if self.discovery_round.is_some() {
 			self.discover();
 		// Start discovering if the first pings have been sent (or timed out)
-		} else if self.in_flight_pings.len() == 0 && !self.discovery_initiated {
+		} else if self.in_flight_pings.is_empty() && !self.discovery_initiated {
 			self.discovery_initiated = true;
 			self.refresh();
 		}
@@ -912,7 +908,7 @@ mod tests {
 		let mut nearest = Vec::new();
 		let node = Node::from_str("enode://a979fb575495b8d6db44f750317d0f4622bf4c2aa3365d6af7c284339968eef29b69ad0dce72a4d8db5ebb4968de0e3bec910127f134779fbcb0cb6d3331163c@127.0.0.1:7770").unwrap();
 		for _ in 0..1000 {
-			nearest.push( NodeEntry { id: node.id.clone(), endpoint: node.endpoint.clone() });
+			nearest.push( NodeEntry { id: node.id, endpoint: node.endpoint.clone() });
 		}
 
 		let packets = Discovery::prepare_neighbours_packets(&nearest);
@@ -921,7 +917,7 @@ mod tests {
 			assert!(p.len() > 1280/2);
 			assert!(p.len() <= 1280);
 		}
-		assert!(packets.last().unwrap().len() > 0);
+		assert!(!packets.last().unwrap().is_empty());
 	}
 
 	#[test]
@@ -930,7 +926,7 @@ mod tests {
 		let ep = NodeEndpoint { address: SocketAddr::from_str("127.0.0.1:40445").unwrap(), udp_port: 40445 };
 		let mut discovery = Discovery::new(&key, ep.clone(), IpFilter::default());
 
-		for i in 1..(MAX_NODES_PING+1) {
+		for i in 1..=MAX_NODES_PING {
 			discovery.add_node(NodeEntry { id: NodeId::random(), endpoint: ep.clone() });
 			assert_eq!(discovery.in_flight_pings.len(), i);
 			assert_eq!(discovery.send_queue.len(), i);
@@ -978,7 +974,7 @@ mod tests {
 
 				// Process all queued messages.
 				for i in 0 .. 20 {
-					let src = discovery_handlers[i%5].public_endpoint.address.clone();
+					let src = discovery_handlers[i%5].public_endpoint.address;
 					while let Some(datagram) = discovery_handlers[i%5].dequeue_send() {
 						let dest = discovery_handlers.iter_mut()
 							.find(|disc| datagram.address == disc.public_endpoint.address)
@@ -1030,7 +1026,7 @@ mod tests {
 		for _ in 0..100 {
 			discovery.add_node(NodeEntry { id: NodeId::random(), endpoint: ep.clone() });
 		}
-		assert!(discovery.in_flight_pings.len() > 0);
+		assert!(!discovery.in_flight_pings.is_empty());
 
 		// Expire pings to nodes that are not in buckets.
 		let num_nodes = total_bucket_nodes(&discovery.node_buckets);
@@ -1045,7 +1041,7 @@ mod tests {
 		let key = Random.generate().unwrap();
 		discovery.send_find_node(&node_entries[100], key.public()).unwrap();
 		for payload in Discovery::prepare_neighbours_packets(&node_entries[101..116]) {
-			let packet = assemble_packet(PACKET_NEIGHBOURS, &payload, &key.secret()).unwrap();
+			let packet = assemble_packet(PACKET_NEIGHBOURS, &payload, key.secret()).unwrap();
 			discovery.on_packet(&packet, from.clone()).unwrap();
 		}
 
@@ -1057,7 +1053,7 @@ mod tests {
 		// FIND_NODE does not time out because it receives k results.
 		discovery.send_find_node(&node_entries[100], key.public()).unwrap();
 		for payload in Discovery::prepare_neighbours_packets(&node_entries[101..117]) {
-			let packet = assemble_packet(PACKET_NEIGHBOURS, &payload, &key.secret()).unwrap();
+			let packet = assemble_packet(PACKET_NEIGHBOURS, &payload, key.secret()).unwrap();
 			discovery.on_packet(&packet, from.clone()).unwrap();
 		}
 
@@ -1146,9 +1142,9 @@ mod tests {
 
 		let secret_hex = "6c71d1b8930d29e6371be1081f2c909c64b46440a1716314c3c9df995cb3aed1";
 		let key = Secret::from_str(secret_hex)
-			.and_then(|secret| KeyPair::from_secret(secret))
+			.and_then(KeyPair::from_secret)
 			.unwrap();
-		let mut discovery = Discovery::new(&key, ep.clone(), IpFilter::default());
+		let mut discovery = Discovery::new(&key, ep, IpFilter::default());
 
 		discovery.init_node_list(node_entries.clone());
 
@@ -1171,7 +1167,7 @@ mod tests {
 			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 3, 7, 8, 12
 		];
 		let actual_bucket_sizes = discovery.node_buckets.iter()
-			.map(|ref bucket| bucket.nodes.len())
+			.map(|bucket| bucket.nodes.len())
 			.collect::<Vec<_>>();
 		assert_eq!(actual_bucket_sizes, expected_bucket_sizes);
 
@@ -1193,7 +1189,7 @@ mod tests {
 	fn packets() {
 		let key = Random.generate().unwrap();
 		let ep = NodeEndpoint { address: SocketAddr::from_str("127.0.0.1:40449").unwrap(), udp_port: 40449 };
-		let mut discovery = Discovery::new(&key, ep.clone(), IpFilter::default());
+		let mut discovery = Discovery::new(&key, ep, IpFilter::default());
 		discovery.check_timestamps = false;
 		let from = SocketAddr::from_str("99.99.99.99:40445").unwrap();
 
@@ -1275,7 +1271,7 @@ mod tests {
 		assert_eq!(ep2, NodeEndpoint::from_rlp(&rlp.at(2).unwrap()).unwrap());
 
 		// `discovery1` should be added to node table on ping received
-		if let Some(_) = discovery2.on_packet(&ping_data.payload, ep1.address.clone()).unwrap() {
+		if discovery2.on_packet(&ping_data.payload, ep1.address.clone()).unwrap().is_some() {
 			panic!("Expected no changes to discovery2's table");
 		}
 
@@ -1293,7 +1289,7 @@ mod tests {
 		let incorrect_pong_data = assemble_packet(
 			PACKET_PONG, &incorrect_pong_rlp.drain(), &discovery2.secret
 		).unwrap();
-		if let Some(_) = discovery1.on_packet(&incorrect_pong_data, ep2.address.clone()).unwrap() {
+		if discovery1.on_packet(&incorrect_pong_data, ep2.address.clone()).unwrap().is_some() {
 			panic!("Expected no changes to discovery1's table because pong hash is incorrect");
 		}
 
@@ -1322,7 +1318,7 @@ mod tests {
 		let unexpected_pong = assemble_packet(
 			PACKET_PONG, &unexpected_pong_rlp.drain(), key3.secret()
 		).unwrap();
-		if let Some(_) = discovery1.on_packet(&unexpected_pong, ep3.address.clone()).unwrap() {
+		if discovery1.on_packet(&unexpected_pong, ep3.address.clone()).unwrap().is_some() {
 			panic!("Expected no changes to discovery1's table for unexpected pong");
 		}
 	}

@@ -32,7 +32,7 @@ impl SessionsQueue {
 		// TODO [Opt]:
 		// 1) known sessions - change to iter
 		// 2) unknown sesions - request chunk-by-chunk
-		SessionsQueue {
+		Self {
 			known_sessions: key_storage.iter().map(|(k, _)| k).collect(),
 			unknown_sessions: unknown_sessions.into_iter().collect(),
 		}

@@ -102,38 +102,39 @@ pub enum Field<T> {
 	BackReference(usize, usize),
 }
 
+#[allow(clippy::use_self)]
 impl<T> Field<T> {
 	/// Helper for creating a new back-reference field.
-	pub fn back_ref(idx: usize, req: usize) -> Self {
-		Field::BackReference(idx, req)
+	pub const fn back_ref(idx: usize, req: usize) -> Self {
+		Self::BackReference(idx, req)
 	}
 
 	/// map a scalar into some other item.
 	pub fn map<F, U>(self, f: F) -> Field<U> where F: FnOnce(T) -> U {
 		match self {
-			Field::Scalar(x) => Field::Scalar(f(x)),
-			Field::BackReference(req, idx) => Field::BackReference(req, idx),
+			Self::Scalar(x) => Field::Scalar(f(x)),
+			Self::BackReference(req, idx) => Field::BackReference(req, idx),
 		}
 	}
 
 	/// Attempt to get a reference to the inner scalar.
 	pub fn as_ref(&self) -> Option<&T> {
-		match *self {
-			Field::Scalar(ref x) => Some(x),
-			Field::BackReference(_, _) => None,
+		match self {
+			Self::Scalar(x) => Some(x),
+			Self::BackReference(_, _) => None,
 		}
 	}
 
 	// attempt conversion into scalar value.
 	fn into_scalar(self) -> Result<T, NoSuchOutput> {
 		match self {
-			Field::Scalar(val) => Ok(val),
+			Self::Scalar(val) => Ok(val),
 			_ => Err(NoSuchOutput),
 		}
 	}
 
 	fn adjust_req<F>(&mut self, mut mapping: F) where F: FnMut(usize) -> usize {
-		if let Field::BackReference(ref mut req_idx, _) = *self {
+		if let Self::BackReference(req_idx, _) = self {
 			*req_idx = mapping(*req_idx)
 		}
 	}
@@ -141,17 +142,17 @@ impl<T> Field<T> {
 
 impl<T> From<T> for Field<T> {
 	fn from(val: T) -> Self {
-		Field::Scalar(val)
+		Self::Scalar(val)
 	}
 }
 
 impl<T: Decodable> Decodable for Field<T> {
 	fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
 		match rlp.val_at::<u8>(0)? {
-			0 => Ok(Field::Scalar(rlp.val_at::<T>(1)?)),
+			0 => Ok(Self::Scalar(rlp.val_at::<T>(1)?)),
 			1 => Ok({
 				let inner_rlp = rlp.at(1)?;
-				Field::BackReference(inner_rlp.val_at(0)?, inner_rlp.val_at(1)?)
+				Self::BackReference(inner_rlp.val_at(0)?, inner_rlp.val_at(1)?)
 			}),
 			_ => Err(DecoderError::Custom("Unknown discriminant for PIP field.")),
 		}
@@ -161,12 +162,12 @@ impl<T: Decodable> Decodable for Field<T> {
 impl<T: Encodable> Encodable for Field<T> {
 	fn rlp_append(&self, s: &mut RlpStream) {
 		s.begin_list(2);
-		match *self {
-			Field::Scalar(ref data) => {
-				s.append(&0u8).append(data);
+		match self {
+			Self::Scalar(data) => {
+				s.append(&0_u8).append(data);
 			}
-			Field::BackReference(ref req, ref idx) => {
-				s.append(&1u8).begin_list(2).append(req).append(idx);
+			Self::BackReference(req, idx) => {
+				s.append(&1_u8).begin_list(2).append(req).append(idx);
 			}
 		}
 	}
@@ -184,9 +185,9 @@ pub enum Output {
 impl Output {
 	/// Get the output kind.
 	pub fn kind(&self) -> OutputKind {
-		match *self {
-			Output::Hash(_) => OutputKind::Hash,
-			Output::Number(_) => OutputKind::Number,
+		match self {
+			Self::Hash(_) => OutputKind::Hash,
+			Self::Number(_) => OutputKind::Number,
 		}
 	}
 }
@@ -211,28 +212,28 @@ pub enum HashOrNumber {
 
 impl From<H256> for HashOrNumber {
 	fn from(hash: H256) -> Self {
-		HashOrNumber::Hash(hash)
+		Self::Hash(hash)
 	}
 }
 
 impl From<u64> for HashOrNumber {
 	fn from(num: u64) -> Self {
-		HashOrNumber::Number(num)
+		Self::Number(num)
 	}
 }
 
 impl Decodable for HashOrNumber {
 	fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-		rlp.as_val::<H256>().map(HashOrNumber::Hash)
-			.or_else(|_| rlp.as_val().map(HashOrNumber::Number))
+		rlp.as_val::<H256>().map(Self::Hash)
+			.or_else(|_| rlp.as_val().map(Self::Number))
 	}
 }
 
 impl Encodable for HashOrNumber {
 	fn rlp_append(&self, s: &mut RlpStream) {
-		match *self {
-			HashOrNumber::Hash(ref hash) => s.append(hash),
-			HashOrNumber::Number(ref num) => s.append(num),
+		match self {
+			Self::Hash(hash) => s.append(hash),
+			Self::Number(num) => s.append(num),
 		};
 	}
 }
@@ -295,17 +296,17 @@ pub enum CompleteRequest {
 impl CompleteRequest {
 	/// Inspect the kind of this response.
 	pub fn kind(&self) -> Kind {
-		match *self {
-			CompleteRequest::Headers(_) => Kind::Headers,
-			CompleteRequest::HeaderProof(_) => Kind::HeaderProof,
-			CompleteRequest::TransactionIndex(_) => Kind::TransactionIndex,
-			CompleteRequest::Receipts(_) => Kind::Receipts,
-			CompleteRequest::Body(_) => Kind::Body,
-			CompleteRequest::Account(_) => Kind::Account,
-			CompleteRequest::Storage(_) => Kind::Storage,
-			CompleteRequest::Code(_) => Kind::Code,
-			CompleteRequest::Execution(_) => Kind::Execution,
-			CompleteRequest::Signal(_) => Kind::Signal,
+		match self {
+			Self::Headers(_) => Kind::Headers,
+			Self::HeaderProof(_) => Kind::HeaderProof,
+			Self::TransactionIndex(_) => Kind::TransactionIndex,
+			Self::Receipts(_) => Kind::Receipts,
+			Self::Body(_) => Kind::Body,
+			Self::Account(_) => Kind::Account,
+			Self::Storage(_) => Kind::Storage,
+			Self::Code(_) => Kind::Code,
+			Self::Execution(_) => Kind::Execution,
+			Self::Signal(_) => Kind::Signal,
 		}
 	}
 }
@@ -313,17 +314,17 @@ impl CompleteRequest {
 impl Request {
 	/// Get the request kind.
 	pub fn kind(&self) -> Kind {
-		match *self {
-			Request::Headers(_) => Kind::Headers,
-			Request::HeaderProof(_) => Kind::HeaderProof,
-			Request::TransactionIndex(_) => Kind::TransactionIndex,
-			Request::Receipts(_) => Kind::Receipts,
-			Request::Body(_) => Kind::Body,
-			Request::Account(_) => Kind::Account,
-			Request::Storage(_) => Kind::Storage,
-			Request::Code(_) => Kind::Code,
-			Request::Execution(_) => Kind::Execution,
-			Request::Signal(_) => Kind::Signal,
+		match self {
+			Self::Headers(_) => Kind::Headers,
+			Self::HeaderProof(_) => Kind::HeaderProof,
+			Self::TransactionIndex(_) => Kind::TransactionIndex,
+			Self::Receipts(_) => Kind::Receipts,
+			Self::Body(_) => Kind::Body,
+			Self::Account(_) => Kind::Account,
+			Self::Storage(_) => Kind::Storage,
+			Self::Code(_) => Kind::Code,
+			Self::Execution(_) => Kind::Execution,
+			Self::Signal(_) => Kind::Signal,
 		}
 	}
 }
@@ -331,16 +332,16 @@ impl Request {
 impl Decodable for Request {
 	fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
 		match rlp.val_at::<Kind>(0)? {
-			Kind::Headers => Ok(Request::Headers(rlp.val_at(1)?)),
-			Kind::HeaderProof => Ok(Request::HeaderProof(rlp.val_at(1)?)),
-			Kind::TransactionIndex => Ok(Request::TransactionIndex(rlp.val_at(1)?)),
-			Kind::Receipts => Ok(Request::Receipts(rlp.val_at(1)?)),
-			Kind::Body => Ok(Request::Body(rlp.val_at(1)?)),
-			Kind::Account => Ok(Request::Account(rlp.val_at(1)?)),
-			Kind::Storage => Ok(Request::Storage(rlp.val_at(1)?)),
-			Kind::Code => Ok(Request::Code(rlp.val_at(1)?)),
-			Kind::Execution => Ok(Request::Execution(rlp.val_at(1)?)),
-			Kind::Signal => Ok(Request::Signal(rlp.val_at(1)?)),
+			Kind::Headers => Ok(Self::Headers(rlp.val_at(1)?)),
+			Kind::HeaderProof => Ok(Self::HeaderProof(rlp.val_at(1)?)),
+			Kind::TransactionIndex => Ok(Self::TransactionIndex(rlp.val_at(1)?)),
+			Kind::Receipts => Ok(Self::Receipts(rlp.val_at(1)?)),
+			Kind::Body => Ok(Self::Body(rlp.val_at(1)?)),
+			Kind::Account => Ok(Self::Account(rlp.val_at(1)?)),
+			Kind::Storage => Ok(Self::Storage(rlp.val_at(1)?)),
+			Kind::Code => Ok(Self::Code(rlp.val_at(1)?)),
+			Kind::Execution => Ok(Self::Execution(rlp.val_at(1)?)),
+			Kind::Signal => Ok(Self::Signal(rlp.val_at(1)?)),
 		}
 	}
 }
@@ -352,17 +353,17 @@ impl Encodable for Request {
 		// hack around https://github.com/paritytech/parity-ethereum/issues/4356
 		Encodable::rlp_append(&self.kind(), s);
 
-		match *self {
-			Request::Headers(ref req) => s.append(req),
-			Request::HeaderProof(ref req) => s.append(req),
-			Request::TransactionIndex(ref req) => s.append(req),
-			Request::Receipts(ref req) => s.append(req),
-			Request::Body(ref req) => s.append(req),
-			Request::Account(ref req) => s.append(req),
-			Request::Storage(ref req) => s.append(req),
-			Request::Code(ref req) => s.append(req),
-			Request::Execution(ref req) => s.append(req),
-			Request::Signal(ref req) => s.append(req),
+		match self {
+			Self::Headers(req) => s.append(req),
+			Self::HeaderProof(req) => s.append(req),
+			Self::TransactionIndex(req) => s.append(req),
+			Self::Receipts(req) => s.append(req),
+			Self::Body(req) => s.append(req),
+			Self::Account(req) => s.append(req),
+			Self::Storage(req) => s.append(req),
+			Self::Code(req) => s.append(req),
+			Self::Execution(req) => s.append(req),
+			Self::Signal(req) => s.append(req),
 		};
 	}
 }
@@ -374,77 +375,77 @@ impl IncompleteRequest for Request {
 	fn check_outputs<F>(&self, f: F) -> Result<(), NoSuchOutput>
 		where F: FnMut(usize, usize, OutputKind) -> Result<(), NoSuchOutput>
 	{
-		match *self {
-			Request::Headers(ref req) => req.check_outputs(f),
-			Request::HeaderProof(ref req) => req.check_outputs(f),
-			Request::TransactionIndex(ref req) => req.check_outputs(f),
-			Request::Receipts(ref req) => req.check_outputs(f),
-			Request::Body(ref req) => req.check_outputs(f),
-			Request::Account(ref req) => req.check_outputs(f),
-			Request::Storage(ref req) => req.check_outputs(f),
-			Request::Code(ref req) => req.check_outputs(f),
-			Request::Execution(ref req) => req.check_outputs(f),
-			Request::Signal(ref req) => req.check_outputs(f),
+		match self {
+			Self::Headers(req) => req.check_outputs(f),
+			Self::HeaderProof(req) => req.check_outputs(f),
+			Self::TransactionIndex(req) => req.check_outputs(f),
+			Self::Receipts(req) => req.check_outputs(f),
+			Self::Body(req) => req.check_outputs(f),
+			Self::Account(req) => req.check_outputs(f),
+			Self::Storage(req) => req.check_outputs(f),
+			Self::Code(req) => req.check_outputs(f),
+			Self::Execution(req) => req.check_outputs(f),
+			Self::Signal(req) => req.check_outputs(f),
 		}
 	}
 
 	fn note_outputs<F>(&self, f: F) where F: FnMut(usize, OutputKind) {
-		match *self {
-			Request::Headers(ref req) => req.note_outputs(f),
-			Request::HeaderProof(ref req) => req.note_outputs(f),
-			Request::TransactionIndex(ref req) => req.note_outputs(f),
-			Request::Receipts(ref req) => req.note_outputs(f),
-			Request::Body(ref req) => req.note_outputs(f),
-			Request::Account(ref req) => req.note_outputs(f),
-			Request::Storage(ref req) => req.note_outputs(f),
-			Request::Code(ref req) => req.note_outputs(f),
-			Request::Execution(ref req) => req.note_outputs(f),
-			Request::Signal(ref req) => req.note_outputs(f),
+		match self {
+			Self::Headers(req) => req.note_outputs(f),
+			Self::HeaderProof(req) => req.note_outputs(f),
+			Self::TransactionIndex(req) => req.note_outputs(f),
+			Self::Receipts(req) => req.note_outputs(f),
+			Self::Body(req) => req.note_outputs(f),
+			Self::Account(req) => req.note_outputs(f),
+			Self::Storage(req) => req.note_outputs(f),
+			Self::Code(req) => req.note_outputs(f),
+			Self::Execution(req) => req.note_outputs(f),
+			Self::Signal(req) => req.note_outputs(f),
 		}
 	}
 
 	fn fill<F>(&mut self, oracle: F) where F: Fn(usize, usize) -> Result<Output, NoSuchOutput> {
-		match *self {
-			Request::Headers(ref mut req) => req.fill(oracle),
-			Request::HeaderProof(ref mut req) => req.fill(oracle),
-			Request::TransactionIndex(ref mut req) => req.fill(oracle),
-			Request::Receipts(ref mut req) => req.fill(oracle),
-			Request::Body(ref mut req) => req.fill(oracle),
-			Request::Account(ref mut req) => req.fill(oracle),
-			Request::Storage(ref mut req) => req.fill(oracle),
-			Request::Code(ref mut req) => req.fill(oracle),
-			Request::Execution(ref mut req) => req.fill(oracle),
-			Request::Signal(ref mut req) => req.fill(oracle),
+		match self {
+			Self::Headers(req) => req.fill(oracle),
+			Self::HeaderProof(req) => req.fill(oracle),
+			Self::TransactionIndex(req) => req.fill(oracle),
+			Self::Receipts(req) => req.fill(oracle),
+			Self::Body(req) => req.fill(oracle),
+			Self::Account(req) => req.fill(oracle),
+			Self::Storage(req) => req.fill(oracle),
+			Self::Code(req) => req.fill(oracle),
+			Self::Execution(req) => req.fill(oracle),
+			Self::Signal(req) => req.fill(oracle),
 		}
 	}
 
 	fn complete(self) -> Result<Self::Complete, NoSuchOutput> {
 		match self {
-			Request::Headers(req) => req.complete().map(CompleteRequest::Headers),
-			Request::HeaderProof(req) => req.complete().map(CompleteRequest::HeaderProof),
-			Request::TransactionIndex(req) => req.complete().map(CompleteRequest::TransactionIndex),
-			Request::Receipts(req) => req.complete().map(CompleteRequest::Receipts),
-			Request::Body(req) => req.complete().map(CompleteRequest::Body),
-			Request::Account(req) => req.complete().map(CompleteRequest::Account),
-			Request::Storage(req) => req.complete().map(CompleteRequest::Storage),
-			Request::Code(req) => req.complete().map(CompleteRequest::Code),
-			Request::Execution(req) => req.complete().map(CompleteRequest::Execution),
-			Request::Signal(req) => req.complete().map(CompleteRequest::Signal),
+			Self::Headers(req) => req.complete().map(CompleteRequest::Headers),
+			Self::HeaderProof(req) => req.complete().map(CompleteRequest::HeaderProof),
+			Self::TransactionIndex(req) => req.complete().map(CompleteRequest::TransactionIndex),
+			Self::Receipts(req) => req.complete().map(CompleteRequest::Receipts),
+			Self::Body(req) => req.complete().map(CompleteRequest::Body),
+			Self::Account(req) => req.complete().map(CompleteRequest::Account),
+			Self::Storage(req) => req.complete().map(CompleteRequest::Storage),
+			Self::Code(req) => req.complete().map(CompleteRequest::Code),
+			Self::Execution(req) => req.complete().map(CompleteRequest::Execution),
+			Self::Signal(req) => req.complete().map(CompleteRequest::Signal),
 		}
 	}
 
 	fn adjust_refs<F>(&mut self, mapping: F) where F: FnMut(usize) -> usize {
-		match *self {
-			Request::Headers(ref mut req) => req.adjust_refs(mapping),
-			Request::HeaderProof(ref mut req) => req.adjust_refs(mapping),
-			Request::TransactionIndex(ref mut req) => req.adjust_refs(mapping),
-			Request::Receipts(ref mut req) => req.adjust_refs(mapping),
-			Request::Body(ref mut req) => req.adjust_refs(mapping),
-			Request::Account(ref mut req) => req.adjust_refs(mapping),
-			Request::Storage(ref mut req) => req.adjust_refs(mapping),
-			Request::Code(ref mut req) => req.adjust_refs(mapping),
-			Request::Execution(ref mut req) => req.adjust_refs(mapping),
-			Request::Signal(ref mut req) => req.adjust_refs(mapping),
+		match self {
+			Self::Headers(req) => req.adjust_refs(mapping),
+			Self::HeaderProof(req) => req.adjust_refs(mapping),
+			Self::TransactionIndex(req) => req.adjust_refs(mapping),
+			Self::Receipts(req) => req.adjust_refs(mapping),
+			Self::Body(req) => req.adjust_refs(mapping),
+			Self::Account(req) => req.adjust_refs(mapping),
+			Self::Storage(req) => req.adjust_refs(mapping),
+			Self::Code(req) => req.adjust_refs(mapping),
+			Self::Execution(req) => req.adjust_refs(mapping),
+			Self::Signal(req) => req.adjust_refs(mapping),
 		}
 	}
 }
@@ -493,16 +494,16 @@ pub enum Kind {
 impl Decodable for Kind {
 	fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
 		match rlp.as_val::<u8>()? {
-			0 => Ok(Kind::Headers),
-			1 => Ok(Kind::HeaderProof),
-			2 => Ok(Kind::TransactionIndex),
-			3 => Ok(Kind::Receipts),
-			4 => Ok(Kind::Body),
-			5 => Ok(Kind::Account),
-			6 => Ok(Kind::Storage),
-			7 => Ok(Kind::Code),
-			8 => Ok(Kind::Execution),
-			9 => Ok(Kind::Signal),
+			0 => Ok(Self::Headers),
+			1 => Ok(Self::HeaderProof),
+			2 => Ok(Self::TransactionIndex),
+			3 => Ok(Self::Receipts),
+			4 => Ok(Self::Body),
+			5 => Ok(Self::Account),
+			6 => Ok(Self::Storage),
+			7 => Ok(Self::Code),
+			8 => Ok(Self::Execution),
+			9 => Ok(Self::Signal),
 			_ => Err(DecoderError::Custom("Unknown PIP request ID.")),
 		}
 	}
@@ -542,17 +543,17 @@ pub enum Response {
 impl ResponseLike for Response {
 	/// Fill reusable outputs by writing them into the function.
 	fn fill_outputs<F>(&self, f: F) where F: FnMut(usize, Output) {
-		match *self {
-			Response::Headers(ref res) => res.fill_outputs(f),
-			Response::HeaderProof(ref res) => res.fill_outputs(f),
-			Response::TransactionIndex(ref res) => res.fill_outputs(f),
-			Response::Receipts(ref res) => res.fill_outputs(f),
-			Response::Body(ref res) => res.fill_outputs(f),
-			Response::Account(ref res) => res.fill_outputs(f),
-			Response::Storage(ref res) => res.fill_outputs(f),
-			Response::Code(ref res) => res.fill_outputs(f),
-			Response::Execution(ref res) => res.fill_outputs(f),
-			Response::Signal(ref res) => res.fill_outputs(f),
+		match self {
+			Self::Headers(res) => res.fill_outputs(f),
+			Self::HeaderProof(res) => res.fill_outputs(f),
+			Self::TransactionIndex(res) => res.fill_outputs(f),
+			Self::Receipts(res) => res.fill_outputs(f),
+			Self::Body(res) => res.fill_outputs(f),
+			Self::Account(res) => res.fill_outputs(f),
+			Self::Storage(res) => res.fill_outputs(f),
+			Self::Code(res) => res.fill_outputs(f),
+			Self::Execution(res) => res.fill_outputs(f),
+			Self::Signal(res) => res.fill_outputs(f),
 		}
 	}
 }
@@ -560,17 +561,17 @@ impl ResponseLike for Response {
 impl Response {
 	/// Inspect the kind of this response.
 	pub fn kind(&self) -> Kind {
-		match *self {
-			Response::Headers(_) => Kind::Headers,
-			Response::HeaderProof(_) => Kind::HeaderProof,
-			Response::TransactionIndex(_) => Kind::TransactionIndex,
-			Response::Receipts(_) => Kind::Receipts,
-			Response::Body(_) => Kind::Body,
-			Response::Account(_) => Kind::Account,
-			Response::Storage(_) => Kind::Storage,
-			Response::Code(_) => Kind::Code,
-			Response::Execution(_) => Kind::Execution,
-			Response::Signal(_) => Kind::Signal,
+		match self {
+			Self::Headers(_) => Kind::Headers,
+			Self::HeaderProof(_) => Kind::HeaderProof,
+			Self::TransactionIndex(_) => Kind::TransactionIndex,
+			Self::Receipts(_) => Kind::Receipts,
+			Self::Body(_) => Kind::Body,
+			Self::Account(_) => Kind::Account,
+			Self::Storage(_) => Kind::Storage,
+			Self::Code(_) => Kind::Code,
+			Self::Execution(_) => Kind::Execution,
+			Self::Signal(_) => Kind::Signal,
 		}
 	}
 }
@@ -578,16 +579,16 @@ impl Response {
 impl Decodable for Response {
 	fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
 		match rlp.val_at::<Kind>(0)? {
-			Kind::Headers => Ok(Response::Headers(rlp.val_at(1)?)),
-			Kind::HeaderProof => Ok(Response::HeaderProof(rlp.val_at(1)?)),
-			Kind::TransactionIndex => Ok(Response::TransactionIndex(rlp.val_at(1)?)),
-			Kind::Receipts => Ok(Response::Receipts(rlp.val_at(1)?)),
-			Kind::Body => Ok(Response::Body(rlp.val_at(1)?)),
-			Kind::Account => Ok(Response::Account(rlp.val_at(1)?)),
-			Kind::Storage => Ok(Response::Storage(rlp.val_at(1)?)),
-			Kind::Code => Ok(Response::Code(rlp.val_at(1)?)),
-			Kind::Execution => Ok(Response::Execution(rlp.val_at(1)?)),
-			Kind::Signal => Ok(Response::Signal(rlp.val_at(1)?)),
+			Kind::Headers => Ok(Self::Headers(rlp.val_at(1)?)),
+			Kind::HeaderProof => Ok(Self::HeaderProof(rlp.val_at(1)?)),
+			Kind::TransactionIndex => Ok(Self::TransactionIndex(rlp.val_at(1)?)),
+			Kind::Receipts => Ok(Self::Receipts(rlp.val_at(1)?)),
+			Kind::Body => Ok(Self::Body(rlp.val_at(1)?)),
+			Kind::Account => Ok(Self::Account(rlp.val_at(1)?)),
+			Kind::Storage => Ok(Self::Storage(rlp.val_at(1)?)),
+			Kind::Code => Ok(Self::Code(rlp.val_at(1)?)),
+			Kind::Execution => Ok(Self::Execution(rlp.val_at(1)?)),
+			Kind::Signal => Ok(Self::Signal(rlp.val_at(1)?)),
 		}
 	}
 }
@@ -599,17 +600,17 @@ impl Encodable for Response {
 		// hack around https://github.com/paritytech/parity-ethereum/issues/4356
 		Encodable::rlp_append(&self.kind(), s);
 
-		match *self {
-			Response::Headers(ref res) => s.append(res),
-			Response::HeaderProof(ref res) => s.append(res),
-			Response::TransactionIndex(ref res) => s.append(res),
-			Response::Receipts(ref res) => s.append(res),
-			Response::Body(ref res) => s.append(res),
-			Response::Account(ref res) => s.append(res),
-			Response::Storage(ref res) => s.append(res),
-			Response::Code(ref res) => s.append(res),
-			Response::Execution(ref res) => s.append(res),
-			Response::Signal(ref res) => s.append(res),
+		match self {
+			Self::Headers(res) => s.append(res),
+			Self::HeaderProof(res) => s.append(res),
+			Self::TransactionIndex(res) => s.append(res),
+			Self::Receipts(res) => s.append(res),
+			Self::Body(res) => s.append(res),
+			Self::Account(res) => s.append(res),
+			Self::Storage(res) => s.append(res),
+			Self::Code(res) => s.append(res),
+			Self::Execution(res) => s.append(res),
+			Self::Signal(res) => s.append(res),
 		};
 	}
 }
@@ -764,7 +765,7 @@ pub mod header {
 				headers.push(encoded::Header::new(item.as_raw().to_owned()));
 			}
 
-			Ok(Response { headers })
+			Ok(Self { headers })
 		}
 	}
 
@@ -856,7 +857,7 @@ pub mod header_proof {
 
 	impl Decodable for Response {
 		fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-			Ok(Response {
+			Ok(Self {
 				proof: rlp.list_at(0)?,
 				hash: rlp.val_at(1)?,
 				td: rlp.val_at(2)?,
@@ -907,7 +908,7 @@ pub mod transaction_index {
 		fn fill<F>(&mut self, oracle: F) where F: Fn(usize, usize) -> Result<Output, NoSuchOutput> {
 			if let Field::BackReference(req, idx) = self.hash {
 				self.hash = match oracle(req, idx) {
-					Ok(Output::Hash(hash)) => Field::Scalar(hash.into()),
+					Ok(Output::Hash(hash)) => Field::Scalar(hash),
 					_ => Field::BackReference(req, idx),
 				}
 			}
@@ -982,7 +983,7 @@ pub mod block_receipts {
 		fn fill<F>(&mut self, oracle: F) where F: Fn(usize, usize) -> Result<Output, NoSuchOutput> {
 			if let Field::BackReference(req, idx) = self.hash {
 				self.hash = match oracle(req, idx) {
-					Ok(Output::Hash(hash)) => Field::Scalar(hash.into()),
+					Ok(Output::Hash(hash)) => Field::Scalar(hash),
 					_ => Field::BackReference(req, idx),
 				}
 			}
@@ -1096,7 +1097,7 @@ pub mod block_body {
 			let _: Vec<UnverifiedTransaction> = rlp.list_at(0)?;
 			let _: Vec<FullHeader> = rlp.list_at(1)?;
 
-			Ok(Response {
+			Ok(Self {
 				body: encoded::Body::new(rlp.as_raw().to_owned()),
 			})
 		}
@@ -1104,7 +1105,7 @@ pub mod block_body {
 
 	impl Encodable for Response {
 		fn rlp_append(&self, s: &mut RlpStream) {
-			s.append_raw(&self.body.rlp().as_raw(), 1);
+			s.append_raw(self.body.rlp().as_raw(), 1);
 		}
 	}
 }
@@ -1510,7 +1511,7 @@ pub mod execution {
 				items.push(raw_item.data()?.to_vec());
 			}
 
-			Ok(Response { items })
+			Ok(Self { items })
 		}
 	}
 
@@ -1541,7 +1542,7 @@ pub mod epoch_signal {
 
 	impl Decodable for Incomplete {
 		fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-			Ok(Incomplete {
+			Ok(Self {
 				block_hash: rlp.val_at(0)?,
 			})
 		}
@@ -1611,7 +1612,7 @@ pub mod epoch_signal {
 	impl Decodable for Response {
 		fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
 
-			Ok(Response {
+			Ok(Self {
 				signal: rlp.as_val()?,
 			})
 		}
@@ -1628,6 +1629,7 @@ pub mod epoch_signal {
 mod tests {
 	use super::*;
 	use common_types::header::Header;
+	use ethereum_types::{Address, U256};
 
 	fn check_roundtrip<T>(val: T)
 		where T: ::rlp::Encodable + ::rlp::Decodable + PartialEq + ::std::fmt::Debug
@@ -1655,7 +1657,7 @@ mod tests {
 
 	#[test]
 	fn field_roundtrip() {
-		let field_scalar = Field::Scalar(5usize);
+		let field_scalar = Field::Scalar(5_usize);
 		let field_back: Field<usize> = Field::BackReference(1, 2);
 
 		check_roundtrip(field_scalar);
@@ -1665,7 +1667,7 @@ mod tests {
 	#[test]
 	fn headers_roundtrip() {
 		let req = IncompleteHeadersRequest {
-			start: Field::Scalar(5u64.into()),
+			start: Field::Scalar(5_u64.into()),
 			skip: 0,
 			max: 100,
 			reverse: false,
@@ -1694,7 +1696,7 @@ mod tests {
 		let full_req = Request::HeaderProof(req.clone());
 		let res = HeaderProofResponse {
 			proof: vec![vec![1, 2, 3], vec![4, 5, 6]],
-			hash: Default::default(),
+			hash: H256::zero(),
 			td: 100.into(),
 		};
 		let full_res = Response::HeaderProof(res.clone());
@@ -1708,7 +1710,7 @@ mod tests {
 	#[test]
 	fn transaction_index_roundtrip() {
 		let req = IncompleteTransactionIndexRequest {
-			hash: Field::Scalar(Default::default()),
+			hash: Field::Scalar(H256::zero()),
 		};
 
 		let full_req = Request::TransactionIndex(req.clone());
@@ -1729,11 +1731,11 @@ mod tests {
 	fn receipts_roundtrip() {
 		use common_types::receipt::{Receipt, TransactionOutcome};
 		let req = IncompleteReceiptsRequest {
-			hash: Field::Scalar(Default::default()),
+			hash: Field::Scalar(H256::zero()),
 		};
 
 		let full_req = Request::Receipts(req.clone());
-		let receipt = Receipt::new(TransactionOutcome::Unknown, Default::default(), Vec::new());
+		let receipt = Receipt::new(TransactionOutcome::Unknown, U256::zero(), Vec::new());
 		let res = ReceiptsResponse {
 			receipts: vec![receipt.clone(), receipt],
 		};
@@ -1749,14 +1751,14 @@ mod tests {
 	fn body_roundtrip() {
 		use common_types::transaction::{Transaction, UnverifiedTransaction};
 		let req = IncompleteBodyRequest {
-			hash: Field::Scalar(Default::default()),
+			hash: Field::Scalar(H256::zero()),
 		};
 
 		let full_req = Request::Body(req.clone());
 		let res = BodyResponse {
 			body: {
 				let header = ::common_types::header::Header::default();
-				let tx = UnverifiedTransaction::from(Transaction::default().fake_sign(Default::default()));
+				let tx = UnverifiedTransaction::from(Transaction::default().fake_sign(Address::zero()));
 				let mut stream = RlpStream::new_list(2);
 				stream.begin_list(2).append(&tx).append(&tx)
 					.begin_list(1).append(&header);
@@ -1775,7 +1777,7 @@ mod tests {
 	#[test]
 	fn account_roundtrip() {
 		let req = IncompleteAccountRequest {
-			block_hash: Field::Scalar(Default::default()),
+			block_hash: Field::Scalar(H256::zero()),
 			address_hash: Field::BackReference(1, 2),
 		};
 
@@ -1783,9 +1785,9 @@ mod tests {
 		let res = AccountResponse {
 			proof: vec![vec![1, 2, 3], vec![4, 5, 6]],
 			nonce: 100.into(),
-			balance: 123456.into(),
-			code_hash: Default::default(),
-			storage_root: Default::default(),
+			balance: 123_456.into(),
+			code_hash: H256::zero(),
+			storage_root: H256::zero(),
 		};
 		let full_res = Response::Account(res.clone());
 
@@ -1798,7 +1800,7 @@ mod tests {
 	#[test]
 	fn storage_roundtrip() {
 		let req = IncompleteStorageRequest {
-			block_hash: Field::Scalar(Default::default()),
+			block_hash: Field::Scalar(H256::zero()),
 			address_hash: Field::BackReference(1, 2),
 			key_hash: Field::BackReference(3, 2),
 		};
@@ -1819,7 +1821,7 @@ mod tests {
 	#[test]
 	fn code_roundtrip() {
 		let req = IncompleteCodeRequest {
-			block_hash: Field::Scalar(Default::default()),
+			block_hash: Field::Scalar(H256::zero()),
 			code_hash: Field::BackReference(3, 2),
 		};
 
@@ -1838,8 +1840,8 @@ mod tests {
 	#[test]
 	fn execution_roundtrip() {
 		let req = IncompleteExecutionRequest {
-			block_hash: Field::Scalar(Default::default()),
-			from: Default::default(),
+			block_hash: Field::Scalar(H256::zero()),
+			from: Address::zero(),
 			action: ::common_types::transaction::Action::Create,
 			gas: 100_000.into(),
 			gas_price: 0.into(),
@@ -1848,7 +1850,7 @@ mod tests {
 		};
 
 		let full_req = Request::Execution(req.clone());
-		let res = ExecutionResponse { items: vec![vec![], vec![1, 1, 1, 2, 3]] };
+		let res = ExecutionResponse { items: vec![Vec::new(), vec![1, 1, 1, 2, 3]] };
 		let full_res = Response::Execution(res.clone());
 
 		check_roundtrip(req);
@@ -1862,8 +1864,8 @@ mod tests {
 		use rlp::*;
 
 		let reqs: Vec<_> = (0..10).map(|_| IncompleteExecutionRequest {
-			block_hash: Field::Scalar(Default::default()),
-			from: Default::default(),
+			block_hash: Field::Scalar(H256::zero()),
+			from: Address::zero(),
 			action: ::common_types::transaction::Action::Create,
 			gas: 100_000.into(),
 			gas_price: 0.into(),
@@ -1872,11 +1874,11 @@ mod tests {
 		}).map(Request::Execution).collect();
 
 		let mut stream = RlpStream::new_list(2);
-		stream.append(&100usize).append_list(&reqs);
+		stream.append(&100_usize).append_list(&reqs);
 		let out = stream.out();
 
 		let rlp = Rlp::new(&out);
-		assert_eq!(rlp.val_at::<usize>(0).unwrap(), 100usize);
+		assert_eq!(rlp.val_at::<usize>(0).unwrap(), 100_usize);
 		assert_eq!(rlp.list_at::<Request>(1).unwrap(), reqs);
 	}
 
@@ -1888,20 +1890,20 @@ mod tests {
 
 		let body = ::common_types::encoded::Body::new(stream.out());
 		let reqs = vec![
-			Response::Headers(HeadersResponse { headers: vec![] }),
-			Response::HeaderProof(HeaderProofResponse { proof: vec![], hash: Default::default(), td: 100.into()}),
-			Response::Receipts(ReceiptsResponse { receipts: vec![Receipt::new(TransactionOutcome::Unknown, Default::default(), Vec::new())] }),
+			Response::Headers(HeadersResponse { headers: Vec::new() }),
+			Response::HeaderProof(HeaderProofResponse { proof: Vec::new(), hash: H256::zero(), td: 100.into()}),
+			Response::Receipts(ReceiptsResponse { receipts: vec![Receipt::new(TransactionOutcome::Unknown, U256::zero(), Vec::new())] }),
 			Response::Body(BodyResponse { body: body }),
 			Response::Account(AccountResponse {
-				proof: vec![],
+				proof: Vec::new(),
 				nonce: 100.into(),
 				balance: 123.into(),
-				code_hash: Default::default(),
-				storage_root: Default::default()
+				code_hash: H256::zero(),
+				storage_root: H256::zero()
 			}),
-			Response::Storage(StorageResponse { proof: vec![], value: H256::zero() }),
+			Response::Storage(StorageResponse { proof: Vec::new(), value: H256::zero() }),
 			Response::Code(CodeResponse { code: vec![1, 2, 3, 4, 5] }),
-			Response::Execution(ExecutionResponse { items: vec![] }),
+			Response::Execution(ExecutionResponse { items: Vec::new() }),
 		];
 
 		let raw = ::rlp::encode_list(&reqs);
@@ -1911,7 +1913,7 @@ mod tests {
 	#[test]
 	fn epoch_signal_roundtrip() {
 		let req = IncompleteSignalRequest {
-			block_hash: Field::Scalar(Default::default()),
+			block_hash: Field::Scalar(H256::zero()),
 		};
 
 		let full_req = Request::Signal(req.clone());

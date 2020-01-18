@@ -87,10 +87,10 @@ pub fn request(address: &SocketAddr, request: &str) -> Response {
 	loop {
 		let mut chunk = [0; 32 *1024];
 		match req.read(&mut chunk) {
-			Err(ref err) if err.kind() == io::ErrorKind::WouldBlock => break,
+			Err(err) if err.kind() == io::ErrorKind::WouldBlock => break,
 			Err(err) => panic!("Unable to read response: {:?}", err),
 			Ok(0) => break,
-			Ok(read) => response.extend_from_slice(&chunk[..read]),
+			Ok(read) => response.extend_from_slice(chunk.get(..read).unwrap()),
 		}
 	}
 

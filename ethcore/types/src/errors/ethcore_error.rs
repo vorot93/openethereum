@@ -104,13 +104,13 @@ impl error::Error for EthcoreError {
 
 impl From<&str> for EthcoreError {
 	fn from(s: &str) -> Self {
-		EthcoreError::Msg(s.into())
+		Self::Msg(s.into())
 	}
 }
 
 impl<E> From<Box<E>> for EthcoreError where EthcoreError: From<E> {
-	fn from(err: Box<E>) -> EthcoreError {
-		EthcoreError::from(*err)
+	fn from(err: Box<E>) -> Self {
+		Self::from(*err)
 	}
 }
 
@@ -170,12 +170,12 @@ impl error::Error for ExecutionError {
 
 impl From<Box<TrieError>> for ExecutionError {
 	fn from(err: Box<TrieError>) -> Self {
-		ExecutionError::Internal(format!("{:?}", err))
+		Self::Internal(format!("{:?}", err))
 	}
 }
 impl From<TrieError> for ExecutionError {
 	fn from(err: TrieError) -> Self {
-		ExecutionError::Internal(format!("{:?}", err))
+		Self::Internal(format!("{:?}", err))
 	}
 }
 
@@ -183,21 +183,21 @@ impl fmt::Display for ExecutionError {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		use self::ExecutionError::*;
 
-		let msg = match *self {
-			NotEnoughBaseGas { ref required, ref got } =>
+		let msg = match self {
+			NotEnoughBaseGas { required, got } =>
 				format!("Not enough base gas. {} is required, but only {} paid", required, got),
-			BlockGasLimitReached { ref gas_limit, ref gas_used, ref gas } =>
+			BlockGasLimitReached { gas_limit, gas_used, gas } =>
 				format!("Block gas limit reached. The limit is {}, {} has \
 					already been used, and {} more is required", gas_limit, gas_used, gas),
-			InvalidNonce { ref expected, ref got } =>
+			InvalidNonce { expected, got } =>
 				format!("Invalid transaction nonce: expected {}, found {}", expected, got),
-			NotEnoughCash { ref required, ref got } =>
+			NotEnoughCash { required, got } =>
 				format!("Cost of transaction exceeds sender balance. {} is required \
 					but the sender only has {}", required, got),
 			MutableCallInStaticContext => "Mutable Call in static context".to_owned(),
 			SenderMustExist => "Transacting from an empty account".to_owned(),
-			Internal(ref msg) => msg.clone(),
-			TransactionMalformed(ref err) => format!("Malformed transaction: {}", err),
+			Internal(msg) => msg.clone(),
+			TransactionMalformed(err) => format!("Malformed transaction: {}", err),
 		};
 
 		f.write_fmt(format_args!("Transaction execution error ({}).", msg))

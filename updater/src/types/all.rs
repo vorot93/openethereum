@@ -61,5 +61,9 @@ pub enum CapState {
 }
 
 impl Default for CapState {
-	fn default() -> Self { CapState::Unknown }
+	fn default() -> Self { Self::new() }
+}
+
+impl CapState {
+	pub const fn new() -> Self { Self::Unknown }
 }

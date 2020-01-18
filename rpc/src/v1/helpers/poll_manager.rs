@@ -31,14 +31,13 @@ pub struct PollManager<F, T = StandardTimer> where T: Timer {
 impl<F> PollManager<F, StandardTimer> {
 	/// Creates new instance of indexer
 	pub fn new(lifetime: u32) -> Self {
-		PollManager::new_with_timer(Default::default(), lifetime)
+		Self::new_with_timer(StandardTimer::default(), lifetime)
 	}
 }
 
 impl<F, T> PollManager<F, T> where T: Timer {
-
 	pub fn new_with_timer(timer: T, lifetime: u32) -> Self {
-		PollManager {
+		Self {
 			polls: TransientHashMap::new_with_timer(lifetime, timer),
 			next_available_id: 0,
 		}
@@ -59,20 +58,20 @@ impl<F, T> PollManager<F, T> where T: Timer {
 
 	// Implementation is always using `poll_mut`
 	/// Get a reference to stored poll filter
-	pub fn poll(&mut self, id: &PollId) -> Option<&F> {
+	pub fn poll(&mut self, id: PollId) -> Option<&F> {
 		self.polls.prune();
-		self.polls.get(id)
+		self.polls.get(&id)
 	}
 
 	/// Get a mutable reference to stored poll filter
-	pub fn poll_mut(&mut self, id: &PollId) -> Option<&mut F> {
+	pub fn poll_mut(&mut self, id: PollId) -> Option<&mut F> {
 		self.polls.prune();
-		self.polls.get_mut(id)
+		self.polls.get_mut(&id)
 	}
 
 	/// Removes poll info.
-	pub fn remove_poll(&mut self, id: &PollId) -> bool {
-		self.polls.remove(id).is_some()
+	pub fn remove_poll(&mut self, id: PollId) -> bool {
+		self.polls.remove(&id).is_some()
 	}
 }
 
@@ -104,20 +103,20 @@ mod tests {
 		assert_eq!(indexer.create_poll(20), 1);
 
 		time.set(10);
-		*indexer.poll_mut(&0).unwrap() = 21;
-		assert_eq!(*indexer.poll(&0).unwrap(), 21);
-		assert_eq!(*indexer.poll(&1).unwrap(), 20);
+		*indexer.poll_mut(0).unwrap() = 21;
+		assert_eq!(*indexer.poll(0).unwrap(), 21);
+		assert_eq!(*indexer.poll(1).unwrap(), 20);
 
 		time.set(30);
-		*indexer.poll_mut(&1).unwrap() = 23;
-		assert_eq!(*indexer.poll(&1).unwrap(), 23);
+		*indexer.poll_mut(1).unwrap() = 23;
+		assert_eq!(*indexer.poll(1).unwrap(), 23);
 
 		time.set(75);
-		assert!(indexer.poll(&0).is_none());
-		assert_eq!(*indexer.poll(&1).unwrap(), 23);
+		assert!(indexer.poll(0).is_none());
+		assert_eq!(*indexer.poll(1).unwrap(), 23);
 
-		indexer.remove_poll(&1);
-		assert!(indexer.poll(&1).is_none());
+		indexer.remove_poll(1);
+		assert!(indexer.poll(1).is_none());
 	}
 
 }

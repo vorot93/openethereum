@@ -96,8 +96,8 @@ impl<C> PrivateReadyState<C> {
 	pub fn new(
 		state: C,
 	) -> Self {
-		PrivateReadyState {
-			senders: Default::default(),
+		Self {
+			senders: HashSet::new(),
 			state,
 		}
 	}
@@ -129,7 +129,7 @@ pub struct VerificationStore {
 
 impl Default for VerificationStore {
 	fn default() -> Self {
-		VerificationStore {
+		Self {
 			verification_pool: RwLock::new(
 				txpool::Pool::new(
 					txpool::NoopListener,
@@ -224,7 +224,7 @@ impl SigningStore {
 		&mut self,
 		private_hash: H256,
 		transaction: SignedTransaction,
-		validators: &Vec<Address>,
+		validators: &[Address],
 		state: Bytes,
 		contract_nonce: U256,
 	) -> Result<(), Error> {
@@ -233,8 +233,8 @@ impl SigningStore {
 		}
 
 		self.transactions.insert(private_hash, PrivateTransactionSigningDesc {
-			original_transaction: transaction.clone(),
-			validators: validators.clone(),
+			original_transaction: transaction,
+			validators: validators.to_vec(),
 			received_signatures: Vec::new(),
 			state,
 			contract_nonce,

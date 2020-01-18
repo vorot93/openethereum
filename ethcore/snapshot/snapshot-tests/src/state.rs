@@ -102,7 +102,7 @@ fn snap_and_restore() {
 	let keys = old_db.keys();
 
 	for key in keys.keys() {
-		assert_eq!(old_db.get(&key, EMPTY_PREFIX).unwrap(), new_db.as_hash_db().get(&key, EMPTY_PREFIX).unwrap());
+		assert_eq!(old_db.get(key, EMPTY_PREFIX).unwrap(), new_db.as_hash_db().get(key, EMPTY_PREFIX).unwrap());
 	}
 }
 
@@ -118,8 +118,8 @@ fn get_code_from_prev_chunk() {
 	let code = b"this is definitely code";
 	let mut used_code = HashSet::new();
 	let mut acc_stream = RlpStream::new_list(4);
-	acc_stream.append(&U256::default())
-		.append(&U256::default())
+	acc_stream.append(&U256::zero())
+		.append(&U256::zero())
 		.append(&KECCAK_NULL_RLP)
 		.append(&keccak(code));
 
@@ -203,7 +203,7 @@ fn checks_flag() {
 	let db_path = tempdir.path().join("db");
 	{
 		let new_db = Arc::new(Database::open(&db_cfg, &db_path.to_string_lossy()).unwrap());
-		let mut rebuilder = StateRebuilder::new(new_db.clone(), Algorithm::OverlayRecent);
+		let mut rebuilder = StateRebuilder::new(new_db, Algorithm::OverlayRecent);
 		let reader = PackedReader::new(&snap_file).unwrap().unwrap();
 
 		let flag = AtomicBool::new(false);

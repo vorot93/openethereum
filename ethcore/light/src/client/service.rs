@@ -45,16 +45,16 @@ pub enum Error {
 
 impl From<CoreError> for Error {
 	#[inline]
-	fn from(err: CoreError) -> Error {
-		Error::Core(err)
+	fn from(err: CoreError) -> Self {
+		Self::Core(err)
 	}
 }
 
 impl fmt::Display for Error {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		match *self {
-			Error::Core(ref msg) => write!(f, "Core error: {}", msg),
-			Error::Io(ref err) => write!(f, "I/O service error: {}", err),
+		match self {
+			Self::Core(msg) => write!(f, "Core error: {}", msg),
+			Self::Io(err) => write!(f, "I/O service error: {}", err),
 		}
 	}
 }
@@ -80,7 +80,7 @@ impl<T: ChainDataFetcher> Service<T> {
 		spec.engine.register_client(Arc::downgrade(&client) as _);
 		io_service.register_handler(Arc::new(ImportBlocks(client.clone()))).map_err(Error::Io)?;
 
-		Ok(Service {
+		Ok(Self {
 			client,
 			io_service,
 		})

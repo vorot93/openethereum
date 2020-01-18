@@ -62,8 +62,8 @@ pub struct TestMinerService {
 }
 
 impl Default for TestMinerService {
-	fn default() -> TestMinerService {
-		TestMinerService {
+	fn default() -> Self {
+		Self {
 			imported_transactions: Default::default(),
 			pending_transactions: Default::default(),
 			local_transactions: Default::default(),
@@ -153,7 +153,7 @@ impl MinerService for TestMinerService {
 		let transactions: Vec<_> = transactions.into_iter().map(|tx| SignedTransaction::new(tx).unwrap()).collect();
 		self.imported_transactions.lock().extend_from_slice(&transactions);
 
-		for sender in transactions.iter().map(|tx| tx.sender()) {
+		for sender in transactions.iter().map(SignedTransaction::sender) {
 			let nonce = self.next_nonce(chain, &sender);
 			self.next_nonces.write().insert(sender, nonce);
 		}
@@ -277,7 +277,7 @@ impl MinerService for TestMinerService {
 	fn queue_status(&self) -> QueueStatus {
 		QueueStatus {
 			options: verifier::Options {
-				minimal_gas_price: 0x1312d00.into(),
+				minimal_gas_price: 0x0131_2d00.into(),
 				block_gas_limit: 5_000_000.into(),
 				tx_gas_limit: 5_000_000.into(),
 				no_early_reject: false,
@@ -302,7 +302,7 @@ impl MinerService for TestMinerService {
 	}
 
 	fn sensible_gas_price(&self) -> U256 {
-		20_000_000_000u64.into()
+		20_000_000_000_u64.into()
 	}
 
 	fn sensible_gas_limit(&self) -> U256 {
@@ -311,15 +311,12 @@ impl MinerService for TestMinerService {
 
 	fn set_minimal_gas_price(&self, gas_price: U256) -> Result<bool, &str> {
 		let mut new_price = self.min_gas_price.write();
-		match *new_price {
-			Some(ref mut v) => {
-				*v = gas_price;
-				Ok(true)
-			},
-			None => {
-				let error_msg = "Can't update fixed gas price while automatic gas calibration is enabled.";
-				Err(error_msg)
-			},
+		if let Some(v) = new_price.as_mut() {
+			*v = gas_price;
+			Ok(true)
+		} else {
+			let error_msg = "Can't update fixed gas price while automatic gas calibration is enabled.";
+			Err(error_msg)
 		}
 	}
 }

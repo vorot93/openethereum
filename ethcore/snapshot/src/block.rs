@@ -37,13 +37,14 @@ pub struct AbridgedBlock {
 
 impl AbridgedBlock {
 	/// Create from rlp-compressed bytes. Does no verification.
-	pub fn from_raw(compressed: Bytes) -> Self {
-		AbridgedBlock {
+	pub const fn from_raw(compressed: Bytes) -> Self {
+		Self {
 			rlp: compressed,
 		}
 	}
 
 	/// Return the inner bytes.
+	#[allow(clippy::missing_const_for_fn)]
 	pub fn into_inner(self) -> Bytes {
 		self.rlp
 	}
@@ -82,7 +83,7 @@ impl AbridgedBlock {
 			stream.append_raw(&field, 1);
 		}
 
-		AbridgedBlock {
+		Self {
 			rlp: stream.out(),
 		}
 	}

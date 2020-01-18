@@ -62,9 +62,9 @@ impl Future for DispatchResult {
 	type Error = Error;
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-		match *self {
-			DispatchResult::Value(ref response) => Ok(Async::Ready(response.clone())),
-			DispatchResult::Future(_uid, ref mut future) => try_ready!(future.poll()).map(Async::Ready),
+		match self {
+			Self::Value(response) => Ok(Async::Ready(response.clone())),
+			Self::Future(_uid, future) => try_ready!(future.poll()).map(Async::Ready),
 		}
 	}
 }
@@ -102,13 +102,13 @@ pub struct SigningQueueClient<D> {
 impl<D: Dispatcher + 'static> SigningQueueClient<D> {
 	/// Creates a new signing queue client given shared signing queue.
 	pub fn new(signer: &Arc<SignerService>, dispatcher: D, executor: Executor, accounts: &Arc<dyn dispatch::Accounts>) -> Self {
-		SigningQueueClient {
+		Self {
 			signer: signer.clone(),
 			accounts: accounts.clone(),
 			dispatcher,
 			executor,
 			confirmations: Arc::new(Mutex::new(TransientHashMap::new(MAX_PENDING_DURATION_SEC))),
-			deprecation_notice: Default::default(),
+			deprecation_notice: DeprecationNotice::default(),
 		}
 	}
 
@@ -187,8 +187,8 @@ impl<D: Dispatcher + 'static> ParitySigning for SigningQueueClient<D> {
 		self.deprecation_notice.print("parity_checkRequest", deprecated::msgs::ACCOUNTS);
 		match self.confirmations.lock().get(&id) {
 			None => Err(errors::request_not_found()), // Request info has been dropped, or even never been there
-			Some(&None) => Ok(None), // No confirmation yet, request is known, confirmation is pending
-			Some(&Some(ref confirmation)) => confirmation.clone().map(Some), // Confirmation is there
+			Some(None) => Ok(None), // No confirmation yet, request is known, confirmation is pending
+			Some(Some(confirmation)) => confirmation.clone().map(Some), // Confirmation is there
 		}
 	}
 

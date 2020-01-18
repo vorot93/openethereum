@@ -34,25 +34,18 @@ use key_server_cluster::connection_trigger::{Maintain, ConnectionTrigger};
 use key_server_cluster::cluster_message_processor::MessageProcessor;
 use key_server_cluster::io::{DeadlineStatus, ReadMessage, SharedTcpStream,
 	read_encrypted_message, WriteMessage, write_encrypted_message};
-use key_server_cluster::message::{self, ClusterMessage, Message};
+use key_server_cluster::message::Message;
 use key_server_cluster::net::{accept_connection as io_accept_connection,
 	connect as io_connect, Connection as IoConnection};
 
 /// Empty future.
 pub type BoxedEmptyFuture = Box<dyn Future<Item = (), Error = ()> + Send>;
 
-/// Maintain interval (seconds). Every MAINTAIN_INTERVAL seconds node:
-/// 1) checks if connected nodes are responding to KeepAlive messages
+/// Maintain interval (seconds). Every `MAINTAIN_INTERVAL` seconds node:
+/// 1) checks if connected nodes are responding to keep-alive messages
 /// 2) tries to connect to disconnected nodes
 /// 3) checks if enc/dec sessions are time-outed
 const MAINTAIN_INTERVAL: u64 = 10;
-
-/// When no messages have been received from node within KEEP_ALIVE_SEND_INTERVAL seconds,
-/// we must send KeepAlive message to the node to check if it still responds to messages.
-const KEEP_ALIVE_SEND_INTERVAL: Duration = Duration::from_secs(30);
-/// When no messages have been received from node within KEEP_ALIVE_DISCONNECT_INTERVAL seconds,
-/// we must treat this node as non-responding && disconnect from it.
-const KEEP_ALIVE_DISCONNECT_INTERVAL: Duration = Duration::from_secs(60);
 
 /// Network connection manager configuration.
 pub struct NetConnectionsManagerConfig {
@@ -73,7 +66,7 @@ pub struct NetConnectionsManager {
 	data: Arc<NetConnectionsData>,
 }
 
-/// Network connections data. Shared among NetConnectionsManager and spawned futures.
+/// Network connections data. Shared among `NetConnectionsManager` and spawned futures.
 struct NetConnectionsData {
 	/// Allow connecting to 'higher' nodes.
 	allow_connecting_to_higher_nodes: bool,
@@ -89,7 +82,7 @@ struct NetConnectionsData {
 	container: Arc<RwLock<NetConnectionsContainer>>,
 }
 
-/// Network connections container. This is the only mutable data of NetConnectionsManager.
+/// Network connections container. This is the only mutable data of `NetConnectionsManager`.
 /// The set of nodes is mutated by the connection trigger and the connections set is also
 /// mutated by spawned futures.
 pub struct NetConnectionsContainer {
@@ -132,7 +125,7 @@ impl NetConnectionsManager {
 			&net_config.listen_address.0,
 			net_config.listen_address.1)?;
 
-		Ok(NetConnectionsManager {
+		Ok(Self {
 			listen_address,
 			data: Arc::new(NetConnectionsData {
 				allow_connecting_to_higher_nodes: net_config.allow_connecting_to_higher_nodes,
@@ -191,21 +184,16 @@ impl ConnectionProvider for RwLock<NetConnectionsContainer> {
 
 impl NetConnection {
 	/// Create new connection.
-	pub fn new(executor: Executor, is_inbound: bool, connection: IoConnection) -> NetConnection {
-		NetConnection {
+	pub fn new(executor: Executor, is_inbound: bool, connection: IoConnection) -> Self {
+		Self {
 			executor,
 			node_id: connection.node_id,
 			node_address: connection.address,
-			is_inbound: is_inbound,
+			is_inbound,
 			stream: connection.stream,
 			key: connection.key,
 			last_message_time: RwLock::new(Instant::now()),
 		}
-	}
-
-	/// Get last message time.
-	pub fn last_message_time(&self) -> Instant {
-		*self.last_message_time.read()
 	}
 
 	/// Update last message time
@@ -243,17 +231,17 @@ impl Connection for NetConnection {
 }
 
 impl NetConnectionsData {
-	/// Executes closure for each active connection.
-	pub fn active_connections(&self) -> Vec<Arc<NetConnection>> {
-		self.container.read().connections.values().cloned().collect()
-	}
-
 	/// Executes closure for each disconnected node.
 	pub fn disconnected_nodes(&self) -> Vec<(NodeId, SocketAddr)> {
 		let container = self.container.read();
 		container.nodes.iter()
-			.filter(|(node_id, _)| !container.connections.contains_key(node_id))
-			.map(|(node_id, addr)| (*node_id, *addr))
+			.filter_map(|(node_id, addr)| {
+				if !container.connections.contains_key(node_id) {
+					Some((*node_id, *addr))
+				} else {
+					None
+				}
+			})
 			.collect()
 	}
 
@@ -449,47 +437,11 @@ fn net_process_connection_messages(
 
 /// Schedule connections. maintain.
 fn net_schedule_maintain(data: Arc<NetConnectionsData>) {
-	let closure_data = data.clone();
+	let _closure_data = data.clone();
 	execute(&data.executor, Interval::new_interval(Duration::new(MAINTAIN_INTERVAL, 0))
-		.and_then(move |_| Ok(net_maintain(closure_data.clone())))
+		.and_then(move |_| Ok(()))
 		.for_each(|_| Ok(()))
 		.then(|_| future::ok(())));
-}
-
-/// Maintain network connections.
-fn net_maintain(data: Arc<NetConnectionsData>) {
-	trace!(target: "secretstore_net", "{}: executing maintain procedures", data.self_key_pair.public());
-
-	update_nodes_set(data.clone());
-	data.message_processor.maintain_sessions();
-	net_keep_alive(data.clone());
-	net_connect_disconnected(data);
-}
-
-/// Send keep alive messages to remote nodes.
-fn net_keep_alive(data: Arc<NetConnectionsData>) {
-	let active_connections = data.active_connections();
-	for connection in active_connections {
-		// the last_message_time could change after active_connections() call
-		// => we always need to call Instant::now() after getting last_message_time
-		let last_message_time = connection.last_message_time();
-		let now = Instant::now();
-		let last_message_diff = now - last_message_time;
-		if last_message_diff > KEEP_ALIVE_DISCONNECT_INTERVAL {
-			warn!(target: "secretstore_net", "{}: keep alive timeout for node {}",
-				data.self_key_pair.public(), connection.node_id());
-
-			let node_id = *connection.node_id();
-			if data.remove(&*connection) {
-				let maintain_action = data.trigger.lock().on_connection_closed(&node_id);
-				maintain_connection_trigger(data.clone(), maintain_action);
-			}
-			data.message_processor.process_disconnect(&node_id);
-		}
-		else if last_message_diff > KEEP_ALIVE_SEND_INTERVAL {
-			connection.send_message(Message::Cluster(ClusterMessage::KeepAlive(message::KeepAlive {})));
-		}
-	}
 }
 
 /// Connect disconnected nodes.
@@ -507,12 +459,6 @@ fn execute<F: Future<Item = (), Error = ()> + Send + 'static>(executor: &Executo
 	if let Err(err) = future::Executor::execute(executor, Box::new(f)) {
 		error!("Secret store runtime unable to spawn task. Runtime is shutting down. ({:?})", err);
 	}
-}
-
-/// Try to update active nodes set from connection trigger.
-fn update_nodes_set(data: Arc<NetConnectionsData>) {
-	let maintain_action = data.trigger.lock().on_maintain();
-	maintain_connection_trigger(data, maintain_action);
 }
 
 /// Execute maintain procedures of connections trigger.
@@ -536,7 +482,7 @@ fn maintain_connection_trigger(data: Arc<NetConnectionsData>, maintain_action: O
 	}
 }
 
-/// Compose SocketAddr from configuration' address and port.
+/// Compose `SocketAddr` from configuration' address and port.
 fn make_socket_address(address: &str, port: u16) -> Result<SocketAddr, Error> {
 	let ip_address: IpAddr = address.parse().map_err(|_| Error::InvalidNodeAddress)?;
 	Ok(SocketAddr::new(ip_address, port))

@@ -61,7 +61,7 @@ impl Encodable for FlatTrace {
 impl Decodable for FlatTrace {
 	fn decode(d: &Rlp) -> Result<Self, DecoderError> {
 		let v: Vec<usize> = d.list_at(3)?;
-		let res = FlatTrace {
+		let res = Self {
 			action: d.val_at(0)?,
 			result: d.val_at(1)?,
 			subtraces: d.val_at(2)?,
@@ -78,14 +78,14 @@ pub struct FlatTransactionTraces(pub(crate) Vec<FlatTrace>);
 
 impl From<Vec<FlatTrace>> for FlatTransactionTraces {
 	fn from(v: Vec<FlatTrace>) -> Self {
-		FlatTransactionTraces(v)
+		Self(v)
 	}
 }
 
 impl FlatTransactionTraces {
 	/// Returns bloom of all traces in the collection.
 	pub fn bloom(&self) -> Bloom {
-		self.0.iter().fold(Default::default(), | bloom, trace | bloom | trace.bloom())
+		self.0.iter().fold(Bloom::default(), |bloom, trace| { bloom | trace.bloom() })
 	}
 }
 
@@ -101,7 +101,7 @@ pub struct FlatBlockTraces(pub(crate) Vec<FlatTransactionTraces>);
 
 impl From<Vec<FlatTransactionTraces>> for FlatBlockTraces {
 	fn from(v: Vec<FlatTransactionTraces>) -> Self {
-		FlatBlockTraces(v)
+		Self(v)
 	}
 }
 
@@ -166,7 +166,7 @@ mod tests {
 			}),
 			result: Res::Call(CallResult {
 				gas_used: 0.into(),
-				output: vec![],
+				output: Vec::new(),
 			}),
 			trace_address: Default::default(),
 			subtraces: 0,
@@ -177,13 +177,13 @@ mod tests {
 				from: "3d0768da09ce77d25e2d998e6a7b6ed4b9116c2d".parse().unwrap(),
 				to: "412fda7643b37d436cb40628f6dbbb80a07267ed".parse().unwrap(),
 				value: 0.into(),
-				gas: 0x010c78.into(),
+				gas: 0x0001_0c78.into(),
 				input: vec![0x41, 0xc0, 0xe1, 0xb5],
 				call_type: CallType::Call,
 			}),
 			result: Res::Call(CallResult {
 				gas_used: 0x0127.into(),
-				output: vec![],
+				output: Vec::new(),
 			}),
 			trace_address: Default::default(),
 			subtraces: 1,

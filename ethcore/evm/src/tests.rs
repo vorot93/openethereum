@@ -36,7 +36,7 @@ fn test_add(factory: super::Factory) {
 	let code = hex!("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff01600055").to_vec();
 
 	let mut params = ActionParams::default();
-	params.address = address.clone();
+	params.address = address;
 	params.gas = U256::from(100_000);
 	params.code = Some(Arc::new(code));
 	let mut ext = FakeExt::new();
@@ -61,7 +61,7 @@ fn test_sha3(factory: super::Factory) {
 	let code = hex!("6000600020600055").to_vec();
 
 	let mut params = ActionParams::default();
-	params.address = address.clone();
+	params.address = address;
 	params.gas = U256::from(100_000);
 	params.code = Some(Arc::new(code));
 	let mut ext = FakeExt::new();
@@ -84,7 +84,7 @@ fn test_address(factory: super::Factory) {
 	let code = hex!("30600055").to_vec();
 
 	let mut params = ActionParams::default();
-	params.address = address.clone();
+	params.address = address;
 	params.gas = U256::from(100_000);
 	params.code = Some(Arc::new(code));
 	let mut ext = FakeExt::new();
@@ -108,8 +108,8 @@ fn test_origin(factory: super::Factory) {
 	let code = hex!("32600055").to_vec();
 
 	let mut params = ActionParams::default();
-	params.address = address.clone();
-	params.origin = origin.clone();
+	params.address = address;
+	params.origin = origin;
 	params.gas = U256::from(100_000);
 	params.code = Some(Arc::new(code));
 	let mut ext = FakeExt::new();
@@ -132,7 +132,7 @@ fn test_selfbalance(factory: super::Factory) {
 	let code = hex!("47 60 ff 55").to_vec();
 
 	let mut params = ActionParams::default();
-	params.address = own_addr.clone();
+	params.address = own_addr;
 	params.gas = U256::from(100_000);
 	params.code = Some(Arc::new(code));
 	let mut ext = FakeExt::new_istanbul();
@@ -159,8 +159,8 @@ fn test_sender(factory: super::Factory) {
 	let code = hex!("33600055").to_vec();
 
 	let mut params = ActionParams::default();
-	params.address = address.clone();
-	params.sender = sender.clone();
+	params.address = address;
+	params.sender = sender;
 	params.gas = U256::from(100_000);
 	params.code = Some(Arc::new(code));
 	let mut ext = FakeExt::new();
@@ -214,8 +214,8 @@ fn test_extcodecopy(factory: super::Factory) {
 	let sender_code = hex!("6005600055").to_vec();
 
 	let mut params = ActionParams::default();
-	params.address = address.clone();
-	params.sender = sender.clone();
+	params.address = address;
+	params.sender = sender;
 	params.gas = U256::from(100_000);
 	params.code = Some(Arc::new(code));
 	let mut ext = FakeExt::new();
@@ -236,7 +236,7 @@ fn test_log_empty(factory: super::Factory) {
 	let code = hex!("60006000a0").to_vec();
 
 	let mut params = ActionParams::default();
-	params.address = address.clone();
+	params.address = address;
 	params.gas = U256::from(100_000);
 	params.code = Some(Arc::new(code));
 	let mut ext = FakeExt::new();
@@ -267,8 +267,8 @@ fn test_log_sender(factory: super::Factory) {
 	let code = hex!("60ff6000533360206000a1").to_vec();
 
 	let mut params = ActionParams::default();
-	params.address = address.clone();
-	params.sender = sender.clone();
+	params.address = address;
+	params.sender = sender;
 	params.gas = U256::from(100_000);
 	params.code = Some(Arc::new(code));
 	let mut ext = FakeExt::new();
@@ -292,7 +292,7 @@ fn test_blockhash(factory: super::Factory) {
 	let blockhash = H256::from_str("123400000000000000000000cd1722f2947def4cf144679da39c4c32bdc35681").unwrap();
 
 	let mut params = ActionParams::default();
-	params.address = address.clone();
+	params.address = address;
 	params.gas = U256::from(100_000);
 	params.code = Some(Arc::new(code));
 	let mut ext = FakeExt::new();
@@ -314,7 +314,7 @@ fn test_calldataload(factory: super::Factory) {
 	let data = hex!("0123ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff23").to_vec();
 
 	let mut params = ActionParams::default();
-	params.address = address.clone();
+	params.address = address;
 	params.gas = U256::from(100_000);
 	params.code = Some(Arc::new(code));
 	params.data = Some(data);
@@ -719,7 +719,7 @@ fn test_badinstruction_int() {
 
 	match err {
 		vm::Error::BadInstruction { instruction: 0xaf } => (),
-		_ => assert!(false, "Expected bad instruction")
+		other => panic!("Expected bad instruction, got {:?}", other)
 	}
 }
 
@@ -795,7 +795,7 @@ fn test_calls(factory: super::Factory) {
 	let mut params = ActionParams::default();
 	params.gas = U256::from(150_000);
 	params.code = Some(Arc::new(code));
-	params.address = address.clone();
+	params.address = address;
 	let mut ext = FakeExt::new();
 	ext.balances = {
 		let mut s = HashMap::new();
@@ -812,21 +812,21 @@ fn test_calls(factory: super::Factory) {
 		call_type: FakeCallType::Call,
 		create_scheme: None,
 		gas: U256::from(2556),
-		sender_address: Some(address.clone()),
-		receive_address: Some(code_address.clone()),
+		sender_address: Some(address),
+		receive_address: Some(code_address),
 		value: Some(U256::from(0x50)),
 		data: vec!(),
-		code_address: Some(code_address.clone())
+		code_address: Some(code_address),
 	});
 	assert_set_contains(&ext.calls, &FakeCall {
 		call_type: FakeCallType::Call,
 		create_scheme: None,
 		gas: U256::from(2556),
-		sender_address: Some(address.clone()),
-		receive_address: Some(address.clone()),
+		sender_address: Some(address),
+		receive_address: Some(address),
 		value: Some(U256::from(0x50)),
 		data: vec!(),
-		code_address: Some(code_address.clone())
+		code_address: Some(code_address)
 	});
 	assert_eq!(gas_left, U256::from(91_405));
 	assert_eq!(ext.calls.len(), 2);
@@ -840,7 +840,7 @@ fn test_create_in_staticcall(factory: super::Factory) {
 	let mut params = ActionParams::default();
 	params.gas = U256::from(100_000);
 	params.code = Some(Arc::new(code));
-	params.address = address.clone();
+	params.address = address;
 	let mut ext = FakeExt::new_byzantium();
 	ext.is_static = true;
 
@@ -1094,8 +1094,8 @@ fn test_sar(factory: super::Factory) {
 }
 
 fn push_two_pop_one_constantinople_test(factory: &super::Factory, opcode: u8, mut push1: Vec<u8>, mut push2:  Vec<u8>, result: &str) {
-	assert!(push1.len() <= 32 && push1.len() != 0);
-	assert!(push2.len() <= 32 && push2.len() != 0);
+	assert!(push1.len() <= 32 && !push1.is_empty());
+	assert!(push2.len() <= 32 && !push2.is_empty());
 
 	let mut code = Vec::new();
 	code.push(0x60 + ((push1.len() - 1) as u8));

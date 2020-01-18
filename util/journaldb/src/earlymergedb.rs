@@ -116,10 +116,10 @@ pub struct EarlyMergeDB {
 
 impl EarlyMergeDB {
 	/// Create a new instance from file
-	pub fn new(backing: Arc<dyn KeyValueDB>, column: u32) -> EarlyMergeDB {
-		let (latest_era, refs) = EarlyMergeDB::read_refs(&*backing, column);
+	pub fn new(backing: Arc<dyn KeyValueDB>, column: u32) -> Self {
+		let (latest_era, refs) = Self::read_refs(&*backing, column);
 		let refs = Some(Arc::new(RwLock::new(refs)));
-		EarlyMergeDB {
+		Self {
 			overlay: new_memory_db(),
 			backing,
 			refs,
@@ -135,14 +135,14 @@ impl EarlyMergeDB {
 	}
 
 	// The next three are valid only as long as there is an insert operation of `key` in the journal.
-	fn set_already_in(batch: &mut DBTransaction, col: u32, key: &H256) { batch.put(col, &Self::morph_key(key, 0), &[1u8]); }
+	fn set_already_in(batch: &mut DBTransaction, col: u32, key: &H256) { batch.put(col, &Self::morph_key(key, 0), &[1_u8]); }
 	fn reset_already_in(batch: &mut DBTransaction, col: u32, key: &H256) { batch.delete(col, &Self::morph_key(key, 0)); }
 	fn is_already_in(backing: &dyn KeyValueDB, col: u32, key: &H256) -> bool {
 		backing.get(col, &Self::morph_key(key, 0)).expect("Low-level database error. Some issue with your hard disk?").is_some()
 	}
 
 	fn insert_keys(inserts: &[(H256, DBValue)], backing: &dyn KeyValueDB, col: u32, refs: &mut HashMap<H256, RefInfo>, batch: &mut DBTransaction) {
-		for &(ref h, ref d) in inserts {
+		for (h, d) in inserts {
 			match refs.entry(*h) {
 				Entry::Occupied(mut entry) => {
 					let info = entry.get_mut();
@@ -167,7 +167,7 @@ impl EarlyMergeDB {
 					}
 					entry.insert(RefInfo {
 						queue_refs: 1,
-						in_archive: in_archive,
+						in_archive,
 					});
 				},
 			}
@@ -249,8 +249,8 @@ impl EarlyMergeDB {
 		let (latest_era, reconstructed) = Self::read_refs(&*self.backing, self.column);
 		let refs = self.refs.as_ref().unwrap().write();
 		if *refs != reconstructed || latest_era != self.latest_era {
-			let clean_refs = refs.iter().filter_map(|(k, v)| if reconstructed.get(k) == Some(v) {None} else {Some((k.clone(), v.clone()))}).collect::<HashMap<_, _>>();
-			let clean_recon = reconstructed.into_iter().filter_map(|(k, v)| if refs.get(&k) == Some(&v) {None} else {Some((k.clone(), v.clone()))}).collect::<HashMap<_, _>>();
+			let clean_refs = refs.iter().filter_map(|(k, v)| if reconstructed.get(k) == Some(v) {None} else {Some((*k, v.clone()))}).collect::<HashMap<_, _>>();
+			let clean_recon = reconstructed.into_iter().filter_map(|(k, v)| if refs.get(&k) == Some(&v) {None} else {Some((k, v))}).collect::<HashMap<_, _>>();
 			warn!(target: "jdb", "mem: {:?}  !=  log: {:?}", clean_refs, clean_recon);
 			false
 		} else {
@@ -273,7 +273,7 @@ impl EarlyMergeDB {
 			loop {
 				let mut db_key = DatabaseKey {
 					era,
-					index: 0usize,
+					index: 0_usize,
 				};
 				while let Some(rlp_data) = db.get(col, &encode(&db_key)).expect("Low-level database error.") {
 					let inserts = DatabaseValueView::from_rlp(&rlp_data).inserts().expect("rlp read from db; qed");
@@ -318,12 +318,12 @@ impl HashDB<KeccakHasher, DBValue> for EarlyMergeDB {
 
 impl JournalDB for EarlyMergeDB {
 	fn boxed_clone(&self) -> Box<dyn JournalDB> {
-		Box::new(EarlyMergeDB {
+		Box::new(Self {
 			overlay: self.overlay.clone(),
 			backing: self.backing.clone(),
 			refs: self.refs.clone(),
-			latest_era: self.latest_era.clone(),
-			column: self.column.clone(),
+			latest_era: self.latest_era,
+			column: self.column,
 		})
 	}
 
@@ -339,14 +339,14 @@ impl JournalDB for EarlyMergeDB {
 
 	fn mem_used(&self) -> usize {
 		let mut ops = new_malloc_size_ops();
-		self.overlay.size_of(&mut ops) + match self.refs {
-			Some(ref c) => c.read().size_of(&mut ops),
+		self.overlay.size_of(&mut ops) + match &self.refs {
+			Some(c) => c.read().size_of(&mut ops),
 			None => 0
 		}
 	}
 
 	fn state(&self, id: &H256) -> Option<Bytes> {
-		self.backing.get_by_prefix(self.column, &id[0..DB_PREFIX_LEN]).map(|b| b.into_vec())
+		self.backing.get_by_prefix(self.column, &id[0..DB_PREFIX_LEN]).map(<[u8]>::into_vec)
 	}
 
 	fn journal_under(&mut self, batch: &mut DBTransaction, now: u64, id: &H256) -> io::Result<u32> {
@@ -359,7 +359,7 @@ impl JournalDB for EarlyMergeDB {
 		{
 			let mut db_key = DatabaseKey {
 				era: now,
-				index: 0usize,
+				index: 0_usize,
 			};
 			let mut last;
 
@@ -376,7 +376,7 @@ impl JournalDB for EarlyMergeDB {
 
 			let removes: Vec<H256> = drained
 				.iter()
-				.filter_map(|(k, &(_, c))| if c < 0 {Some(k.clone())} else {None})
+				.filter_map(|(k, &(_, c))| if c < 0 { Some(*k) } else { None })
 				.collect();
 			let inserts: Vec<(H256, _)> = drained
 				.into_iter()
@@ -419,7 +419,7 @@ impl JournalDB for EarlyMergeDB {
 		// apply old commits' details
 		let mut db_key = DatabaseKey {
 			era: end_era,
-			index: 0usize,
+			index: 0_usize,
 		};
 		let mut last;
 
@@ -529,7 +529,7 @@ mod tests {
 	use keccak_hash::keccak;
 	use hash_db::{HashDB, EMPTY_PREFIX};
 	use super::*;
-	use kvdb_memorydb;
+	
 	use crate::{inject_batch, commit_batch};
 
 	#[test]

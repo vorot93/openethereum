@@ -20,10 +20,11 @@ use std::collections::HashMap;
 use std::io;
 
 use ethereum_types::{H256, U256, BigEndianHash};
+use evm::Instruction;
 use parity_bytes::ToPretty;
 use pod::PodState;
 use serde::Serialize;
-use trace;
+
 
 use crate::{
 	display,
@@ -135,22 +136,21 @@ impl Informant<io::Stderr, io::Stderr> {
 }
 
 impl<Trace: Writer, Out: Writer> Informant<Trace, Out> {
-
 	pub fn new(trace_sink: Trace, out_sink: Out) -> Self {
-		Informant {
-			code: Default::default(),
-			instruction: Default::default(),
-			depth: Default::default(),
-			stack: Default::default(),
-			storage: Default::default(),
-			subinfos: Default::default(),
+		Self {
+			code: Vec::new(),
+			instruction: 0,
+			depth: 0,
+			stack: Vec::new(),
+			storage: HashMap::new(),
+			subinfos: Vec::new(),
 			subdepth: 0,
 			trace_sink,
 			out_sink,
 		}
 	}
 
-	fn with_informant_in_depth<F: Fn(&mut Informant<Trace, Out>)>(informant: &mut Informant<Trace, Out>, depth: usize, f: F) {
+	fn with_informant_in_depth<F: Fn(&mut Self)>(informant: &mut Self, depth: usize, f: F) {
 		if depth == 0 {
 			f(informant);
 		} else {
@@ -159,7 +159,7 @@ impl<Trace: Writer, Out: Writer> Informant<Trace, Out> {
 	}
 
 	fn dump_state_into(trace_sink: &mut Trace, root: H256, end_state: &Option<PodState>) {
-		if let Some(ref end_state) = end_state {
+		if let Some(end_state) = end_state {
 			let dump_data =
 				DumpData {
 					root: &root,
@@ -182,7 +182,7 @@ impl<Trace: Writer, Out: Writer> vm::Informant for Informant<Trace, Out> {
 		let message_init =
 			MessageInitial {
 				action,
-				test: &name,
+				test: name,
 			}
 		;
 
@@ -196,7 +196,7 @@ impl<Trace: Writer, Out: Writer> vm::Informant for Informant<Trace, Out> {
 		(self.trace_sink.clone(), self.out_sink.clone())
 	}
 
-	fn finish(result: vm::RunResult<<Self as trace::VMTracer>::Output>, (ref mut trace_sink, ref mut out_sink): &mut Self::Sink) {
+	fn finish(result: vm::RunResult<<Self as trace::VMTracer>::Output>, (trace_sink, out_sink): &mut Self::Sink) {
 
 		match result {
 			Ok(success) => {
@@ -245,15 +245,15 @@ impl<Trace: Writer, Out: Writer> trace::VMTracer for Informant<Trace, Out> {
 
 	fn trace_next_instruction(&mut self, pc: usize, instruction: u8, current_gas: U256) -> bool {
 		let subdepth = self.subdepth;
-		Self::with_informant_in_depth(self, subdepth, |informant: &mut Informant<Trace, Out>| {
-			let info = ::evm::Instruction::from_u8(instruction).map(|i| i.info());
+		Self::with_informant_in_depth(self, subdepth, |informant: &mut Self| {
+			let info = ::evm::Instruction::from_u8(instruction).map(Instruction::info);
 			informant.instruction = instruction;
 
 			let trace_data =
 				TraceData {
-					pc: pc,
+					pc,
 					op: instruction,
-					op_name: info.map(|i| i.name).unwrap_or(""),
+					op_name: info.map_or("", |i| i.name),
 					gas: &format!("{:#x}", current_gas),
 					stack: &informant.stack,
 					storage: &informant.storage,
@@ -270,7 +270,7 @@ impl<Trace: Writer, Out: Writer> trace::VMTracer for Informant<Trace, Out> {
 
 	fn trace_prepare_execute(&mut self, _pc: usize, _instruction: u8, _gas_cost: U256, _mem_written: Option<(usize, usize)>, store_written: Option<(U256, U256)>) {
 		let subdepth = self.subdepth;
-		Self::with_informant_in_depth(self, subdepth, |informant: &mut Informant<Trace, Out>| {
+		Self::with_informant_in_depth(self, subdepth, |informant: &mut Self| {
 			if let Some((pos, val)) = store_written {
 				informant.storage.insert(BigEndianHash::from_uint(&pos), BigEndianHash::from_uint(&val));
 			}
@@ -279,11 +279,11 @@ impl<Trace: Writer, Out: Writer> trace::VMTracer for Informant<Trace, Out> {
 
 	fn trace_executed(&mut self, _gas_used: U256, stack_push: &[U256], _mem: &[u8]) {
 		let subdepth = self.subdepth;
-		Self::with_informant_in_depth(self, subdepth, |informant: &mut Informant<Trace, Out>| {
-			let info = ::evm::Instruction::from_u8(informant.instruction).map(|i| i.info());
+		Self::with_informant_in_depth(self, subdepth, |informant: &mut Self| {
+			let info = ::evm::Instruction::from_u8(informant.instruction).map(Instruction::info);
 
 			let len = informant.stack.len();
-			let info_args = info.map(|i| i.args).unwrap_or(0);
+			let info_args = info.map_or(0, |i| i.args);
 			informant.stack.truncate(if len > info_args { len - info_args } else { 0 });
 			informant.stack.extend_from_slice(stack_push);
 		});
@@ -291,8 +291,8 @@ impl<Trace: Writer, Out: Writer> trace::VMTracer for Informant<Trace, Out> {
 
 	fn prepare_subtrace(&mut self, code: &[u8]) {
 		let subdepth = self.subdepth;
-		Self::with_informant_in_depth(self, subdepth, |informant: &mut Informant<Trace, Out>| {
-			let mut vm = Informant::new(informant.trace_sink.clone(), informant.out_sink.clone());
+		Self::with_informant_in_depth(self, subdepth, |informant: &mut Self| {
+			let mut vm = Self::new(informant.trace_sink.clone(), informant.out_sink.clone());
 			vm.depth = informant.depth + 1;
 			vm.code = code.to_vec();
 			informant.subinfos.push(vm);
@@ -303,7 +303,7 @@ impl<Trace: Writer, Out: Writer> trace::VMTracer for Informant<Trace, Out> {
 	fn done_subtrace(&mut self) {
 		self.subdepth -= 1;
 		let subdepth = self.subdepth;
-		Self::with_informant_in_depth(self, subdepth, |informant: &mut Informant<Trace, Out>| {
+		Self::with_informant_in_depth(self, subdepth, |informant: &mut Self| {
 			informant.subinfos.pop();
 		});
 	}

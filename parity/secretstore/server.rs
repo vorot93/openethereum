@@ -115,7 +115,7 @@ mod server {
 	impl KeyServer {
 		/// Create new noop key server
 		pub fn new(_conf: Configuration, _deps: Dependencies, _executor: Executor) -> Result<Self, String> {
-			Ok(KeyServer)
+			Ok(Self)
 		}
 	}
 }
@@ -195,7 +195,7 @@ mod server {
 					},
 					nodes: conf.nodes.into_iter().map(|(p, (ip, port))| (p, ethcore_secretstore::NodeAddress {
 						address: ip,
-						port: port,
+						port,
 					})).collect(),
 					key_server_set_contract_address: conf.key_server_set_contract_address.map(into_service_contract_address),
 					allow_connecting_to_higher_nodes: true,
@@ -224,7 +224,7 @@ pub use self::server::KeyServer;
 impl Default for Configuration {
 	fn default() -> Self {
 		let data_dir = default_data_path();
-		Configuration {
+		Self {
 			enabled: true,
 			http_enabled: true,
 			auto_migrate_enabled: true,
@@ -243,7 +243,7 @@ impl Default for Configuration {
 			http_interface: "127.0.0.1".to_owned(),
 			http_port: 8082,
 			data_path: replace_home(&data_dir, "$BASE/secretstore"),
-			cors: Some(vec![]),
+			cors: Some(Vec::new()),
 		}
 	}
 }
@@ -254,6 +254,5 @@ pub fn start(conf: Configuration, deps: Dependencies, executor: Executor) -> Res
 		return Ok(None);
 	}
 
-	KeyServer::new(conf, deps, executor)
-		.map(|s| Some(s))
+	KeyServer::new(conf, deps, executor).map(Some)
 }

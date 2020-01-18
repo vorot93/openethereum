@@ -21,7 +21,7 @@ use std::time::Duration;
 use accounts::AccountProvider;
 use bytes::Bytes;
 use eip_712::{EIP712, hash_structured_data};
-use ethereum_types::{H160, H256, H520, U128, Address};
+use ethereum_types::{H160, H256, H520, U128};
 use crypto::publickey::{public_to_address, recover, Signature};
 use types::transaction::{PendingTransaction, SignedTransaction};
 
@@ -52,14 +52,14 @@ pub struct PersonalClient<D: Dispatcher> {
 }
 
 impl<D: Dispatcher> PersonalClient<D> {
-	/// Creates new PersonalClient
+	/// Creates new `PersonalClient`
 	pub fn new(
 		accounts: &Arc<AccountProvider>,
 		dispatcher: D,
 		allow_perm_unlock: bool,
 		allow_experimental_rpcs: bool,
 	) -> Self {
-		PersonalClient {
+		Self {
 			accounts: accounts.clone(),
 			dispatcher,
 			allow_perm_unlock,
@@ -84,7 +84,7 @@ impl<D: Dispatcher + 'static> PersonalClient<D> {
 		let accounts = self.accounts.clone();
 
 		let default = match request.from.as_ref() {
-			Some(account) => Ok(account.clone().into()),
+			Some(account) => Ok(*account),
 			None => accounts
 				.default_account()
 				.map_err(|e| errors::account("Cannot find default account.", e)),
@@ -122,18 +122,16 @@ impl<D: Dispatcher + 'static> Personal for PersonalClient<D> {
 
 	fn unlock_account(&self, account: H160, account_pass: String, duration: Option<U128>) -> Result<bool> {
 		self.deprecation_notice.print("personal_unlockAccount", deprecated::msgs::ACCOUNTS);
-		let account: Address = account.into();
 		let store = self.accounts.clone();
 		let duration = match duration {
 			None => None,
 			Some(duration) => {
-				let duration: U128 = duration.into();
 				let v = duration.low_u64() as u32;
 				if duration != v.into() {
 					return Err(errors::invalid_params("Duration", "Invalid Number"));
-				} else {
-					Some(v)
 				}
+
+				Some(v)
 			},
 		};
 
@@ -158,13 +156,13 @@ impl<D: Dispatcher + 'static> Personal for PersonalClient<D> {
 		let dispatcher = self.dispatcher.clone();
 		let accounts = Arc::new(dispatch::Signer::new(self.accounts.clone())) as _;
 
-		let payload = RpcConfirmationPayload::EthSignMessage((account.clone(), data).into());
+		let payload = RpcConfirmationPayload::EthSignMessage((account, data).into());
 
-		Box::new(dispatch::from_rpc(payload, account.into(), &dispatcher)
+		Box::new(dispatch::from_rpc(payload, account, &dispatcher)
 				 .and_then(move |payload| {
 					 dispatch::execute(dispatcher, &accounts, payload, dispatch::SignWith::Password(password.into()))
 				 })
-				 .map(|v| v.into_value())
+				 .map(WithToken::into_value)
 				 .then(|res| match res {
 					 Ok(RpcConfirmationResponse::Signature(signature)) => Ok(signature),
 					 Err(e) => Err(e),
@@ -180,13 +178,13 @@ impl<D: Dispatcher + 'static> Personal for PersonalClient<D> {
 		let dispatcher = self.dispatcher.clone();
 		let accounts = Arc::new(dispatch::Signer::new(self.accounts.clone())) as _;
 
-		let payload = RpcConfirmationPayload::EIP191SignMessage((account.clone(), data.into()).into());
+		let payload = RpcConfirmationPayload::EIP191SignMessage((account, data).into());
 
-		Box::new(dispatch::from_rpc(payload, account.into(), &dispatcher)
+		Box::new(dispatch::from_rpc(payload, account, &dispatcher)
 			.and_then(move |payload| {
 				dispatch::execute(dispatcher, &accounts, payload, dispatch::SignWith::Password(password.into()))
 			})
-			.map(|v| v.into_value())
+			.map(WithToken::into_value)
 			.then(|res| match res {
 				Ok(RpcConfirmationResponse::Signature(signature)) => Ok(signature),
 				Err(e) => Err(e),
@@ -206,13 +204,13 @@ impl<D: Dispatcher + 'static> Personal for PersonalClient<D> {
 		let dispatcher = self.dispatcher.clone();
 		let accounts = Arc::new(dispatch::Signer::new(self.accounts.clone())) as _;
 
-		let payload = RpcConfirmationPayload::EIP191SignMessage((account.clone(), data.into()).into());
+		let payload = RpcConfirmationPayload::EIP191SignMessage((account, data).into());
 
-		Box::new(dispatch::from_rpc(payload, account.into(), &dispatcher)
+		Box::new(dispatch::from_rpc(payload, account, &dispatcher)
 			.and_then(move |payload| {
 				dispatch::execute(dispatcher, &accounts, payload, dispatch::SignWith::Password(password.into()))
 			})
-			.map(|v| v.into_value())
+			.map(WithToken::into_value)
 			.then(|res| match res {
 				Ok(RpcConfirmationResponse::Signature(signature)) => Ok(signature),
 				Err(e) => Err(e),
@@ -222,15 +220,14 @@ impl<D: Dispatcher + 'static> Personal for PersonalClient<D> {
 	}
 
 	fn ec_recover(&self, data: RpcBytes, signature: H520) -> BoxFuture<H160> {
-		let signature: H520 = signature.into();
 		let signature = Signature::from_electrum(signature.as_bytes());
 		let data: Bytes = data.into();
 
 		let hash = eth_data_hash(data);
-		let account = recover(&signature.into(), &hash)
+		let account = recover(&signature, &hash)
 			.map_err(errors::encryption)
 			.map(|public| {
-				public_to_address(&public).into()
+				public_to_address(&public)
 			});
 
 		Box::new(future::done(account))

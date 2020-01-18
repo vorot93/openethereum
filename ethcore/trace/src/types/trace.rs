@@ -71,7 +71,7 @@ pub struct Call {
 impl From<ActionParams> for Call {
 	fn from(p: ActionParams) -> Self {
 		match p.call_type {
-			CallType::DelegateCall | CallType::CallCode => Call {
+			CallType::DelegateCall | CallType::CallCode => Self {
 				from: p.address,
 				to: p.code_address,
 				value: p.value.value(),
@@ -79,7 +79,7 @@ impl From<ActionParams> for Call {
 				input: p.data.unwrap_or_else(Vec::new),
 				call_type: p.call_type,
 			},
-			_ => Call {
+			_ => Self {
 				from: p.sender,
 				to: p.address,
 				value: p.value.value(),
@@ -117,7 +117,7 @@ pub struct Create {
 
 impl From<ActionParams> for Create {
 	fn from(p: ActionParams) -> Self {
-		Create {
+		Self {
 			from: p.sender,
 			value: p.value.value(),
 			gas: p.gas,
@@ -149,11 +149,11 @@ pub enum RewardType {
 
 impl Encodable for RewardType {
 	fn rlp_append(&self, s: &mut RlpStream) {
-		let v = match *self {
-			RewardType::Block => 0u32,
-			RewardType::Uncle => 1,
-			RewardType::EmptyStep => 2,
-			RewardType::External => 3,
+		let v = match self {
+			Self::Block => 0_u32,
+			Self::Uncle => 1,
+			Self::EmptyStep => 2,
+			Self::External => 3,
 		};
 		Encodable::rlp_append(&v, s);
 	}
@@ -162,10 +162,10 @@ impl Encodable for RewardType {
 impl Decodable for RewardType {
 	fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
 		rlp.as_val().and_then(|v| Ok(match v {
-			0u32 => RewardType::Block,
-			1 => RewardType::Uncle,
-			2 => RewardType::EmptyStep,
-			3 => RewardType::External,
+			0_u32 => Self::Block,
+			1 => Self::Uncle,
+			2 => Self::EmptyStep,
+			3 => Self::External,
 			_ => return Err(DecoderError::Custom("Invalid value of RewardType item")),
 		}))
 	}
@@ -200,7 +200,7 @@ impl Encodable for Reward {
 
 impl Decodable for Reward {
 	fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-		let res = Reward {
+		let res = Self {
 			author: rlp.val_at(0)?,
 			value: rlp.val_at(1)?,
 			reward_type: rlp.val_at(2)?,
@@ -247,21 +247,21 @@ pub enum Action {
 impl Encodable for Action {
 	fn rlp_append(&self, s: &mut RlpStream) {
 		s.begin_list(2);
-		match *self {
-			Action::Call(ref call) => {
-				s.append(&0u8);
+		match self {
+			Self::Call(call) => {
+				s.append(&0_u8);
 				s.append(call);
 			},
-			Action::Create(ref create) => {
-				s.append(&1u8);
+			Self::Create(create) => {
+				s.append(&1_u8);
 				s.append(create);
 			},
-			Action::Suicide(ref suicide) => {
-				s.append(&2u8);
+			Self::Suicide(suicide) => {
+				s.append(&2_u8);
 				s.append(suicide);
 			},
-			Action::Reward(ref reward) => {
-				s.append(&3u8);
+			Self::Reward(reward) => {
+				s.append(&3_u8);
 				s.append(reward);
 			}
 
@@ -273,10 +273,10 @@ impl Decodable for Action {
 	fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
 		let action_type: u8 = rlp.val_at(0)?;
 		match action_type {
-			0 => rlp.val_at(1).map(Action::Call),
-			1 => rlp.val_at(1).map(Action::Create),
-			2 => rlp.val_at(1).map(Action::Suicide),
-			3 => rlp.val_at(1).map(Action::Reward),
+			0 => rlp.val_at(1).map(Self::Call),
+			1 => rlp.val_at(1).map(Self::Create),
+			2 => rlp.val_at(1).map(Self::Suicide),
+			3 => rlp.val_at(1).map(Self::Reward),
 			_ => Err(DecoderError::Custom("Invalid action type.")),
 		}
 	}
@@ -285,11 +285,11 @@ impl Decodable for Action {
 impl Action {
 	/// Returns action bloom.
 	pub fn bloom(&self) -> Bloom {
-		match *self {
-			Action::Call(ref call) => call.bloom(),
-			Action::Create(ref create) => create.bloom(),
-			Action::Suicide(ref suicide) => suicide.bloom(),
-			Action::Reward(ref reward) => reward.bloom(),
+		match self {
+			Self::Call(call) => call.bloom(),
+			Self::Create(create) => create.bloom(),
+			Self::Suicide(suicide) => suicide.bloom(),
+			Self::Reward(reward) => reward.bloom(),
 		}
 	}
 }
@@ -311,30 +311,30 @@ pub enum Res {
 
 impl Encodable for Res {
 	fn rlp_append(&self, s: &mut RlpStream) {
-		match *self {
-			Res::Call(ref call) => {
+		match self {
+			Self::Call(call) => {
 				s.begin_list(2);
-				s.append(&0u8);
+				s.append(&0_u8);
 				s.append(call);
 			},
-			Res::Create(ref create) => {
+			Self::Create(create) => {
 				s.begin_list(2);
-				s.append(&1u8);
+				s.append(&1_u8);
 				s.append(create);
 			},
-			Res::FailedCall(ref err) => {
+			Self::FailedCall(err) => {
 				s.begin_list(2);
-				s.append(&2u8);
+				s.append(&2_u8);
 				s.append(err);
 			},
-			Res::FailedCreate(ref err) => {
+			Self::FailedCreate(err) => {
 				s.begin_list(2);
-				s.append(&3u8);
+				s.append(&3_u8);
 				s.append(err);
 			},
-			Res::None => {
+			Self::None => {
 				s.begin_list(1);
-				s.append(&4u8);
+				s.append(&4_u8);
 			}
 		}
 	}
@@ -344,11 +344,11 @@ impl Decodable for Res {
 	fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
 		let action_type: u8 = rlp.val_at(0)?;
 		match action_type {
-			0 => rlp.val_at(1).map(Res::Call),
-			1 => rlp.val_at(1).map(Res::Create),
-			2 => rlp.val_at(1).map(Res::FailedCall),
-			3 => rlp.val_at(1).map(Res::FailedCreate),
-			4 => Ok(Res::None),
+			0 => rlp.val_at(1).map(Self::Call),
+			1 => rlp.val_at(1).map(Self::Create),
+			2 => rlp.val_at(1).map(Self::FailedCall),
+			3 => rlp.val_at(1).map(Self::FailedCreate),
+			4 => Ok(Self::None),
 			_ => Err(DecoderError::Custom("Invalid result type.")),
 		}
 	}
@@ -357,16 +357,16 @@ impl Decodable for Res {
 impl Res {
 	/// Returns result bloom.
 	pub fn bloom(&self) -> Bloom {
-		match *self {
-			Res::Create(ref create) => create.bloom(),
-			Res::Call(_) | Res::FailedCall(_) | Res::FailedCreate(_) | Res::None => Default::default(),
+		match self {
+			Self::Create(create) => create.bloom(),
+			Self::Call(_) | Self::FailedCall(_) | Self::FailedCreate(_) | Self::None => Default::default(),
 		}
 	}
 
 	/// Did this call fail?
 	pub fn succeeded(&self) -> bool {
-		match *self {
-			Res::Call(_) | Res::Create(_) => true,
+		match self {
+			Self::Call(_) | Self::Create(_) => true,
 			_ => false,
 		}
 	}

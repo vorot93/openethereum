@@ -18,7 +18,7 @@
 
 use rlp::RlpStream;
 use ethereum_types::{H64, H256, H520};
-use ethjson;
+
 
 /// Classic ethereum seal.
 #[derive(Debug)]
@@ -37,7 +37,7 @@ impl Into<Generic> for Ethereum {
 	}
 }
 
-/// AuthorityRound seal.
+/// `AuthorityRound` seal.
 #[derive(Debug)]
 pub struct AuthorityRound {
 	/// Seal step.
@@ -95,20 +95,20 @@ pub enum Seal {
 impl From<ethjson::spec::Seal> for Seal {
 	fn from(s: ethjson::spec::Seal) -> Self {
 		match s {
-			ethjson::spec::Seal::Ethereum(eth) => Seal::Ethereum(Ethereum {
+			ethjson::spec::Seal::Ethereum(eth) => Self::Ethereum(Ethereum {
 				nonce: eth.nonce.into(),
 				mix_hash: eth.mix_hash.into()
 			}),
-			ethjson::spec::Seal::AuthorityRound(ar) => Seal::AuthorityRound(AuthorityRound {
+			ethjson::spec::Seal::AuthorityRound(ar) => Self::AuthorityRound(AuthorityRound {
 				step: ar.step.into(),
 				signature: ar.signature.into()
 			}),
-			ethjson::spec::Seal::Tendermint(tender) => Seal::Tendermint(Tendermint {
+			ethjson::spec::Seal::Tendermint(tender) => Self::Tendermint(Tendermint {
 				round: tender.round.into(),
 				proposal: tender.proposal.into(),
 				precommits: tender.precommits.into_iter().map(Into::into).collect()
 			}),
-			ethjson::spec::Seal::Generic(g) => Seal::Generic(Generic(g.into())),
+			ethjson::spec::Seal::Generic(g) => Self::Generic(Generic(g.into())),
 		}
 	}
 }
@@ -116,10 +116,10 @@ impl From<ethjson::spec::Seal> for Seal {
 impl Into<Generic> for Seal {
 	fn into(self) -> Generic {
 		match self {
-			Seal::Generic(generic) => generic,
-			Seal::Ethereum(eth) => eth.into(),
-			Seal::AuthorityRound(ar) => ar.into(),
-			Seal::Tendermint(tender) => tender.into(),
+			Self::Generic(generic) => generic,
+			Self::Ethereum(eth) => eth.into(),
+			Self::AuthorityRound(ar) => ar.into(),
+			Self::Tendermint(tender) => tender.into(),
 		}
 	}
 }

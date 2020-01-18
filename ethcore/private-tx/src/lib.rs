@@ -16,6 +16,54 @@
 
 //! Private transactions module.
 
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
+
 mod encryptor;
 mod key_server_keys;
 mod private_transactions;
@@ -178,11 +226,11 @@ pub trait Signer: Send + Sync {
 pub struct DummySigner;
 impl Signer for DummySigner {
 	fn decrypt(&self, _account: Address, _shared_mac: &[u8], _payload: &[u8]) -> Result<Vec<u8>, Error> {
-		Err("Decrypting is not supported.".to_owned())?
+		Err("Decrypting is not supported.".to_string().into())
 	}
 
 	fn sign(&self, _account: Address, _hash: Message) -> Result<Signature, Error> {
-		Err("Signing is not supported.".to_owned())?
+		Err("Signing is not supported.".to_string().into())
 	}
 }
 
@@ -239,7 +287,7 @@ impl Provider {
 		db: Arc<dyn KeyValueDB>,
 	) -> Self {
 		keys_provider.update_acl_contract();
-		Provider {
+		Self {
 			encryptor,
 			validator_accounts: config.validator_accounts.into_iter().collect(),
 			signer_account: config.signer_account,
@@ -302,18 +350,15 @@ impl Provider {
 		let private_state = self.execute_private_transaction(BlockId::Latest, &signed_transaction);
 		match private_state {
 			Err(err) => {
-				match err {
-					Error::PrivateStateNotFound => {
-						trace!(target: "privatetx", "Private state for the contract not found, requesting from peers");
-						if let Some(ref logging) = self.logging {
-							let contract_validators = self.get_validators(BlockId::Latest, &contract)?;
-							logging.private_tx_created(&tx_hash, &contract_validators);
-							logging.private_state_request(&tx_hash);
-						}
-						let request = RequestType::Creation(signed_transaction);
-						self.request_private_state(&contract, request)?;
-					},
-					_ => {},
+				if let Error::PrivateStateNotFound = err {
+					trace!(target: "privatetx", "Private state for the contract not found, requesting from peers");
+					if let Some(logging) = &self.logging {
+						let contract_validators = self.get_validators(BlockId::Latest, &contract)?;
+						logging.private_tx_created(&tx_hash, &contract_validators);
+						logging.private_state_request(&tx_hash);
+					}
+					let request = RequestType::Creation(Box::new(signed_transaction));
+					self.request_private_state(&contract, request)?;
 				}
 				Err(err)
 			}
@@ -325,7 +370,7 @@ impl Provider {
 				trace!(target: "privatetx", "Hashed effective private state for sender: {:?}", private_state_hash);
 				self.transactions_for_signing.write().add_transaction(private.hash(), signed_transaction, &contract_validators, private_state, contract_nonce)?;
 				self.broadcast_private_transaction(private.hash(), private.rlp_bytes());
-				if let Some(ref logging) = self.logging {
+				if let Some(logging) = &self.logging {
 					logging.private_tx_created(&tx_hash, &contract_validators);
 				}
 				Ok(Receipt {
@@ -338,12 +383,12 @@ impl Provider {
 	}
 
 	/// Calculate hash from united private state and contract nonce
-	pub fn calculate_state_hash(&self, state: &Bytes, nonce: U256) -> H256 {
+	pub fn calculate_state_hash(&self, state: &[u8], nonce: U256) -> H256 {
 		let state_hash = keccak(state);
 		let nonce_h256: H256 = BigEndianHash::from_uint(&nonce);
-		let mut state_buf = [0u8; 64];
-		state_buf[..32].clone_from_slice(state_hash.as_bytes());
-		state_buf[32..].clone_from_slice(nonce_h256.as_bytes());
+		let mut state_buf = [0_u8; 64];
+		state_buf[..32].copy_from_slice(state_hash.as_bytes());
+		state_buf[32..].copy_from_slice(nonce_h256.as_bytes());
 		keccak(AsRef::<[u8]>::as_ref(&state_buf[..]))
 	}
 
@@ -395,14 +440,11 @@ impl Provider {
 		for transaction in ready_transactions {
 			if let Err(err) = self.process_verification_transaction(&transaction) {
 				warn!(target: "privatetx", "Error: {:?}", err);
-				match err {
-					Error::PrivateStateNotFound => {
-						let contract = transaction.private_transaction.contract();
-						trace!(target: "privatetx", "Private state for the contract {:?} not found, requesting from peers", &contract);
-						let request = RequestType::Verification(transaction);
-						self.request_private_state(&contract, request)?;
-					}
-					_ => {}
+				if let Error::PrivateStateNotFound = err {
+					let contract = transaction.private_transaction.contract();
+					trace!(target: "privatetx", "Private state for the contract {:?} not found, requesting from peers", &contract);
+					let request = RequestType::Verification(transaction);
+					self.request_private_state(&contract, request)?;
 				}
 			}
 		}
@@ -463,7 +505,7 @@ impl Provider {
 				}
 			}
 			// Store logs
-			if let Some(ref logging) = self.logging {
+			if let Some(logging) = &self.logging {
 				logging.signature_added(&original_tx_hash, &last.1);
 				logging.tx_deployed(&original_tx_hash, &public_tx_hash);
 			}
@@ -477,7 +519,7 @@ impl Provider {
 			match self.transactions_for_signing.write().add_signature(&private_hash, signed_tx.signature()) {
 				Ok(_) => {
 					trace!(target: "privatetx", "Signature stored for private transaction");
-					if let Some(ref logging) = self.logging {
+					if let Some(logging) = &self.logging {
 						logging.signature_added(&original_tx_hash, &last.1);
 					}
 				}
@@ -491,12 +533,11 @@ impl Provider {
 	}
 
 	fn contract_address_from_transaction(transaction: &SignedTransaction) -> Result<Address, Error> {
-		match transaction.action {
-			Action::Call(contract) => Ok(contract),
-			_ => {
-				warn!(target: "privatetx", "Incorrect type of action for the transaction");
-				return Err(Error::BadTransactionType);
-			}
+		if let Action::Call(contract) = transaction.action {
+			Ok(contract)
+		} else {
+			warn!(target: "privatetx", "Incorrect type of action for the transaction");
+			Err(Error::BadTransactionType)
 		}
 	}
 
@@ -505,19 +546,16 @@ impl Provider {
 		match recover(&sign, &state_hash) {
 			Ok(public) => {
 				let sender = public_to_address(&public);
-				match desc.validators.contains(&sender) {
-					true => {
-						Ok((desc.received_signatures.len() + 1 == desc.validators.len(), sender))
-					}
-					false => {
-						warn!(target: "privatetx", "Sender's state doesn't correspond to validator's");
-						return Err(Error::StateIncorrect);
-					}
+				if desc.validators.contains(&sender) {
+					Ok((desc.received_signatures.len() + 1 == desc.validators.len(), sender))
+				} else {
+					warn!(target: "privatetx", "Sender's state doesn't correspond to validator's");
+					Err(Error::StateIncorrect)
 				}
 			}
 			Err(err) => {
 				warn!(target: "privatetx", "Sender's state doesn't correspond to validator's, error {:?}", err);
-				return Err(err.into());
+				Err(err.into())
 			}
 		}
 	}
@@ -554,7 +592,7 @@ impl Provider {
 					return Err(Error::StateIncorrect);
 				}
 				let state_hash = H256::from_slice(&state_hash);
-				if let Err(_) = self.state_storage.private_state_db().state(&state_hash) {
+				if self.state_storage.private_state_db().state(&state_hash).is_err() {
 					// State not found in the local db
 					stalled_contracts_hashes.insert(state_hash);
 				}
@@ -578,7 +616,7 @@ impl Provider {
 			for request in ready_requests {
 				match request {
 					RequestType::Creation(transaction) => {
-						match self.create_private_transaction(transaction) {
+						match self.create_private_transaction(*transaction) {
 							Ok(receipt) => trace!(target: "privatetx", "Creation request processed, receipt: {:?}", receipt),
 							Err(e) => error!(target: "privatetx", "Cannot process creation request with error: {:?}", e),
 						}
@@ -586,12 +624,9 @@ impl Provider {
 					RequestType::Verification(transaction) => {
 						if let Err(err) = self.process_verification_transaction(&transaction) {
 							warn!(target: "privatetx", "Error while processing pending verification request: {:?}", err);
-							match err {
-								Error::PrivateStateNotFound => {
-									let contract = transaction.private_transaction.contract();
-									error!(target: "privatetx", "Cannot retrieve private state after sync for {:?}", &contract);
-								}
-								_ => {}
+							if let Error::PrivateStateNotFound = err {
+								let contract = transaction.private_transaction.contract();
+								error!(target: "privatetx", "Cannot retrieve private state after sync for {:?}", &contract);
 							}
 						}
 					}
@@ -624,17 +659,16 @@ impl Provider {
 	}
 
 	fn get_decrypted_state(&self, address: &Address, block: BlockId) -> Result<Bytes, Error> {
-		match self.use_offchain_storage {
-			true => {
-				let hashed_state = self.get_decrypted_state_from_contract(address, block)?;
-				if hashed_state.len() != H256::len_bytes() {
-					return Err(Error::StateIncorrect);
-				}
-				let hashed_state = H256::from_slice(&hashed_state);
-				let stored_state_data = self.state_storage.private_state_db().state(&hashed_state)?;
-				self.decrypt(address, &stored_state_data)
+		if self.use_offchain_storage {
+			let hashed_state = self.get_decrypted_state_from_contract(address, block)?;
+			if hashed_state.len() != H256::len_bytes() {
+				return Err(Error::StateIncorrect);
 			}
-			false => self.get_decrypted_state_from_contract(address, block),
+			let hashed_state = H256::from_slice(&hashed_state);
+			let stored_state_data = self.state_storage.private_state_db().state(&hashed_state)?;
+			self.decrypt(address, &stored_state_data)
+		} else {
+			self.get_decrypted_state_from_contract(address, block)
 		}
 	}
 
@@ -642,9 +676,10 @@ impl Provider {
 		let (data, decoder) = private_contract::functions::state::call();
 		let value = self.client.call_contract(block, *address, data)?;
 		let state = decoder.decode(&value).map_err(|e| Error::Call(format!("Contract call failed {:?}", e)))?;
-		match self.use_offchain_storage {
-			true => Ok(state),
-			false => self.decrypt(address, &state),
+		if self.use_offchain_storage {
+			Ok(state)
+		} else {
+			self.decrypt(address, &state)
 		}
 	}
 
@@ -658,7 +693,7 @@ impl Provider {
 	pub fn get_contract_nonce(&self, address: &Address, block: BlockId) -> Result<U256, Error> {
 		let (data, decoder) = private_contract::functions::nonce::call();
 		let value = self.client.call_contract(block, *address, data)?;
-		decoder.decode(&value).map_err(|e| Error::Call(format!("Contract call failed {:?}", e)).into())
+		decoder.decode(&value).map_err(|e| Error::Call(format!("Contract call failed {:?}", e)))
 	}
 
 	fn snapshot_to_storage(raw: Bytes) -> HashMap<H256, H256> {
@@ -700,8 +735,8 @@ impl Provider {
 
 		let mut state = self.client.state_at(block).ok_or(Error::StatePruned)?;
 		// TODO #9825 in case of BlockId::Latest these need to operate on the same state
-		let contract_address = match transaction.action {
-			Action::Call(ref contract_address) => {
+		let contract_address = match &transaction.action {
+			Action::Call(contract_address) => {
 				// Patch current contract state
 				self.patch_account_state(contract_address, block, &mut state)?;
 				Some(*contract_address)
@@ -730,7 +765,7 @@ impl Provider {
 		}
 		let machine = engine.machine();
 		let schedule = machine.schedule(env_info.number);
-		let result = Executive::new(&mut state, &env_info, &machine, &schedule).transact_virtual(transaction, options)?;
+		let result = Executive::new(&mut state, &env_info, machine, &schedule).transact_virtual(transaction, options)?;
 		let (encrypted_code, encrypted_storage) = {
 			let (code, storage) = state.into_account(&contract_address)?;
 			trace!(target: "privatetx", "Private contract executed. code: {:?}, state: {:?}, result: {:?}", code, storage, result.output);
@@ -748,14 +783,14 @@ impl Provider {
 		Ok(PrivateExecutionResult {
 			code: encrypted_code,
 			state: saved_state,
-			contract_address: contract_address,
+			contract_address,
 			result,
 		})
 	}
 
 	fn generate_constructor(validators: &[Address], code: Bytes, storage: Bytes) -> Bytes {
 		let constructor_code = DEFAULT_STUB_CONTRACT.from_hex().expect("Default contract code is valid");
-		private_contract::constructor(constructor_code, validators.iter().map(|a| *a).collect::<Vec<Address>>(), code, storage)
+		private_contract::constructor(constructor_code, validators.iter().copied().collect::<Vec<Address>>(), code, storage)
 	}
 
 	fn generate_set_state_call(signatures: &[Signature], storage: Bytes) -> Bytes {
@@ -787,14 +822,14 @@ impl Provider {
 		let executed = self.execute_private(source, TransactOptions::with_no_tracing(), block)?;
 		let header = self.client.block_header(block)
 			.ok_or(Error::StatePruned)
-			.and_then(|h| h.decode().map_err(|_| Error::StateIncorrect).into())?;
+			.and_then(|h| h.decode().map_err(|_| Error::StateIncorrect))?;
 		let (executed_code, executed_state) = (executed.code.unwrap_or_default(), executed.state);
 		let tx_data = Self::generate_constructor(validators, executed_code.clone(), executed_state.clone());
 		let mut tx = Transaction {
-			nonce: nonce,
+			nonce,
 			action: Action::Create,
 			gas: u64::max_value().into(),
-			gas_price: gas_price,
+			gas_price,
 			value: source.value,
 			data: tx_data,
 		};
@@ -806,8 +841,8 @@ impl Provider {
 		Ok((tx, executed.contract_address))
 	}
 
-	fn estimate_tx_gas(&self, validators: &[Address], code: &Bytes, state: &Bytes, signatures: &[Signature]) -> U256 {
-		let default_gas = 650000 +
+	fn estimate_tx_gas(&self, validators: &[Address], code: &[u8], state: &[u8], signatures: &[Signature]) -> U256 {
+		let default_gas = 650_000 +
 			validators.len() as u64 * 30000 +
 			code.len() as u64 * 8000 +
 			signatures.len() as u64 * 50000 +
@@ -828,10 +863,10 @@ impl Provider {
 	pub fn public_transaction(&self, state: Bytes, source: &SignedTransaction, signatures: &[Signature], nonce: U256, gas_price: U256) -> Result<Transaction, Error> {
 		let gas = self.estimate_tx_gas(&[], &Vec::new(), &state, signatures);
 		Ok(Transaction {
-			nonce: nonce,
+			nonce,
 			action: source.action.clone(),
-			gas: gas.into(),
-			gas_price: gas_price,
+			gas,
+			gas_price,
 			value: 0.into(),
 			data: Self::generate_set_state_call(signatures, state)
 		})
@@ -845,8 +880,8 @@ impl Provider {
 
 	/// Retrieves log information about private transaction
 	pub fn private_log(&self, tx_hash: H256) -> Result<TransactionLog, Error> {
-		match self.logging {
-			Some(ref logging) => logging.tx_log(&tx_hash).ok_or(Error::TxNotFoundInLog),
+		match &self.logging {
+			Some(logging) => logging.tx_log(&tx_hash).ok_or(Error::TxNotFoundInLog),
 			None => Err(Error::LoggingPathNotSet),
 		}
 	}
@@ -855,7 +890,7 @@ impl Provider {
 	pub fn get_validators(&self, block: BlockId, address: &Address) -> Result<Vec<Address>, Error> {
 		let (data, decoder) = private_contract::functions::get_validators::call();
 		let value = self.client.call_contract(block, *address, data)?;
-		decoder.decode(&value).map_err(|e| Error::Call(format!("Contract call failed {:?}", e)).into())
+		decoder.decode(&value).map_err(|e| Error::Call(format!("Contract call failed {:?}", e)))
 	}
 
 	fn get_contract_version(&self, block: BlockId, address: &Address) -> usize {
@@ -882,9 +917,10 @@ impl IoHandler<ClientIoMessage<Client>> for Provider {
 	}
 
 	fn timeout(&self, _io: &IoContext<ClientIoMessage<Client>>, timer: TimerToken) {
-		match timer {
-			STATE_RETRIEVAL_TIMER => self.state_storage.tick(&self.logging),
-			_ => warn!("IO service triggered unregistered timer '{}'", timer),
+		if let STATE_RETRIEVAL_TIMER = timer {
+			self.state_storage.tick(&self.logging);
+		} else {
+			warn!("IO service triggered unregistered timer '{}'", timer);
 		}
 	}
 }
@@ -928,11 +964,11 @@ impl Importer for Arc<Provider> {
 		// Add to the queue for further verification
 		self.transactions_for_verification.add_transaction(
 			original_tx,
-			validation_account.map(|&account| account),
+			validation_account.copied(),
 			private_tx,
 			self.pool_client(&nonce_cache, &local_accounts),
 		)?;
-		let provider = Arc::downgrade(self);
+		let provider = Self::downgrade(self);
 		let result = self.channel.send(ClientIoMessage::execute(move |_| {
 			if let Some(provider) = provider.upgrade() {
 				if let Err(e) = provider.process_verification_queue() {
@@ -950,7 +986,7 @@ impl Importer for Arc<Provider> {
 		let tx: SignedPrivateTransaction = Rlp::new(rlp).as_val()?;
 		trace!(target: "privatetx", "Signature for private transaction received: {:?}", tx);
 		let private_hash = tx.private_transaction_hash();
-		let provider = Arc::downgrade(self);
+		let provider = Self::downgrade(self);
 		let result = self.channel.send(ClientIoMessage::execute(move |_| {
 			if let Some(provider) = provider.upgrade() {
 				if let Err(e) = provider.process_signature(&tx) {
@@ -966,7 +1002,7 @@ impl Importer for Arc<Provider> {
 
 	fn private_state_synced(&self, hash: &H256) -> Result<(), String> {
 		trace!(target: "privatetx", "Private state synced, hash: {:?}", hash);
-		let provider = Arc::downgrade(self);
+		let provider = Self::downgrade(self);
 		let completed_hash = *hash;
 		let result = self.channel.send(ClientIoMessage::execute(move |_| {
 			if let Some(provider) = provider.upgrade() {

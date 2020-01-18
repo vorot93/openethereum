@@ -42,12 +42,12 @@ use key_server_cluster::cluster_sessions_creator::{GenerationSessionCreator, Enc
 	SchnorrSigningSessionCreator, KeyVersionNegotiationSessionCreator, AdminSessionCreator, SessionCreatorCore,
 	EcdsaSigningSessionCreator, ClusterSessionCreator};
 
-/// When there are no session-related messages for SESSION_TIMEOUT_INTERVAL seconds,
+/// When there are no session-related messages for `SESSION_TIMEOUT_INTERVAL` seconds,
 /// we must treat this session as stalled && finish it with an error.
-/// This timeout is for cases when node is responding to KeepAlive messages, but intentionally ignores
+/// This timeout is for cases when node is responding to keep-alive messages, but intentionally ignores
 /// session messages.
 const SESSION_TIMEOUT_INTERVAL: Duration = Duration::from_secs(60);
-/// Interval to send session-level KeepAlive-messages.
+/// Interval to send session-level keep-alive messages.
 const SESSION_KEEP_ALIVE_INTERVAL: Duration = Duration::from_secs(30);
 
 lazy_static! {
@@ -99,20 +99,16 @@ pub trait ClusterSession {
 		result_reader: F
 	) -> Option<Result<T, Error>> {
 		let mut locked_data = session_data.lock();
-		match result_reader(&locked_data) {
-			Some(result) => Some(result),
-			None => {
-				let completion_condvar = completion.completion_condvar.as_ref().expect("created in test mode");
-				match timeout {
-					None => completion_condvar.wait(&mut locked_data),
-					Some(timeout) => {
-						completion_condvar.wait_for(&mut locked_data, timeout);
-					},
-				}
+		result_reader(&locked_data).or_else(|| {
+			let completion_condvar = completion.completion_condvar.as_ref().expect("created in test mode");
+			if let Some(timeout) = timeout {
+				completion_condvar.wait_for(&mut locked_data, timeout);
+			} else {
+				completion_condvar.wait(&mut locked_data);
+			}
 
-				result_reader(&locked_data)
-			},
-		}
+			result_reader(&locked_data)
+		})
 	}
 }
 
@@ -228,8 +224,8 @@ impl ClusterSessions {
 	pub fn new(config: &ClusterConfiguration, servers_set_change_session_creator_connector: Arc<dyn ServersSetChangeSessionCreatorConnector>) -> Self {
 		let container_state = Arc::new(Mutex::new(ClusterSessionsContainerState::Idle));
 		let creator_core = Arc::new(SessionCreatorCore::new(config));
-		ClusterSessions {
-			self_node_id: config.self_key_pair.public().clone(),
+		Self {
+			self_node_id: *config.self_key_pair.public(),
 			generation_sessions: ClusterSessionsContainer::new(GenerationSessionCreator {
 				core: creator_core.clone(),
 				make_faulty_generation_sessions: AtomicBool::new(false),
@@ -251,10 +247,10 @@ impl ClusterSessions {
 			}, container_state.clone()),
 			admin_sessions: ClusterSessionsContainer::new(AdminSessionCreator {
 				core: creator_core.clone(),
-				servers_set_change_session_creator_connector: servers_set_change_session_creator_connector,
-				admin_public: config.admin_public.clone(),
+				servers_set_change_session_creator_connector,
+				admin_public: config.admin_public,
 			}, container_state),
-			creator_core: creator_core,
+			creator_core,
 		}
 	}
 
@@ -312,11 +308,11 @@ impl ClusterSessions {
 
 impl<S, SC> ClusterSessionsContainer<S, SC> where S: ClusterSession, SC: ClusterSessionCreator<S> {
 	pub fn new(creator: SC, container_state: Arc<Mutex<ClusterSessionsContainerState>>) -> Self {
-		ClusterSessionsContainer {
-			creator: creator,
+		Self {
+			creator,
 			sessions: RwLock::new(BTreeMap::new()),
 			listeners: Mutex::new(Vec::new()),
-			container_state: container_state,
+			container_state,
 			preserve_sessions: false,
 		}
 	}
@@ -343,7 +339,7 @@ impl<S, SC> ClusterSessionsContainer<S, SC> where S: ClusterSession, SC: Cluster
 
 	#[cfg(test)]
 	pub fn first(&self) -> Option<Arc<S>> {
-		self.sessions.read().values().nth(0).map(|s| s.session.clone())
+		self.sessions.read().values().next().map(|s| s.session.clone())
 	}
 
 	pub fn insert(
@@ -369,7 +365,7 @@ impl<S, SC> ClusterSessionsContainer<S, SC> where S: ClusterSession, SC: Cluster
 
 		// insert session
 		let queued_session = QueuedSession {
-			master: master,
+			master,
 			cluster_view: cluster,
 			last_keep_alive_time: Instant::now(),
 			last_message_time: Instant::now(),
@@ -387,9 +383,13 @@ impl<S, SC> ClusterSessionsContainer<S, SC> where S: ClusterSession, SC: Cluster
 	}
 
 	pub fn enqueue_message(&self, session_id: &S::Id, sender: NodeId, message: Message, is_queued_message: bool) {
-		self.sessions.write().get_mut(session_id)
-			.map(|session| if is_queued_message { session.queue.push_front((sender, message)) }
-				else { session.queue.push_back((sender, message)) });
+		if let Some(session) = self.sessions.write().get_mut(session_id) {
+			if is_queued_message {
+				session.queue.push_front((sender, message))
+			} else {
+				session.queue.push_back((sender, message))
+			}
+		}
 	}
 
 	pub fn dequeue_message(&self, session_id: &S::Id) -> Option<(NodeId, Message)> {
@@ -444,14 +444,11 @@ impl<S, SC> ClusterSessionsContainer<S, SC> where S: ClusterSession, SC: Cluster
 		let mut listeners = self.listeners.lock();
 		let mut listener_index = 0;
 		while listener_index < listeners.len() {
-			match listeners[listener_index].upgrade() {
-				Some(listener) => {
-					callback(&*listener);
-					listener_index += 1;
-				},
-				None => {
-					listeners.swap_remove(listener_index);
-				},
+			if let Some(listener) = listeners[listener_index].upgrade() {
+				callback(&*listener);
+				listener_index += 1;
+			} else {
+				listeners.swap_remove(listener_index);
 			}
 		}
 	}
@@ -493,18 +490,18 @@ impl ClusterSessionsContainerState {
 	/// When session is starting.
 	pub fn on_session_starting(&mut self, is_exclusive_session: bool) -> Result<(), Error> {
 		match *self {
-			ClusterSessionsContainerState::Idle if is_exclusive_session => {
-				::std::mem::replace(self, ClusterSessionsContainerState::Exclusive);
+			Self::Idle if is_exclusive_session => {
+				::std::mem::replace(self, Self::Exclusive);
 			},
-			ClusterSessionsContainerState::Idle => {
-				::std::mem::replace(self, ClusterSessionsContainerState::Active(1));
+			Self::Idle => {
+				::std::mem::replace(self, Self::Active(1));
 			},
-			ClusterSessionsContainerState::Active(_) if is_exclusive_session =>
+			Self::Active(_) if is_exclusive_session =>
 				return Err(Error::HasActiveSessions),
-			ClusterSessionsContainerState::Active(sessions_count) => {
-				::std::mem::replace(self, ClusterSessionsContainerState::Active(sessions_count + 1));
+			Self::Active(sessions_count) => {
+				::std::mem::replace(self, Self::Active(sessions_count + 1));
 			},
-			ClusterSessionsContainerState::Exclusive =>
+			Self::Exclusive =>
 				return Err(Error::ExclusiveSessionActive),
 		}
 		Ok(())
@@ -513,16 +510,16 @@ impl ClusterSessionsContainerState {
 	/// When session is completed.
 	pub fn on_session_completed(&mut self) {
 		match *self {
-			ClusterSessionsContainerState::Idle =>
+			Self::Idle =>
 				unreachable!("idle means that there are no active sessions; on_session_completed is only called once after active session is completed; qed"),
-			ClusterSessionsContainerState::Active(sessions_count) if sessions_count == 1 => {
-				::std::mem::replace(self, ClusterSessionsContainerState::Idle);
+			Self::Active(sessions_count) if sessions_count == 1 => {
+				::std::mem::replace(self, Self::Idle);
 			},
-			ClusterSessionsContainerState::Active(sessions_count) => {
-				::std::mem::replace(self, ClusterSessionsContainerState::Active(sessions_count - 1));
+			Self::Active(sessions_count) => {
+				::std::mem::replace(self, Self::Active(sessions_count - 1));
 			}
-			ClusterSessionsContainerState::Exclusive => {
-				::std::mem::replace(self, ClusterSessionsContainerState::Idle);
+			Self::Exclusive => {
+				::std::mem::replace(self, Self::Idle);
 			},
 		}
 	}
@@ -531,7 +528,7 @@ impl ClusterSessionsContainerState {
 impl SessionIdWithSubSession {
 	/// Create new decryption session Id.
 	pub fn new(session_id: SessionId, sub_session_id: Secret) -> Self {
-		SessionIdWithSubSession {
+		Self {
 			id: session_id,
 			access_key: sub_session_id,
 		}
@@ -548,16 +545,17 @@ impl Ord for SessionIdWithSubSession {
 	fn cmp(&self, other: &Self) -> ::std::cmp::Ordering {
 		match self.id.cmp(&other.id) {
 			::std::cmp::Ordering::Equal => self.access_key.cmp(&other.access_key),
-			r @ _ => r,
+			r => r,
 		}
 	}
 }
 
 impl AdminSession {
 	pub fn as_servers_set_change(&self) -> Option<&ServersSetChangeSessionImpl> {
-		match *self {
-			AdminSession::ServersSetChange(ref session) => Some(session),
-			_ => None
+		if let Self::ServersSetChange(session) = self {
+			Some(session)
+		} else {
+			None
 		}
 	}
 }
@@ -572,51 +570,51 @@ impl ClusterSession for AdminSession {
 	}
 
 	fn id(&self) -> SessionId {
-		match *self {
-			AdminSession::ShareAdd(ref session) => session.id().clone(),
-			AdminSession::ServersSetChange(ref session) => session.id().clone(),
+		match self {
+			Self::ShareAdd(session) => session.id(),
+			Self::ServersSetChange(session) => *session.id(),
 		}
 	}
 
 	fn is_finished(&self) -> bool {
-		match *self {
-			AdminSession::ShareAdd(ref session) => session.is_finished(),
-			AdminSession::ServersSetChange(ref session) => session.is_finished(),
+		match self {
+			Self::ShareAdd(session) => session.is_finished(),
+			Self::ServersSetChange(session) => session.is_finished(),
 		}
 	}
 
 	fn on_session_timeout(&self) {
-		match *self {
-			AdminSession::ShareAdd(ref session) => session.on_session_timeout(),
-			AdminSession::ServersSetChange(ref session) => session.on_session_timeout(),
+		match self {
+			Self::ShareAdd(session) => session.on_session_timeout(),
+			Self::ServersSetChange(session) => session.on_session_timeout(),
 		}
 	}
 
 	fn on_node_timeout(&self, node_id: &NodeId) {
-		match *self {
-			AdminSession::ShareAdd(ref session) => session.on_node_timeout(node_id),
-			AdminSession::ServersSetChange(ref session) => session.on_node_timeout(node_id),
+		match self {
+			Self::ShareAdd(session) => session.on_node_timeout(node_id),
+			Self::ServersSetChange(session) => session.on_node_timeout(node_id),
 		}
 	}
 
 	fn on_session_error(&self, node: &NodeId, error: Error) {
-		match *self {
-			AdminSession::ShareAdd(ref session) => session.on_session_error(node, error),
-			AdminSession::ServersSetChange(ref session) => session.on_session_error(node, error),
+		match self {
+			Self::ShareAdd(session) => session.on_session_error(node, error),
+			Self::ServersSetChange(session) => session.on_session_error(node, error),
 		}
 	}
 
 	fn on_message(&self, sender: &NodeId, message: &Message) -> Result<(), Error> {
-		match *self {
-			AdminSession::ShareAdd(ref session) => session.on_message(sender, message),
-			AdminSession::ServersSetChange(ref session) => session.on_message(sender, message),
+		match self {
+			Self::ShareAdd(session) => session.on_message(sender, message),
+			Self::ServersSetChange(session) => session.on_message(sender, message),
 		}
 	}
 }
 
 impl<S: ClusterSession> WaitableSession<S> {
 	pub fn new(session: S, oneshot: Oneshot<Result<S::SuccessfulResult, Error>>) -> Self {
-		WaitableSession {
+		Self {
 			session: Arc::new(session),
 			oneshot,
 		}
@@ -633,7 +631,7 @@ impl<T> CompletionSignal<T> {
 	pub fn new() -> (Self, Oneshot<Result<T, Error>>) {
 		let (complete, oneshot) = oneshot();
 		let completion_condvar = if cfg!(test) { Some(Condvar::new()) } else { None };
-		(CompletionSignal {
+		(Self {
 			completion_future: Mutex::new(Some(complete)),
 			completion_condvar,
 		}, oneshot)
@@ -642,7 +640,7 @@ impl<T> CompletionSignal<T> {
 	pub fn send(&self, result: Result<T, Error>) {
 		let completion_future = ::std::mem::replace(&mut *self.completion_future.lock(), None);
 		completion_future.map(|c| c.send(result));
-		if let Some(ref completion_condvar) = self.completion_condvar {
+		if let Some(completion_condvar) = &self.completion_condvar {
 			completion_condvar.notify_all();
 		}
 	}
@@ -653,11 +651,9 @@ pub fn create_cluster_view(self_key_pair: Arc<dyn SigningKeyPair>, connections: 
 	let disconnected_nodes = connections.disconnected_nodes();
 
 	let disconnected_nodes_count = disconnected_nodes.len();
-	if requires_all_connections {
-		if disconnected_nodes_count != 0 {
-			return Err(Error::NodeDisconnected);
-		}
-	}
+	if requires_all_connections && disconnected_nodes_count != 0 {
+	return Err(Error::NodeDisconnected);
+}
 
 	connected_nodes.insert(self_key_pair.public().clone());
 
@@ -682,14 +678,14 @@ mod tests {
 		let key_pair = Random.generate().unwrap();
 		let config = ClusterConfiguration {
 			self_key_pair: Arc::new(PlainNodeKeyPair::new(key_pair.clone())),
-			key_server_set: Arc::new(MapKeyServerSet::new(false, vec![(key_pair.public().clone(), format!("127.0.0.1:{}", 100).parse().unwrap())].into_iter().collect())),
+			key_server_set: Arc::new(MapKeyServerSet::new(false, vec![(*key_pair.public(), format!("127.0.0.1:{}", 100).parse().unwrap())].into_iter().collect())),
 			key_storage: Arc::new(DummyKeyStorage::default()),
 			acl_storage: Arc::new(DummyAclStorage::default()),
-			admin_public: Some(Random.generate().unwrap().public().clone()),
+			admin_public: Some(*Random.generate().unwrap().public()),
 			preserve_sessions: false,
 		};
 		ClusterSessions::new(&config, Arc::new(SimpleServersSetChangeSessionCreatorConnector {
-			admin_public: Some(Random.generate().unwrap().public().clone()),
+			admin_public: Some(*Random.generate().unwrap().public()),
 		}))
 	}
 

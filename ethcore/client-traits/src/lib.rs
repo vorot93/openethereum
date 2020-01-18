@@ -14,6 +14,54 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity Ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
+
 use std::{
 	collections::BTreeMap,
 	sync::Arc,
@@ -50,7 +98,7 @@ use ethereum_types::{Address, H256, U256};
 use ethcore_db::keys::BlockReceipts;
 use ethcore_miner::pool::VerifiedTransaction;
 use kvdb::DBValue;
-use stats;
+
 use trace::{
 	FlatTrace,
 	localized::LocalizedTrace,
@@ -72,21 +120,21 @@ pub enum StateOrBlock {
 }
 
 impl From<Box<dyn StateInfo>> for StateOrBlock {
-	fn from(info: Box<dyn StateInfo>) -> StateOrBlock {
-		StateOrBlock::State(info)
+	fn from(info: Box<dyn StateInfo>) -> Self {
+		Self::State(info)
 	}
 }
 
 impl From<BlockId> for StateOrBlock {
-	fn from(id: BlockId) -> StateOrBlock {
-		StateOrBlock::Block(id)
+	fn from(id: BlockId) -> Self {
+		Self::Block(id)
 	}
 }
 
 /// Provides `nonce` and `latest_nonce` methods
 pub trait Nonce {
 	/// Attempt to get address nonce at given block.
-	/// May not fail on BlockId::Latest.
+	/// May not fail on `BlockId::Latest`.
 	fn nonce(&self, address: &Address, id: BlockId) -> Option<U256>;
 
 	/// Get address nonce at the latest block's state.
@@ -101,8 +149,8 @@ pub trait Nonce {
 pub trait Balance {
 	/// Get address balance at the given block's state.
 	///
-	/// May not return None if given BlockId::Latest.
-	/// Returns None if and only if the block's root hash has been pruned from the DB.
+	/// May not return `None` if given `BlockId::Latest`.
+	/// Returns `None` if and only if the block's root hash has been pruned from the DB.
 	fn balance(&self, address: &Address, state: StateOrBlock) -> Option<U256>;
 
 	/// Get address balance at the latest block's state.
@@ -238,7 +286,7 @@ pub trait BlockChainClient:
 	fn block_total_difficulty(&self, id: BlockId) -> Option<U256>;
 
 	/// Attempt to get address storage root at given block.
-	/// May not fail on BlockId::Latest.
+	/// May not fail on `BlockId::Latest`.
 	fn storage_root(&self, address: &Address, id: BlockId) -> Option<H256>;
 
 	/// Get block hash.
@@ -265,7 +313,7 @@ pub trait BlockChainClient:
 
 	/// Get value of the storage at given position at the given block's state.
 	///
-	/// May not return None if given BlockId::Latest.
+	/// May not return None if given `BlockId::Latest`.
 	/// Returns None if and only if the block's root hash has been pruned from the DB.
 	fn storage_at(&self, address: &Address, position: &H256, state: StateOrBlock) -> Option<H256>;
 
@@ -344,7 +392,7 @@ pub trait BlockChainClient:
 	/// List all ready transactions that should be propagated to other peers.
 	fn transactions_to_propagate(&self) -> Vec<Arc<VerifiedTransaction>>;
 
-	/// Sorted list of transaction gas prices from at least last sample_size blocks.
+	/// Sorted list of transaction gas prices from at least last `sample_size` blocks.
 	fn gas_price_corpus(&self, sample_size: usize) -> stats::Corpus<U256> {
 		let mut h = self.chain_info().best_block_hash;
 		let mut corpus = Vec::new();
@@ -358,10 +406,10 @@ pub trait BlockChainClient:
 				if block.number() == 0 {
 					return corpus.into();
 				}
-				for t in block.transaction_views().iter() {
+				for t in &block.transaction_views() {
 					corpus.push( t.gas_price() )
 				}
-				h = block.parent_hash().clone();
+				h = block.parent_hash();
 			}
 		}
 		corpus.into()
@@ -417,8 +465,8 @@ pub struct TransactionRequest {
 
 impl TransactionRequest {
 	/// Creates a request to call a contract at `address` with the specified call data.
-	pub fn call(address: Address, data: Bytes) -> TransactionRequest {
-		TransactionRequest {
+	pub fn call(address: Address, data: Bytes) -> Self {
+		Self {
 			action: Action::Call(address),
 			data,
 			gas: None,
@@ -428,8 +476,8 @@ impl TransactionRequest {
 	}
 
 	/// Creates a request to create a new contract, with the specified bytecode.
-	pub fn create(data: Bytes) -> TransactionRequest {
-		TransactionRequest {
+	pub fn create(data: Bytes) -> Self {
+		Self {
 			action: Action::Create,
 			data,
 			gas: None,
@@ -439,19 +487,19 @@ impl TransactionRequest {
 	}
 
 	/// Sets a gas limit. If this is not specified, a sensible default is used.
-	pub fn gas(mut self, gas: U256) -> TransactionRequest {
+	pub fn gas(mut self, gas: U256) -> Self {
 		self.gas = Some(gas);
 		self
 	}
 
 	/// Sets a gas price. If this is not specified or `None`, a sensible default is used.
-	pub fn gas_price<T: Into<Option<U256>>>(mut self, gas_price: T) -> TransactionRequest {
+	pub fn gas_price<T: Into<Option<U256>>>(mut self, gas_price: T) -> Self {
 		self.gas_price = gas_price.into();
 		self
 	}
 
 	/// Sets a nonce. If this is not specified, the appropriate latest nonce for the author is used.
-	pub fn nonce(mut self, nonce: U256) -> TransactionRequest {
+	pub fn nonce(mut self, nonce: U256) -> Self {
 		self.nonce = Some(nonce);
 		self
 	}
@@ -459,7 +507,7 @@ impl TransactionRequest {
 
 /// resets the blockchain
 pub trait BlockChainReset {
-	/// reset to best_block - n
+	/// reset to `best_block - n`
 	fn reset(&self, num: u32) -> Result<(), String>;
 
 	/// Number of eras kept in a journal before they are pruned
@@ -483,7 +531,7 @@ pub trait StateClient {
 
 	/// Attempt to get a copy of a specific block's final state.
 	///
-	/// This will not fail if given BlockId::Latest.
+	/// This will not fail if given `BlockId::Latest`.
 	/// Otherwise, this can fail (but may not) if the DB prunes state or the block
 	/// is unknown.
 	fn state_at(&self, id: BlockId) -> Option<Self::State>;
@@ -541,7 +589,7 @@ pub trait ChainNotify: Send + Sync {
 
 	/// fires when new block is about to be imported
 	/// implementations should be light
-	fn block_pre_import(&self, _bytes: &Bytes, _hash: &H256, _difficulty: &U256) {
+	fn block_pre_import(&self, _bytes: &[u8], _hash: &H256, _difficulty: &U256) {
 		// does nothing by default
 	}
 

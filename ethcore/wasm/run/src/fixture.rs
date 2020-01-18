@@ -34,9 +34,9 @@ pub enum Source {
 
 impl Source {
 	pub fn as_ref(&self) -> &str {
-		match *self {
-			Source::Raw(ref r) => r.as_ref(),
-			Source::Constructor { ref source, .. } => source.as_ref(),
+		match self {
+			Self::Raw(r) => r.as_ref(),
+			Self::Constructor { source, .. } => source.as_ref(),
 		}
 	}
 }

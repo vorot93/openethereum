@@ -79,13 +79,13 @@ impl PartialEq for Error {
 
 impl From<fetch::Error> for Error {
 	fn from(error: fetch::Error) -> Self {
-		Error::Fetch(error)
+		Self::Fetch(error)
 	}
 }
 
 impl From<io::Error> for Error {
 	fn from(error: io::Error) -> Self {
-		Error::IO(error)
+		Self::IO(error)
 	}
 }
 
@@ -100,10 +100,10 @@ fn validate_hash(path: PathBuf, hash: H256, body: fetch::BodyReader) -> Result<P
 	let mut file_reader = io::BufReader::new(fs::File::open(&path)?);
 	let content_hash = keccak_buffer(&mut file_reader)?;
 	if content_hash != hash {
-		Err(Error::HashMismatch{ got: content_hash, expected: hash })
-	} else {
-		Ok(path)
+		return Err(Error::HashMismatch{ got: content_hash, expected: hash });
 	}
+
+	Ok(path)
 }
 
 /// Default Hash-fetching client using on-chain contract to resolve hashes to URLs.
@@ -117,10 +117,10 @@ pub struct Client<F: Fetch + 'static = fetch::Client> {
 impl<F: Fetch + 'static> Client<F> {
 	/// Creates new instance of the `Client` given on-chain contract client, fetch service and task runner.
 	pub fn with_fetch(contract: Weak<dyn RegistrarClient>, fetch: F, executor: Executor) -> Self {
-		Client {
+		Self {
 			contract: URLHintContract::new(contract),
-			fetch: fetch,
-			executor: executor,
+			fetch,
+			executor,
 			random_path: Arc::new(random_temp_path),
 		}
 	}
@@ -153,17 +153,17 @@ impl<F: Fetch + 'static> HashFetch for Client<F> {
 				remote_fetch.get(&url, abort).from_err()
 			})
 			.and_then(move |response| {
-				if !response.is_success() {
-					Err(Error::InvalidStatus)
-				} else {
+				if response.is_success() {
 					Ok(response)
+				} else {
+					Err(Error::InvalidStatus)
 				}
 			})
 			.and_then(move |response| {
 				debug!(target: "fetch", "Content fetched, validating hash ({:?})", hash);
 				let path = random_path();
 				let res = validate_hash(path.clone(), hash, fetch::BodyReader::new(response));
-				if let Err(ref err) = res {
+				if let Err(err) = &res {
 					trace!(target: "fetch", "Error: {:?}", err);
 					// Remove temporary file in case of error
 					let _ = fs::remove_file(&path);

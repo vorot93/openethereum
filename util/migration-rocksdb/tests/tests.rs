@@ -18,6 +18,54 @@
 //! A random temp directory is created. A database is created within it, and migrations
 //! are performed in temp sub-directories.
 
+#![warn(
+	clippy::all,
+	clippy::pedantic,
+	clippy::nursery,
+)]
+#![allow(
+	clippy::blacklisted_name,
+	clippy::cast_lossless,
+	clippy::cast_possible_truncation,
+	clippy::cast_possible_wrap,
+	clippy::cast_precision_loss,
+	clippy::cast_ptr_alignment,
+	clippy::cast_sign_loss,
+	clippy::cognitive_complexity,
+	clippy::default_trait_access,
+	clippy::enum_glob_use,
+	clippy::eval_order_dependence,
+	clippy::fallible_impl_from,
+	clippy::float_cmp,
+	clippy::identity_op,
+	clippy::if_not_else,
+	clippy::indexing_slicing,
+	clippy::inline_always,
+	clippy::items_after_statements,
+	clippy::large_enum_variant,
+	clippy::many_single_char_names,
+	clippy::match_same_arms,
+	clippy::missing_errors_doc,
+	clippy::missing_safety_doc,
+	clippy::module_inception,
+	clippy::module_name_repetitions,
+	clippy::must_use_candidate,
+	clippy::needless_pass_by_value,
+	clippy::needless_update,
+	clippy::non_ascii_literal,
+	clippy::option_option,
+	clippy::pub_enum_variant_names,
+	clippy::same_functions_in_if_condition,
+	clippy::shadow_unrelated,
+	clippy::similar_names,
+	clippy::single_component_path_imports,
+	clippy::too_many_arguments,
+	clippy::too_many_lines,
+	clippy::type_complexity,
+	clippy::unused_self,
+	clippy::used_underscore_binding,
+)]
+
 #[macro_use]
 extern crate macros;
 extern crate tempdir;
@@ -57,7 +105,7 @@ fn verify_migration(path: &Path, pairs: BTreeMap<Vec<u8>, Vec<u8>>) {
 	for (k, v) in pairs {
 		let x = db.get(0, &k)
 			.expect("database IO should work")
-			.expect(&format!("key={:?} should be in column 0 in the db", &k));
+			.unwrap_or_else(|| panic!("key={:?} should be in column 0 in the db", &k));
 
 		assert_eq!(&x[..], &v[..]);
 	}
@@ -84,7 +132,7 @@ impl SimpleMigration for Migration1 {
 	fn version(&self) -> u32 { 2 }
 	fn migrated_column_index(&self) -> u32 { 0 }
 	fn simple_migrate(&mut self, key: Vec<u8>, _value: Vec<u8>) -> Option<(Vec<u8>, Vec<u8>)> {
-		Some((key, vec![]))
+		Some((key, Vec::new()))
 	}
 }
 
@@ -114,7 +162,7 @@ fn one_simple_migration() {
 	let tempdir = TempDir::new("").unwrap();
 	let db_path = db_path(tempdir.path());
 	let mut manager = Manager::new(Config::default());
-	make_db(&db_path, map![vec![] => vec![], vec![1] => vec![1]]);
+	make_db(&db_path, map![Vec::new() => Vec::new(), vec![1] => vec![1]]);
 	let expected = map![vec![0x11] => vec![0x22], vec![1, 0x11] => vec![1, 0x22]];
 
 	manager.add_migration(Migration0).unwrap();
@@ -129,7 +177,7 @@ fn no_migration_needed() {
 	let tempdir = TempDir::new("").unwrap();
 	let db_path = db_path(tempdir.path());
 	let mut manager = Manager::new(Config::default());
-	make_db(&db_path, map![vec![] => vec![], vec![1] => vec![1]]);
+	make_db(&db_path, map![Vec::new() => Vec::new(), vec![1] => vec![1]]);
 
 	manager.add_migration(Migration0).unwrap();
 	manager.execute(&db_path, 1).unwrap();
@@ -141,7 +189,7 @@ fn wrong_adding_order() {
 	let tempdir = TempDir::new("").unwrap();
 	let db_path = db_path(tempdir.path());
 	let mut manager = Manager::new(Config::default());
-	make_db(&db_path, map![vec![] => vec![], vec![1] => vec![1]]);
+	make_db(&db_path, map![Vec::new() => Vec::new(), vec![1] => vec![1]]);
 
 	manager.add_migration(Migration1).unwrap();
 	manager.add_migration(Migration0).unwrap();
@@ -152,8 +200,8 @@ fn multiple_migrations() {
 	let tempdir = TempDir::new("").unwrap();
 	let db_path = db_path(tempdir.path());
 	let mut manager = Manager::new(Config::default());
-	make_db(&db_path, map![vec![] => vec![], vec![1] => vec![1]]);
-	let expected = map![vec![0x11] => vec![], vec![1, 0x11] => vec![]];
+	make_db(&db_path, map![Vec::new() => Vec::new(), vec![1] => vec![1]]);
+	let expected = map![vec![0x11] => Vec::new(), vec![1, 0x11] => Vec::new()];
 
 	manager.add_migration(Migration0).unwrap();
 	manager.add_migration(Migration1).unwrap();
@@ -167,8 +215,8 @@ fn second_migration() {
 	let tempdir = TempDir::new("").unwrap();
 	let db_path = db_path(tempdir.path());
 	let mut manager = Manager::new(Config::default());
-	make_db(&db_path, map![vec![] => vec![], vec![1] => vec![1]]);
-	let expected = map![vec![] => vec![], vec![1] => vec![]];
+	make_db(&db_path, map![Vec::new() => Vec::new(), vec![1] => vec![1]]);
+	let expected = map![Vec::new() => Vec::new(), vec![1] => Vec::new()];
 
 	manager.add_migration(Migration0).unwrap();
 	manager.add_migration(Migration1).unwrap();
@@ -182,7 +230,7 @@ fn first_and_noop_migration() {
 	let tempdir = TempDir::new("").unwrap();
 	let db_path = db_path(tempdir.path());
 	let mut manager = Manager::new(Config::default());
-	make_db(&db_path, map![vec![] => vec![], vec![1] => vec![1]]);
+	make_db(&db_path, map![Vec::new() => Vec::new(), vec![1] => vec![1]]);
 	let expected = map![vec![0x11] => vec![0x22], vec![1, 0x11] => vec![1, 0x22]];
 
 	manager.add_migration(Migration0).expect("Migration0 can be added");
@@ -196,8 +244,8 @@ fn noop_and_second_migration() {
 	let tempdir = TempDir::new("").unwrap();
 	let db_path = db_path(tempdir.path());
 	let mut manager = Manager::new(Config::default());
-	make_db(&db_path, map![vec![] => vec![], vec![1] => vec![1]]);
-	let expected = map![vec![] => vec![], vec![1] => vec![]];
+	make_db(&db_path, map![Vec::new() => Vec::new(), vec![1] => vec![1]]);
+	let expected = map![Vec::new() => Vec::new(), vec![1] => Vec::new()];
 
 	manager.add_migration(Migration1).unwrap();
 	let end_path = manager.execute(&db_path, 0).unwrap();

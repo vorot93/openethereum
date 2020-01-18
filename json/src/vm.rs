@@ -184,7 +184,7 @@ mod tests {
 		assert_eq!(vm.env, Env {
 			author: Address(Hash160::from_str("2adc25665018aa1fe0e6bc666dac8fc2697ff9ba").unwrap()),
 			difficulty: Uint(0x0100.into()),
-			gas_limit: Uint(0x0f4240.into()),
+			gas_limit: Uint(0x000f_4240.into()),
 			number: Uint(0.into()),
 			timestamp: Uint(1.into())
 		});
@@ -194,12 +194,12 @@ mod tests {
 			code: Bytes::new(TEST_CODE.from_hex().unwrap()),
 			code_version: Uint(0.into()),
 			data: Bytes::new(Vec::new()),
-			gas: Uint(0x0186a0.into()),
-			gas_price: Uint(0x5af3107a4000_u64.into()),
+			gas: Uint(0x0001_86a0.into()),
+			gas_price: Uint(0x5af3_107a_4000_u64.into()),
 			origin: Address(Hash160::from_str("cd1722f2947def4cf144679da39c4c32bdc35681").unwrap()),
-			value: Uint(0x0de0b6b3a7640000_u64.into())
+			value: Uint(0x0de0_b6b3_a764_0000_u64.into())
 		});
-		assert_eq!(vm.gas_left, Some(Uint(0x013874.into())));
+		assert_eq!(vm.gas_left, Some(Uint(0x0001_3874.into())));
 		assert_eq!(
 			vm.logs,
 			Some(H256(Hash256::from_str("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()))
@@ -210,7 +210,7 @@ mod tests {
 				map![
 					Address(Hash160::from_str("0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6").unwrap()) => Account {
 						builtin: None,
-						balance: Some(Uint(0x0de0b6b3a7640000_u64.into())),
+						balance: Some(Uint(0x0de0_b6b3_a764_0000_u64.into())),
 						code: Some(Bytes::new(TEST_CODE.from_hex().unwrap())),
 						constructor: None,
 						nonce: Some(Uint(0.into())),
@@ -225,7 +225,7 @@ mod tests {
 						map![
 							Address(Hash160::from_str("0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6").unwrap()) => Account {
 								builtin: None,
-								balance: Some(Uint(0x0de0b6b3a7640000_u64.into())),
+								balance: Some(Uint(0x0de0_b6b3_a764_0000_u64.into())),
 								code: Some(Bytes::new(TEST_CODE.from_hex().unwrap())),
 								constructor: None,
 								nonce: Some(Uint(0.into())),
@@ -254,7 +254,7 @@ mod tests {
 			  0xee, 0xee, 0xff, 0xff]);
 
 		assert_eq!(call.destination, MaybeEmpty::None);
-		assert_eq!(call.gas_limit, Uint(U256::from(0x1748766aa5u64)));
+		assert_eq!(call.gas_limit, Uint(U256::from(0x0017_4876_6aa5_u64)));
 		assert_eq!(call.value, Uint(U256::from(0)));
 	}
 
@@ -271,7 +271,7 @@ mod tests {
 
 		assert_eq!(&call.data[..], &[0x12, 0x34]);
 		assert_eq!(call.destination, MaybeEmpty::Some(Address(Hash160::from_str("5a39ed1020c04d4d84539975b893a4e7c53eab6c").unwrap())));
-		assert_eq!(call.gas_limit, Uint(U256::from(0x1748766aa5u64)));
+		assert_eq!(call.gas_limit, Uint(U256::from(0x0017_4876_6aa5_u64)));
 		assert_eq!(call.value, Uint(U256::from(0)));
 	}
 }

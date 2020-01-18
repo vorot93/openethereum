@@ -89,23 +89,20 @@ impl AccountEntry {
 	}
 
 	fn exists_and_is_null(&self) -> bool {
-		self.account.as_ref().map_or(false, |a| a.is_null())
+		self.account.as_ref().map_or(false, Account::is_null)
 	}
 
 	/// Clone dirty data into new `AccountEntry`. This includes
 	/// basic account data and modified storage keys.
 	/// Returns None if clean.
-	fn clone_if_dirty(&self) -> Option<AccountEntry> {
-		match self.is_dirty() {
-			true => Some(self.clone_dirty()),
-			false => None,
-		}
+	fn clone_if_dirty(&self) -> Option<Self> {
+		if self.is_dirty() { Some(self.clone_dirty()) } else { None }
 	}
 
 	/// Clone dirty data into new `AccountEntry`. This includes
 	/// basic account data and modified storage keys.
-	fn clone_dirty(&self) -> AccountEntry {
-		AccountEntry {
+	fn clone_dirty(&self) -> Self {
+		Self {
 			old_balance: self.old_balance,
 			account: self.account.as_ref().map(Account::clone_dirty),
 			state: self.state,
@@ -113,38 +110,38 @@ impl AccountEntry {
 	}
 
 	// Create a new account entry and mark it as dirty.
-	fn new_dirty(account: Option<Account>) -> AccountEntry {
-		AccountEntry {
-			old_balance: account.as_ref().map(|a| a.balance().clone()),
+	fn new_dirty(account: Option<Account>) -> Self {
+		Self {
+			old_balance: account.as_ref().map(|a| *a.balance()),
 			account,
 			state: AccountState::Dirty,
 		}
 	}
 
 	// Create a new account entry and mark it as clean.
-	fn new_clean(account: Option<Account>) -> AccountEntry {
-		AccountEntry {
-			old_balance: account.as_ref().map(|a| a.balance().clone()),
+	fn new_clean(account: Option<Account>) -> Self {
+		Self {
+			old_balance: account.as_ref().map(|a| *a.balance()),
 			account,
 			state: AccountState::CleanFresh,
 		}
 	}
 
 	// Create a new account entry and mark it as clean and cached.
-	fn new_clean_cached(account: Option<Account>) -> AccountEntry {
-		AccountEntry {
-			old_balance: account.as_ref().map(|a| a.balance().clone()),
+	fn new_clean_cached(account: Option<Account>) -> Self {
+		Self {
+			old_balance: account.as_ref().map(|a| *a.balance()),
 			account,
 			state: AccountState::CleanCached,
 		}
 	}
 
 	// Replace data with another entry but preserve storage cache.
-	fn overwrite_with(&mut self, other: AccountEntry) {
+	fn overwrite_with(&mut self, other: Self) {
 		self.state = other.state;
 		match other.account {
 			Some(acc) => {
-				if let Some(ref mut ours) = self.account {
+				if let Some(ours) = &mut self.account {
 					ours.overwrite_with(acc);
 				} else {
 					self.account = Some(acc);
@@ -244,26 +241,27 @@ pub trait StateInfo {
 }
 
 impl<B: Backend> StateInfo for State<B> {
-	fn nonce(&self, a: &Address) -> TrieResult<U256> { State::nonce(self, a) }
-	fn balance(&self, a: &Address) -> TrieResult<U256> { State::balance(self, a) }
-	fn storage_at(&self, address: &Address, key: &H256) -> TrieResult<H256> { State::storage_at(self, address, key) }
-	fn code(&self, address: &Address) -> TrieResult<Option<Arc<Bytes>>> { State::code(self, address) }
+	fn nonce(&self, a: &Address) -> TrieResult<U256> { Self::nonce(self, a) }
+	fn balance(&self, a: &Address) -> TrieResult<U256> { Self::balance(self, a) }
+	fn storage_at(&self, address: &Address, key: &H256) -> TrieResult<H256> { Self::storage_at(self, address, key) }
+	fn code(&self, address: &Address) -> TrieResult<Option<Arc<Bytes>>> { Self::code(self, address) }
 }
 
-const SEC_TRIE_DB_UNWRAP_STR: &'static str = "A state can only be created with valid root. Creating a SecTrieDB with a valid root will not fail. \
+const SEC_TRIE_DB_UNWRAP_STR: &str = "A state can only be created with valid root. Creating a SecTrieDB with a valid root will not fail. \
 			 Therefore creating a SecTrieDB with this state's root will not fail.";
 
+#[allow(clippy::use_self)]
 impl<B: Backend> State<B> {
 	/// Creates new state with empty state root
 	/// Used for tests.
-	pub fn new(mut db: B, account_start_nonce: U256, factories: Factories) -> State<B> {
+	pub fn new(mut db: B, account_start_nonce: U256, factories: Factories) -> Self {
 		let mut root = H256::zero();
 		{
 			// init trie and reset root to null
 			let _ = factories.trie.create(db.as_hash_db_mut(), &mut root);
 		}
 
-		State {
+		Self {
 			db,
 			root,
 			cache: RefCell::new(HashMap::new()),
@@ -274,12 +272,12 @@ impl<B: Backend> State<B> {
 	}
 
 	/// Creates new state with existing state root
-	pub fn from_existing(db: B, root: H256, account_start_nonce: U256, factories: Factories) -> TrieResult<State<B>> {
+	pub fn from_existing(db: B, root: H256, account_start_nonce: U256, factories: Factories) -> TrieResult<Self> {
 		if !db.as_hash_db().contains(&root, hash_db::EMPTY_PREFIX) {
 			return Err(Box::new(TrieError::InvalidStateRoot(root)));
 		}
 
-		let state = State {
+		let state = Self {
 			db,
 			root,
 			cache: RefCell::new(HashMap::new()),
@@ -309,9 +307,9 @@ impl<B: Backend> State<B> {
 		// merge with previous checkpoint
 		let last = self.checkpoints.get_mut().pop();
 		if let Some(mut checkpoint) = last {
-			if let Some(ref mut prev) = self.checkpoints.get_mut().last_mut() {
+			if let Some(prev) = self.checkpoints.get_mut().last_mut() {
 				if prev.is_empty() {
-					**prev = checkpoint;
+					*prev = checkpoint;
 				} else {
 					for (k, v) in checkpoint.drain() {
 						prev.entry(k).or_insert(v);
@@ -359,14 +357,14 @@ impl<B: Backend> State<B> {
 		let is_dirty = account.is_dirty();
 		let old_value = self.cache.borrow_mut().insert(*address, account);
 		if is_dirty {
-			if let Some(ref mut checkpoint) = self.checkpoints.borrow_mut().last_mut() {
+			if let Some(checkpoint) = self.checkpoints.borrow_mut().last_mut() {
 				checkpoint.entry(*address).or_insert(old_value);
 			}
 		}
 	}
 
 	fn note_cache(&self, address: &Address) {
-		if let Some(ref mut checkpoint) = self.checkpoints.borrow_mut().last_mut() {
+		if let Some(checkpoint) = self.checkpoints.borrow_mut().last_mut() {
 			checkpoint.entry(*address)
 				.or_insert_with(|| self.cache.borrow().get(address).map(AccountEntry::clone_dirty));
 		}
@@ -382,7 +380,7 @@ impl<B: Backend> State<B> {
 	pub fn into_account(self, account: &Address) -> TrieResult<(Option<Arc<Bytes>>, HashMap<H256, H256>)> {
 		// TODO: deconstruct without cloning.
 		let account = self.require(account, true)?;
-		Ok((account.code().clone(), account.storage_changes().clone()))
+		Ok((account.code(), account.storage_changes().clone()))
 	}
 
 	/// Return reference to root
@@ -396,7 +394,7 @@ impl<B: Backend> State<B> {
 		let original_storage_root = self.original_storage_root(contract)?;
 		let (nonce, overflow) = self.account_start_nonce.overflowing_add(nonce_offset);
 		if overflow {
-			return Err(Box::new(TrieError::DecoderError(H256::from(*contract), rlp::DecoderError::Custom("Nonce overflow".into()))));
+			return Err(Box::new(TrieError::DecoderError(H256::from(*contract), rlp::DecoderError::Custom("Nonce overflow"))));
 		}
 		self.insert_cache(contract, AccountEntry::new_dirty(Some(Account::new_contract(balance, nonce, version, original_storage_root))));
 		Ok(())
@@ -481,7 +479,7 @@ impl<B: Backend> State<B> {
 			for checkpoint in checkpoints.iter().skip(start_checkpoint_index) {
 				match checkpoint.get(address) {
 					// The account exists at this checkpoint.
-					Some(Some(AccountEntry { account: Some(ref account), .. })) => {
+					Some(Some(AccountEntry { account: Some(account), .. })) => {
 						if let Some(value) = account.cached_storage_at(key) {
 							return Ok(Some(value));
 						} else {
@@ -544,15 +542,14 @@ impl<B: Backend> State<B> {
 			let local_cache = self.cache.borrow_mut();
 			let mut local_account = None;
 			if let Some(maybe_acc) = local_cache.get(address) {
-				match maybe_acc.account {
-					Some(ref account) => {
-						if let Some(value) = f_cached_at(account, key) {
-							return Ok(value);
-						} else {
-							local_account = Some(maybe_acc);
-						}
-					},
-					_ => return Ok(H256::zero()),
+				if let Some(account) = &maybe_acc.account {
+					if let Some(value) = f_cached_at(account, key) {
+						return Ok(value);
+					} else {
+						local_account = Some(maybe_acc);
+					}
+				} else {
+					return Ok(H256::zero());
 				}
 			}
 			// check the global cache and and cache storage key there if found,
@@ -569,8 +566,8 @@ impl<B: Backend> State<B> {
 			}
 
 			// otherwise cache the account locally and cache storage key there.
-			if let Some(ref mut acc) = local_account {
-				if let Some(ref account) = acc.account {
+			if let Some(acc) = local_account {
+				if let Some(account) = &acc.account {
 					let account_db = self.factories.accountdb.readonly(self.db.as_hash_db(), account.address_hash(address));
 					return f_at(account, account_db.as_hash_db(), key)
 				} else {
@@ -618,19 +615,19 @@ impl<B: Backend> State<B> {
 	/// Get accounts' code.
 	pub fn code(&self, a: &Address) -> TrieResult<Option<Arc<Bytes>>> {
 		self.ensure_cached(a, RequireCache::Code, true,
-		|a| a.as_ref().map_or(None, |a| a.code().clone()))
+		|a| a.and_then(Account::code))
 	}
 
 	/// Get an account's code hash.
 	pub fn code_hash(&self, a: &Address) -> TrieResult<Option<H256>> {
 		self.ensure_cached(a, RequireCache::None, true,
-		|a| a.as_ref().map(|a| a.code_hash()))
+		|a| a.map(Account::code_hash))
 	}
 
 	/// Get an account's code version.
 	pub fn code_version(&self, a: &Address) -> TrieResult<U256> {
 		self.ensure_cached(a, RequireCache::None, true,
-			|a| a.as_ref().map(|a| *a.code_version()).unwrap_or(U256::zero()))
+			|a| a.as_ref().map_or_else(U256::zero, |a| *a.code_version()))
 	}
 
 	/// Get accounts' code size.
@@ -660,7 +657,7 @@ impl<B: Backend> State<B> {
 		if !decr.is_zero() || !self.exists(a)? {
 			self.require(a, false)?.sub_balance(decr);
 		}
-		if let CleanupMode::TrackTouched(ref mut set) = *cleanup_mode {
+		if let CleanupMode::TrackTouched(set) = cleanup_mode {
 			set.insert(*a);
 		}
 		Ok(())
@@ -711,8 +708,8 @@ impl<B: Backend> State<B> {
 		assert!(self.checkpoints.borrow().is_empty());
 		// first, commit the sub trees.
 		let mut accounts = self.cache.borrow_mut();
-		for (address, ref mut a) in accounts.iter_mut().filter(|&(_, ref a)| a.is_dirty()) {
-			if let Some(ref mut account) = a.account {
+		for (address, a) in accounts.iter_mut().filter(|(_, a)| a.is_dirty()) {
+			if let Some(account) = &mut a.account {
 				let addr_hash = account.address_hash(address);
 				{
 					let mut account_db = self.factories.accountdb.create(self.db.as_hash_db_mut(), addr_hash);
@@ -727,15 +724,12 @@ impl<B: Backend> State<B> {
 
 		{
 			let mut trie = self.factories.trie.from_existing(self.db.as_hash_db_mut(), &mut self.root)?;
-			for (address, ref mut a) in accounts.iter_mut().filter(|&(_, ref a)| a.is_dirty()) {
+			for (address, mut a) in accounts.iter_mut().filter(|(_, a)| a.is_dirty()) {
 				a.state = AccountState::Committed;
-				match a.account {
-					Some(ref mut account) => {
-						trie.insert(address.as_bytes(), &account.rlp())?;
-					},
-					None => {
-						trie.remove(address.as_bytes())?;
-					},
+				if let Some(account) = a.account.as_ref() {
+					trie.insert(address.as_bytes(), &account.rlp())?;
+				} else {
+					trie.remove(address.as_bytes())?;
 				};
 			}
 		}
@@ -747,7 +741,7 @@ impl<B: Backend> State<B> {
 	fn propagate_to_global_cache(&mut self) {
 		let mut addresses = self.cache.borrow_mut();
 		trace!(target: "state", "Committing cache {:?} entries", addresses.len());
-		for (address, a) in addresses.drain().filter(|&(_, ref a)| a.state == AccountState::Committed || a.state == AccountState::CleanFresh) {
+		for (address, a) in addresses.drain().filter(|(_, a)| a.state == AccountState::Committed || a.state == AccountState::CleanFresh) {
 			self.db.add_to_account_cache(address, a.account, a.state == AccountState::Committed);
 		}
 	}
@@ -761,14 +755,14 @@ impl<B: Backend> State<B> {
 	/// Remove any touched empty or dust accounts.
 	pub fn kill_garbage(&mut self, touched: &HashSet<Address>, remove_empty_touched: bool, min_balance: &Option<U256>, kill_contracts: bool) -> TrieResult<()> {
 		let to_kill: HashSet<_> = {
-			self.cache.borrow().iter().filter_map(|(address, ref entry)|
+			self.cache.borrow().iter().filter_map(|(address, entry)|
 				if touched.contains(address) && // Check all touched accounts
 					((remove_empty_touched && entry.exists_and_is_null()) // Remove all empty touched accounts.
 						|| min_balance.map_or(false, |ref balance| entry.account.as_ref().map_or(false, |account|
 						(account.is_basic() || kill_contracts) // Remove all basic and optionally contract accounts where balance has been decreased.
 							&& account.balance() < balance && entry.old_balance.as_ref().map_or(false, |b| account.balance() < b)))) {
 
-					Some(address.clone())
+					Some(*address)
 				} else { None }).collect()
 		};
 		for address in to_kill {
@@ -781,25 +775,25 @@ impl<B: Backend> State<B> {
 	/// Used for tests.
 	pub fn populate_from(&mut self, accounts: PodState) {
 		assert!(self.checkpoints.borrow().is_empty());
-		for (add, acc) in accounts.drain().into_iter() {
+		for (add, acc) in accounts.drain() {
 			self.cache.borrow_mut().insert(add, AccountEntry::new_dirty(Some(Account::from_pod(acc))));
 		}
 	}
 
-	/// Populate a PodAccount map from this state.
+	/// Populate a `PodAccount` map from this state.
 	fn to_pod_cache(&self) -> PodState {
 		assert!(self.checkpoints.borrow().is_empty());
 		PodState::from(self.cache.borrow().iter().fold(BTreeMap::new(), |mut m, (add, opt)| {
-			if let Some(ref acc) = opt.account {
+			if let Some(acc) = &opt.account {
 				m.insert(*add, acc.to_pod());
 			}
 			m
 		}))
 	}
 
-	/// Populate a PodAccount map from this state.
+	/// Populate a `PodAccount` map from this state.
 	/// Warning this is not for real time use.
-	/// Use of this method requires FatDB mode to be able
+	/// Use of this method requires `FatDB` mode to be able
 	/// to iterate on accounts.
 	pub fn to_pod_full(&self) -> Result<PodState, Error> {
 
@@ -821,7 +815,7 @@ impl<B: Backend> State<B> {
 
 		// Resolve missing part
 		for (add, opt) in self.cache.borrow().iter() {
-			if let Some(ref acc) = opt.account {
+			if let Some(acc) = &opt.account {
 				let pod_account = self.account_to_pod_account(acc, add)?;
 				result.insert(add.clone(), pod_account);
 			}
@@ -830,11 +824,11 @@ impl<B: Backend> State<B> {
 		Ok(PodState::from(result))
 	}
 
-	/// Create a PodAccount from an account.
+	/// Create a `PodAccount` from an account.
 	/// Differs from existing method by including all storage
-	/// values of the account to the PodAccount.
+	/// values of the account to the `PodAccount`.
 	/// This function is only intended for use in small tests or with fresh accounts.
-	/// It requires FatDB.
+	/// It requires `FatDB`.
 	fn account_to_pod_account(&self, account: &Account, address: &Address) -> Result<PodAccount, Error> {
 		use ethereum_types::BigEndianHash;
 		assert!(self.factories.trie.is_fat());
@@ -864,7 +858,8 @@ impl<B: Backend> State<B> {
 		Ok(pod_account)
 	}
 
-	/// Populate a PodAccount map from this state, with another state as the account and storage query.
+	/// Populate a `PodAccount` map from this state, with another state as the account and storage query.
+	#[allow(clippy::wrong_self_convention)]
 	fn to_pod_diff<X: Backend>(&mut self, query: &State<X>) -> TrieResult<PodState> {
 		assert!(self.checkpoints.borrow().is_empty());
 
@@ -883,13 +878,13 @@ impl<B: Backend> State<B> {
 						let self_keys = acc.storage_changes().keys().cloned()
 							.collect::<BTreeSet<_>>();
 
-						if let Some(ref query_storage) = query.cache.borrow().get(&address)
+						if let Some(query_storage) = &query.cache.borrow().get(&address)
 							.and_then(|opt| {
 								Some(opt.account.as_ref()?.storage_changes().keys().cloned()
 									.collect::<BTreeSet<_>>())
 							})
 						{
-							self_keys.union(&query_storage).cloned().collect::<Vec<_>>()
+							self_keys.union(query_storage).cloned().collect::<Vec<_>>()
 						} else {
 							self_keys.into_iter().collect::<Vec<_>>()
 						}
@@ -968,8 +963,8 @@ impl<B: Backend> State<B> {
 	fn ensure_cached<F, U>(&self, a: &Address, require: RequireCache, check_null: bool, f: F) -> TrieResult<U>
 		where F: Fn(Option<&Account>) -> U {
 		// check local cache first
-		if let Some(ref mut maybe_acc) = self.cache.borrow_mut().get_mut(a) {
-			if let Some(ref mut account) = maybe_acc.account {
+		if let Some(maybe_acc) = self.cache.borrow_mut().get_mut(a) {
+			if let Some(account) = &mut maybe_acc.account {
 				let accountdb = self.factories.accountdb.readonly(self.db.as_hash_db(), account.address_hash(a));
 				if Self::update_account_cache(require, account, &self.db, accountdb.as_hash_db()) {
 					return Ok(f(Some(account)));
@@ -981,7 +976,7 @@ impl<B: Backend> State<B> {
 		}
 		// check global cache
 		let result = self.db.get_cached(a, |mut acc| {
-			if let Some(ref mut account) = acc {
+			if let Some(account) = &mut acc {
 				let accountdb = self.factories.accountdb.readonly(self.db.as_hash_db(), account.address_hash(a));
 				if !Self::update_account_cache(require, account, &self.db, accountdb.as_hash_db()) {
 					return Err(Box::new(TrieError::IncompleteDatabase(H256::from(*a))));
@@ -989,33 +984,32 @@ impl<B: Backend> State<B> {
 			}
 			Ok(f(acc.map(|a| &*a)))
 		});
-		match result {
-			Some(r) => Ok(r?),
-			None => {
-				// first check if it is not in database for sure
-				if check_null && self.db.is_known_null(a) { return Ok(f(None)); }
+		if let Some(r) = result {
+			Ok(r?)
+		} else {
+			// first check if it is not in database for sure
+			if check_null && self.db.is_known_null(a) { return Ok(f(None)); }
 
-				// not found in the global cache, get from the DB and insert into local
-				let db = &self.db.as_hash_db();
-				let db = self.factories.trie.readonly(db, &self.root)?;
-				let from_rlp = |b: &[u8]| Account::from_rlp(b).expect("decoding db value failed");
-				let mut maybe_acc = db.get_with(a.as_bytes(), from_rlp)?;
-				if let Some(ref mut account) = maybe_acc.as_mut() {
-					let accountdb = self.factories.accountdb.readonly(self.db.as_hash_db(), account.address_hash(a));
-					if !Self::update_account_cache(require, account, &self.db, accountdb.as_hash_db()) {
-						return Err(Box::new(TrieError::IncompleteDatabase(H256::from(*a))));
-					}
+			// not found in the global cache, get from the DB and insert into local
+			let db = &self.db.as_hash_db();
+			let db = self.factories.trie.readonly(db, &self.root)?;
+			let from_rlp = |b: &[u8]| Account::from_rlp(b).expect("decoding db value failed");
+			let mut maybe_acc = db.get_with(a.as_bytes(), from_rlp)?;
+			if let Some(account) = maybe_acc.as_mut() {
+				let accountdb = self.factories.accountdb.readonly(self.db.as_hash_db(), account.address_hash(a));
+				if !Self::update_account_cache(require, account, &self.db, accountdb.as_hash_db()) {
+					return Err(Box::new(TrieError::IncompleteDatabase(H256::from(*a))));
 				}
-				let r = f(maybe_acc.as_ref());
-				self.insert_cache(a, AccountEntry::new_clean(maybe_acc));
-				Ok(r)
 			}
+			let r = f(maybe_acc.as_ref());
+			self.insert_cache(a, AccountEntry::new_clean(maybe_acc));
+			Ok(r)
 		}
 	}
 
 	/// Pull account `a` in our cache from the trie DB. `require_code` requires that the code be cached, too.
 	pub fn require<'a>(&'a self, a: &Address, require_code: bool) -> TrieResult<RefMut<'a, Account>> {
-		self.require_or_from(a, require_code, || Account::new_basic(0u8.into(), self.account_start_nonce), |_| {})
+		self.require_or_from(a, require_code, || Account::new_basic(0_u8.into(), self.account_start_nonce), |_| {})
 	}
 
 	/// Pull account `a` in our cache from the trie DB. `require_code` requires that the code be cached, too.
@@ -1025,19 +1019,20 @@ impl<B: Backend> State<B> {
 	{
 		let contains_key = self.cache.borrow().contains_key(a);
 		if !contains_key {
-			match self.db.get_cached_account(a) {
-				Some(acc) => self.insert_cache(a, AccountEntry::new_clean_cached(acc)),
-				None => {
-					let maybe_acc = if !self.db.is_known_null(a) {
+			if let Some(acc) = self.db.get_cached_account(a) {
+				self.insert_cache(a, AccountEntry::new_clean_cached(acc));
+			} else {
+				let maybe_acc = {
+					if self.db.is_known_null(a) {
+						AccountEntry::new_clean(None)
+					} else {
 						let db = &self.db.as_hash_db();
 						let db = self.factories.trie.readonly(db, &self.root)?;
 						let from_rlp = |b:&[u8]| { Account::from_rlp(b).expect("decoding db value failed") };
 						AccountEntry::new_clean(db.get_with(a.as_bytes(), from_rlp)?)
-					} else {
-						AccountEntry::new_clean(None)
-					};
-					self.insert_cache(a, maybe_acc);
-				}
+					}
+				};
+				self.insert_cache(a, maybe_acc);
 			}
 		}
 		self.note_cache(a);
@@ -1047,7 +1042,7 @@ impl<B: Backend> State<B> {
 			let entry = c.get_mut(a).expect("entry known to exist in the cache; qed");
 
 			match &mut entry.account {
-				&mut Some(ref mut acc) => not_default(acc),
+				Some(acc) => not_default(acc),
 				slot => *slot = Some(default()),
 			}
 
@@ -1070,7 +1065,8 @@ impl<B: Backend> State<B> {
 
 	/// Replace account code and storage. Creates account if it does not exist.
 	pub fn patch_account(&self, a: &Address, code: Arc<Bytes>, storage: HashMap<H256, H256>) -> TrieResult<()> {
-		Ok(self.require(a, false)?.reset_code_and_storage(code, storage))
+		self.require(a, false)?.reset_code_and_storage(code, storage);
+		Ok(())
 	}
 }
 
@@ -1140,7 +1136,7 @@ impl<B: Backend> State<B> {
 //// TODO: cloning for `State` shouldn't be possible in general; Remove this and use
 //// checkpoints where possible.
 impl<B: Backend + Clone> Clone for State<B> {
-	fn clone(&self) -> State<B> {
+	fn clone(&self) -> Self {
 		let cache = {
 			let mut cache: HashMap<Address, AccountEntry> = HashMap::new();
 			for (key, val) in self.cache.borrow().iter() {
@@ -1151,12 +1147,12 @@ impl<B: Backend + Clone> Clone for State<B> {
 			cache
 		};
 
-		State {
+		Self {
 			db: self.db.clone(),
-			root: self.root.clone(),
+			root: self.root,
 			cache: RefCell::new(cache),
 			checkpoints: RefCell::new(Vec::new()),
-			account_start_nonce: self.account_start_nonce.clone(),
+			account_start_nonce: self.account_start_nonce,
 			factories: self.factories.clone(),
 		}
 	}

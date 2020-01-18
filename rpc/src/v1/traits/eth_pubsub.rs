@@ -23,6 +23,7 @@ use jsonrpc_pubsub::{typed, SubscriptionId};
 use v1::types::pubsub;
 
 /// Eth PUB-SUB rpc interface.
+#[allow(clippy::needless_return)]
 #[rpc(server)]
 pub trait EthPubSub {
 	/// RPC Metadata
